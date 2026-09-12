@@ -1,0 +1,13 @@
+spring:
+  datasource:
+    url: ${DEV_DB_URL:jdbc:postgresql://localhost:5432/aives_db}
+    username: ${DEV_DB_USERNAME:postgres}
+    password: ${DEV_DB_PASSWORD:postgres}
+
+aives:
+  ai:
+    openai-api-key: ${OPENAI_API_KEY:}
+    google-cloud-credentials: ${GOOGLE_APPLICATION_CREDENTIALS:}
+  audio:
+    mode: BUFFERED  # BUFFERED (default) or STREAMING
+    storage-path: ./uploads/audio
