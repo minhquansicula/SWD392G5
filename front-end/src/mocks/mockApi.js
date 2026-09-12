@@ -124,59 +124,197 @@ export async function apiUploadAudio(_scheduleId, _blob) {
 // ---------- Analytics ----------
 export async function apiGetExamAnalytics(examId) {
     await delay(400);
+    const exam = exams.find((e) => e.id === examId);
     const examSchedules = schedules.filter((s) => s.examId === examId);
     const completed = examSchedules.filter((s) => s.status === ScheduleStatus.COMPLETED || s.status === ScheduleStatus.GRADED);
     const graded = examSchedules.filter((s) => s.status === ScheduleStatus.GRADED);
+    const pendingReview = examSchedules.filter((s) => s.status === ScheduleStatus.COMPLETED);
+    
+    // Scores array: use finalScore if graded, otherwise aiSuggestedScore
     const scores = completed.map((s) => s.finalScore ?? s.aiSuggestedScore ?? 0);
     const avgScore = scores.length ? scores.reduce((a, b) => a + b, 0) / scores.length : 0;
+    
+    // Calculate median
+    const sortedScores = [...scores].sort((a, b) => a - b);
+    let medianScore = 0;
+    if (sortedScores.length > 0) {
+        const mid = Math.floor(sortedScores.length / 2);
+        medianScore = sortedScores.length % 2 !== 0 ? sortedScores[mid] : (sortedScores[mid - 1] + sortedScores[mid]) / 2;
+    }
+    
+    const passCount = scores.filter((s) => s >= 5.0).length;
+    const passRate = completed.length ? Math.round((passCount / completed.length) * 100) : 0;
+
+    // Academic Tiers
+    const academicTiers = [
+        {
+            tier: 'Under Threshold (< 5.0)',
+            tierLabel: 'Chưa đạt (< 5.0)',
+            range: '< 5.0',
+            color: '#ef4444',
+            count: completed.filter((s) => (s.finalScore ?? s.aiSuggestedScore ?? 0) < 5.0).length,
+            students: completed
+                .filter((s) => (s.finalScore ?? s.aiSuggestedScore ?? 0) < 5.0)
+                .map((s) => ({ name: s.studentName, score: s.finalScore ?? s.aiSuggestedScore })),
+        },
+        {
+            tier: 'Average (5.0 - 6.4)',
+            tierLabel: 'Trung bình (5.0 - 6.4)',
+            range: '5.0 - 6.4',
+            color: '#f59e0b',
+            count: completed.filter((s) => {
+                const sc = s.finalScore ?? s.aiSuggestedScore ?? 0;
+                return sc >= 5.0 && sc < 6.5;
+            }).length,
+            students: completed
+                .filter((s) => {
+                    const sc = s.finalScore ?? s.aiSuggestedScore ?? 0;
+                    return sc >= 5.0 && sc < 6.5;
+                })
+                .map((s) => ({ name: s.studentName, score: s.finalScore ?? s.aiSuggestedScore })),
+        },
+        {
+            tier: 'Good (6.5 - 7.9)',
+            tierLabel: 'Khá (6.5 - 7.9)',
+            range: '6.5 - 7.9',
+            color: '#3b82f6',
+            count: completed.filter((s) => {
+                const sc = s.finalScore ?? s.aiSuggestedScore ?? 0;
+                return sc >= 6.5 && sc < 8.0;
+            }).length,
+            students: completed
+                .filter((s) => {
+                    const sc = s.finalScore ?? s.aiSuggestedScore ?? 0;
+                    return sc >= 6.5 && sc < 8.0;
+                })
+                .map((s) => ({ name: s.studentName, score: s.finalScore ?? s.aiSuggestedScore })),
+        },
+        {
+            tier: 'Excellent (8.0 - 10.0)',
+            tierLabel: 'Giỏi - Xuất sắc (8.0 - 10.0)',
+            range: '8.0 - 10.0',
+            color: '#10b981',
+            count: completed.filter((s) => (s.finalScore ?? s.aiSuggestedScore ?? 0) >= 8.0).length,
+            students: completed
+                .filter((s) => (s.finalScore ?? s.aiSuggestedScore ?? 0) >= 8.0)
+                .map((s) => ({ name: s.studentName, score: s.finalScore ?? s.aiSuggestedScore })),
+        },
+    ];
+
+    // Standard 10-interval distribution with candidate details
+    const standardIntervals = [
+        { min: 0, max: 2, range: '0 - 2' },
+        { min: 2, max: 4, range: '2 - 4' },
+        { min: 4, max: 5, range: '4 - 5' },
+        { min: 5, max: 6, range: '5 - 6' },
+        { min: 6, max: 7, range: '6 - 7' },
+        { min: 7, max: 8, range: '7 - 8' },
+        { min: 8, max: 9, range: '8 - 9' },
+        { min: 9, max: 10.1, range: '9 - 10' },
+    ];
+
+    const scoreDistribution = standardIntervals.map((interval) => {
+        const matchingStudents = completed.filter((s) => {
+            const sc = s.finalScore ?? s.aiSuggestedScore ?? 0;
+            return sc >= interval.min && sc < interval.max;
+        });
+        return {
+            range: interval.range,
+            count: matchingStudents.length,
+            students: matchingStudents.map((s) => `${s.studentName} (${(s.finalScore ?? s.aiSuggestedScore).toFixed(1)})`),
+        };
+    });
+
+    // Question difficulty analysis
+    const courseQuestions = mockQuestions.filter((q) => q.courseId === exam?.courseId);
+    const questionDifficulty = courseQuestions.map((q) => {
+        const qResults = allQuestionResults.filter((r) => r.questionId === q.id);
+        const avg = qResults.length ? qResults.reduce((a, b) => a + b.aiScore, 0) / qResults.length : 0;
+        const passAttempts = qResults.filter((r) => r.aiScore >= 5.0).length;
+        const successRate = qResults.length ? Math.round((passAttempts / qResults.length) * 100) : 0;
+        const latestFeedback = qResults.length > 0 ? qResults[0].aiFeedback : 'Chưa có dữ liệu bài thi cho câu hỏi này.';
+        
+        return {
+            questionId: q.id,
+            questionContent: q.content,
+            difficulty: q.difficultyLevel,
+            avgScore: Math.round(avg * 10) / 10,
+            successRate: qResults.length ? successRate : 0,
+            timesAsked: qResults.length,
+            passCount: passAttempts,
+            latestFeedback,
+        };
+    });
+
+    // Student roster with full context
+    const studentsList = examSchedules.map((s) => {
+        const student = mockUsers.find((u) => u.id === s.studentId);
+        const sResults = allQuestionResults.filter((r) => r.examScheduleId === s.id);
+        return {
+            id: s.id,
+            studentId: s.studentId,
+            studentName: s.studentName || student?.fullName || 'Sinh viên',
+            username: student?.username || '',
+            scheduledStartTime: s.scheduledStartTime,
+            scheduledEndTime: s.scheduledEndTime,
+            status: s.status,
+            aiSuggestedScore: s.aiSuggestedScore,
+            finalScore: s.finalScore,
+            gradedBy: s.gradedBy,
+            gradedAt: s.gradedAt,
+            questionsCount: sResults.length,
+        };
+    });
+
     return {
-        scoreDistribution: [
-            { range: '0-2', count: scores.filter((s) => s < 2).length },
-            { range: '2-4', count: scores.filter((s) => s >= 2 && s < 4).length },
-            { range: '4-5', count: scores.filter((s) => s >= 4 && s < 5).length },
-            { range: '5-6', count: scores.filter((s) => s >= 5 && s < 6).length },
-            { range: '6-7', count: scores.filter((s) => s >= 6 && s < 7).length },
-            { range: '7-8', count: scores.filter((s) => s >= 7 && s < 8).length },
-            { range: '8-9', count: scores.filter((s) => s >= 8 && s < 9).length },
-            { range: '9-10', count: scores.filter((s) => s >= 9).length },
-        ],
-        questionDifficulty: mockQuestions
-            .filter((q) => {
-            const exam = exams.find((e) => e.id === examId);
-            return q.courseId === exam?.courseId;
-        })
-            .map((q) => {
-            const qResults = allQuestionResults.filter((r) => r.questionId === q.id);
-            const avg = qResults.length ? qResults.reduce((a, b) => a + b.aiScore, 0) / qResults.length : 0;
-            return {
-                questionId: q.id,
-                questionContent: q.content.substring(0, 80) + '...',
-                difficulty: q.difficultyLevel,
-                avgScore: Math.round(avg * 10) / 10,
-                successRate: qResults.length ? Math.round((qResults.filter((r) => r.aiScore >= 5).length / qResults.length) * 100) : 0,
-                timesAsked: qResults.length,
-            };
-        }),
         overallStats: {
             totalStudents: examSchedules.length,
             completedCount: completed.length,
             gradedCount: graded.length,
+            pendingReviewCount: pendingReview.length,
             avgScore: Math.round(avgScore * 10) / 10,
+            medianScore: Math.round(medianScore * 10) / 10,
             highestScore: scores.length ? Math.max(...scores) : 0,
             lowestScore: scores.length ? Math.min(...scores) : 0,
+            passCount,
+            passRate,
         },
+        academicTiers,
+        scoreDistribution,
+        questionDifficulty,
+        studentsList,
     };
 }
 // ---------- Export ----------
 export async function apiExportReport(examId) {
-    await delay(500);
-    const examSchedules = schedules.filter((s) => s.examId === examId);
+    await delay(400);
     const exam = exams.find((e) => e.id === examId);
-    let csv = 'StudentName,StudentId,ScheduledTime,AIScore,FinalScore,Status\n';
+    const examSchedules = schedules.filter((s) => s.examId === examId);
+    const completed = examSchedules.filter((s) => s.status === ScheduleStatus.COMPLETED || s.status === ScheduleStatus.GRADED);
+    const graded = examSchedules.filter((s) => s.status === ScheduleStatus.GRADED);
+    const scores = completed.map((s) => s.finalScore ?? s.aiSuggestedScore ?? 0);
+    const avgScore = scores.length ? (scores.reduce((a, b) => a + b, 0) / scores.length).toFixed(1) : 'N/A';
+    const passRate = completed.length ? Math.round((scores.filter((s) => s >= 5.0).length / completed.length) * 100) : 0;
+
+    let csv = `BÁO CÁO KẾT QUẢ VẤN ĐÁP — HỆ THỐNG AIVES\n`;
+    csv += `Kỳ thi: "${exam?.title || examId}"\n`;
+    csv += `Môn học: "${exam?.courseName || ''} (${exam?.courseId || ''})"\n`;
+    csv += `Giảng viên phụ trách: "${exam?.createdByName || 'TS. Nguyễn Văn An'}"\n`;
+    csv += `Thời gian xuất: "${new Date().toLocaleString('vi-VN')}"\n`;
+    csv += `Thống kê tổng quan: Tổng số SV: ${examSchedules.length} | Đã thi: ${completed.length} | Đã duyệt điểm: ${graded.length} | Điểm TB: ${avgScore} | Tỷ lệ Đạt: ${passRate}%\n\n`;
+    
+    csv += 'Mã SV,Họ và tên,Ca thi bắt đầu,Ca thi kết thúc,Trạng thái,Điểm AI gợi ý,Điểm chính thức,Người phê duyệt,Thời gian duyệt\n';
     for (const s of examSchedules) {
-        csv += `"${s.studentName}","${s.studentId}","${s.scheduledStartTime}",${s.aiSuggestedScore ?? ''},${s.finalScore ?? ''},${s.status}\n`;
+        const statusText = 
+            s.status === ScheduleStatus.GRADED ? 'Đã duyệt điểm' :
+            s.status === ScheduleStatus.COMPLETED ? 'Chờ GV duyệt' :
+            s.status === ScheduleStatus.IN_PROGRESS ? 'Đang thi' : 'Chưa thi';
+            
+        csv += `"${s.studentId}","${s.studentName}","${new Date(s.scheduledStartTime).toLocaleString('vi-VN')}","${new Date(s.scheduledEndTime).toLocaleString('vi-VN')}","${statusText}",${s.aiSuggestedScore ?? ''},${s.finalScore ?? ''},"${s.gradedBy || ''}","${s.gradedAt ? new Date(s.gradedAt).toLocaleString('vi-VN') : ''}"\n`;
     }
-    return new Blob([`${exam?.title}\n\n${csv}`], { type: 'text/csv' });
+    
+    // Add BOM for Excel UTF-8 display
+    return new Blob(['\uFEFF' + csv], { type: 'text/csv;charset=utf-8;' });
 }
 // ---------- Utility exports ----------
 export function getMockCourses() {
