@@ -1,8 +1,8 @@
 spring:
   datasource:
-    url: ${DEV_DB_URL:jdbc:postgresql://localhost:5432/aives_db}
-    username: ${DEV_DB_USERNAME:postgres}
-    password: ${DEV_DB_PASSWORD:postgres}
+    url: ${DEV_DB_URL:jdbc:postgresql://ep-dry-block-b3yhbez5-pooler.c-4.ap-southeast-1.aws.neon.tech:5432/neondb?sslmode=require}
+    username: ${DEV_DB_USERNAME:neondb_owner}
+    password: ${DEV_DB_PASSWORD:npg_P7CZhEKTy2Dp}
 
 aives:
   ai:
