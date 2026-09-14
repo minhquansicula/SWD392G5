@@ -10,7 +10,7 @@
   --color-primary-200: #bfdbfe;
   --color-primary-300: #93c5fd;
   --color-primary-400: #60a5fa;
-  --color-primary-500: #3b82f6; /* Vercel blue */
+  --color-primary-500: #3b82f6; 
   --color-primary-600: #2563eb;
   --color-primary-700: #1d4ed8;
   --color-primary-800: #1e40af;
@@ -49,7 +49,7 @@
    THEME COLOR SCHEMES
    ---------------------------------------------------- */
 
-/* Default: Dark Theme (Obsidian & Dark Grays) */
+/* Default: Dark Theme */
 :root, html.dark {
   color-scheme: dark;
   --surface-50: #fafafa;
@@ -70,25 +70,25 @@
   --glass-light-bg: rgba(39, 39, 42, 0.4);
 }
 
-/* Light Theme: "Exam Paper & Red Pen" (from design brief) */
+/* Light Theme: Eye-Comfort (Softer Grays, Reduced Glare) */
 html.light {
   color-scheme: light;
-  --surface-50: #141310;
-  --surface-100: #24231F; /* Ink black text */
-  --surface-200: #383730;
-  --surface-300: #504f46;
-  --surface-400: #6B6A61; /* Faded ink text */
-  --surface-500: #8c8a7e;
-  --surface-600: #b5b3a5;
-  --surface-700: #DAD8CC; /* Paper rule hairline border */
-  --surface-800: #EDEDE6; /* Secondary paper panel */
-  --surface-900: #FFFFFF; /* Pure card paper */
-  --surface-950: #F5F5F0; /* Primary exam paper background */
+  --surface-50: #1e293b;  /* Softer heading text */
+  --surface-100: #334155; /* Primary dark text */
+  --surface-200: #475569; /* Body text */
+  --surface-300: #64748b; /* Secondary text */
+  --surface-400: #94a3b8; /* Muted label text */
+  --surface-500: #cbd5e1; /* Subtle icons */
+  --surface-600: #e2e8f0; /* Dividers */
+  --surface-700: #e5e7eb; /* Soft hairline borders */
+  --surface-800: #f1f5f9; /* Slate secondary pills/badges */
+  --surface-900: #fcfcfd; /* Off-white card surface (less blinding) */
+  --surface-950: #f3f4f6; /* Neutral soft gray background to reduce eye strain */
 
-  --border-color-card: #DAD8CC;
-  --border-color-light: #E5E3D8;
-  --glass-bg: rgba(255, 255, 255, 0.95);
-  --glass-light-bg: rgba(247, 247, 243, 0.85);
+  --border-color-card: #e5e7eb;
+  --border-color-light: #f3f4f6;
+  --glass-bg: rgba(252, 252, 253, 0.85);
+  --glass-light-bg: rgba(243, 244, 246, 0.6);
 }
 
 /* Base styles */
@@ -107,7 +107,7 @@ html.dark body {
 }
 
 html.light body {
-  background-image: radial-gradient(circle at top center, rgba(46, 74, 102, 0.05) 0%, transparent 60%);
+  background-image: radial-gradient(circle at top center, rgba(148, 163, 184, 0.08) 0%, transparent 60%);
 }
 
 /* Typography refinements */
@@ -117,7 +117,7 @@ html.dark h1, html.dark h2, html.dark h3, html.dark h4, html.dark h5, html.dark 
 }
 
 html.light h1, html.light h2, html.light h3, html.light h4, html.light h5, html.light h6 {
-  color: #24231F;
+  color: #1e293b;
   letter-spacing: -0.02em;
 }
 
@@ -163,7 +163,7 @@ html.light h1, html.light h2, html.light h3, html.light h4, html.light h5, html.
 }
 
 html.light .glass {
-  box-shadow: 0 4px 20px -2px rgba(0, 0, 0, 0.05);
+  box-shadow: 0 2px 10px -2px rgba(0, 0, 0, 0.03);
 }
 
 .glow-effect {
@@ -183,25 +183,62 @@ html.light .glass {
   pointer-events: none;
 }
 
-/* Light mode overrides for elements that used white text or dark borders */
+/* Light mode overrides */
 html.light .text-white:not([class*="bg-primary"]):not([class*="bg-accent"]):not([class*="bg-danger"]):not([class*="bg-warning"]):not([class*="bg-indigo"]):not([class*="bg-purple"]) {
-  color: #24231F !important;
+  color: #1e293b !important;
 }
 
 html.light [class*="border-white/"] {
-  border-color: #DAD8CC !important;
+  border-color: #e5e7eb !important;
 }
 
 html.light [class*="bg-white/5"] {
-  background-color: rgba(0, 0, 0, 0.03) !important;
+  background-color: #f1f5f9 !important;
 }
 
 html.light [class*="bg-white/10"] {
-  background-color: rgba(0, 0, 0, 0.06) !important;
+  background-color: #e2e8f0 !important;
 }
 
 html.light [class*="bg-black/"] {
-  background-color: rgba(0, 0, 0, 0.03) !important;
+  background-color: #f8fafc !important;
+}
+
+/* Light theme cards, sidebar & navigation */
+html.light .bg-surface-900,
+html.light .glass {
+  background-color: #fcfcfd !important;
+  border-color: #e5e7eb !important;
+  box-shadow: 0 1px 2px 0 rgba(0, 0, 0, 0.02), 0 4px 12px -2px rgba(0, 0, 0, 0.03) !important;
+}
+
+html.light aside {
+  background-color: #fcfcfd !important;
+  border-color: #e5e7eb !important;
+}
+
+html.light header {
+  background-color: rgba(252, 252, 253, 0.88) !important;
+  border-color: #e5e7eb !important;
+  backdrop-filter: blur(12px) !important;
+}
+
+/* Light theme primary action button */
+html.light .bg-white.text-black {
+  background-color: #1e293b !important;
+  color: #ffffff !important;
+  box-shadow: 0 2px 8px rgba(30, 41, 59, 0.08) !important;
+}
+html.light .bg-white.text-black:hover {
+  background-color: #334155 !important;
+}
+
+/* Search bar & input fields in light mode */
+html.light input {
+  color: #1e293b !important;
+}
+html.light input::placeholder {
+  color: #94a3b8 !important;
 }
 
 /* Gradient text */
@@ -213,7 +250,7 @@ html.light [class*="bg-black/"] {
 }
 
 html.light .gradient-text {
-  background: linear-gradient(135deg, #24231F, #6B6A61);
+  background: linear-gradient(135deg, #334155, #64748b);
   -webkit-background-clip: text;
   -webkit-text-fill-color: transparent;
   background-clip: text;

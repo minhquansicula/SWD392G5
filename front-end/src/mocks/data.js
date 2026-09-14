@@ -5,6 +5,12 @@ import { Role, DifficultyLevel, ScheduleStatus, TranscriptRole, } from '../types
 // ---------- Users ----------
 export const mockUsers = [
     {
+        id: 'usr-admin-001',
+        username: 'admin',
+        fullName: 'Quản trị viên Hệ thống',
+        role: Role.ADMIN,
+    },
+    {
         id: 'usr-lecturer-001',
         username: 'dr.nguyen',
         fullName: 'TS. Nguyễn Văn An',

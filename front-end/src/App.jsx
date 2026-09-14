@@ -11,6 +11,9 @@ import { useAuthStore } from './store/authStore';
 import Login from './pages/Login';
 import Register from './pages/Register';
 
+// Admin Pages
+import AdminUsers from './pages/AdminUsers';
+
 // Protected Feature Pages
 import ExamList from './pages/ExamList';
 import ExamCreate from './pages/ExamCreate';
@@ -29,6 +32,9 @@ function RootRedirect() {
     if (!isAuthenticated || !currentUser) {
         return <Navigate to="/login" replace />;
     }
+    if (currentUser.role === Role.ADMIN) {
+        return <Navigate to="/admin/users" replace />;
+    }
     if (currentUser.role === Role.STUDENT) {
         return <Navigate to="/my-schedules" replace />;
     }
@@ -39,6 +45,9 @@ function RootRedirect() {
 function GuestRoute({ children }) {
     const { currentUser, isAuthenticated } = useAuthStore();
     if (isAuthenticated && currentUser) {
+        if (currentUser.role === Role.ADMIN) {
+            return <Navigate to="/admin/users" replace />;
+        }
         if (currentUser.role === Role.STUDENT) {
             return <Navigate to="/my-schedules" replace />;
         }
@@ -73,6 +82,16 @@ function App() {
 
             {/* Application Shell (Protected Routes) */}
             <Route element={<Layout />}>
+                {/* ADMIN ROUTES */}
+                <Route 
+                    path="/admin/users" 
+                    element={
+                        <ProtectedRoute roles={[Role.ADMIN]}>
+                            <AdminUsers />
+                        </ProtectedRoute>
+                    } 
+                />
+
                 {/* LECTURER & ADMIN ROUTES */}
                 <Route 
                     path="/exams" 

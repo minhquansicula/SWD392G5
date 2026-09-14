@@ -1,11 +1,10 @@
 // ============================================================
-// AIVES — Register Page (Linear / Vercel Glassmorphism Style)
+// AIVES — Register Page (Minimal & Focused, Admin-Assigned Roles)
 // ============================================================
 import { useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { motion, AnimatePresence } from 'framer-motion';
 import { 
-    GraduationCap, 
     Lock, 
     User, 
     Mail, 
@@ -14,23 +13,16 @@ import {
     EyeOff, 
     AlertCircle, 
     Loader2, 
-    Sun, 
-    Moon, 
     CheckCircle,
-    UserCheck,
-    BookOpen
+    ShieldAlert
 } from 'lucide-react';
 import { useAuthStore } from '../store/authStore';
-import { useThemeStore } from '../store/themeStore';
 import { Role } from '../types';
-import { cn } from '../lib/utils';
 
 export default function Register() {
     const navigate = useNavigate();
     const { register, isLoading, error, clearError } = useAuthStore();
-    const { theme, toggleTheme } = useThemeStore();
 
-    const [role, setRole] = useState(Role.STUDENT);
     const [fullName, setFullName] = useState('');
     const [username, setUsername] = useState('');
     const [email, setEmail] = useState('');
@@ -85,26 +77,23 @@ export default function Register() {
             return;
         }
         if (!agreeTerms) {
-            setLocalError('Bạn cần đồng ý với Quy chế thi vấn đáp trực tuyến để tiếp tục');
+            setLocalError('Bạn cần đồng ý với Quy chế và Điều khoản để tiếp tục');
             return;
         }
 
         try {
+            // Role is default assigned as STUDENT initially, pending Admin role management
             const user = await register({
                 fullName: fullName.trim(),
                 username: username.trim(),
                 email: email.trim(),
                 password,
-                role,
+                role: Role.STUDENT,
             });
 
             setSuccessMessage(`Đăng ký thành công! Đang chuyển hướng vào hệ thống...`);
             setTimeout(() => {
-                if (user.role === Role.STUDENT) {
-                    navigate('/my-schedules', { replace: true });
-                } else {
-                    navigate('/exams', { replace: true });
-                }
+                navigate('/my-schedules', { replace: true });
             }, 900);
         } catch (err) {
             setLocalError(err.message || 'Đăng ký không thành công. Vui lòng thử lại!');
@@ -119,96 +108,29 @@ export default function Register() {
             <div className="absolute top-1/6 -right-20 w-96 h-96 bg-primary-600/15 rounded-full blur-[140px] pointer-events-none" />
             <div className="absolute bottom-1/6 -left-20 w-96 h-96 bg-accent-500/10 rounded-full blur-[140px] pointer-events-none" />
 
-            {/* Top Bar (Theme Toggle) */}
-            <header className="absolute top-6 right-6 z-30 flex items-center gap-3">
-                <button
-                    onClick={toggleTheme}
-                    className="p-2.5 rounded-xl border border-white/10 bg-surface-900/60 backdrop-blur-xl text-surface-400 hover:text-white hover:bg-white/5 transition-all shadow-sm cursor-pointer"
-                    title={theme === 'dark' ? 'Chuyển sang Giao diện Sáng' : 'Chuyển sang Giao diện Tối'}
-                >
-                    {theme === 'dark' ? <Sun className="w-4 h-4 text-warning-400" /> : <Moon className="w-4 h-4 text-primary-400" />}
-                </button>
-            </header>
-
             {/* Main Auth Container */}
             <motion.div
-                initial={{ opacity: 0, y: 20, scale: 0.98 }}
+                initial={{ opacity: 0, y: 15, scale: 0.98 }}
                 animate={{ opacity: 1, y: 0, scale: 1 }}
-                transition={{ duration: 0.5, ease: [0.16, 1, 0.3, 1] }}
+                transition={{ duration: 0.4, ease: [0.16, 1, 0.3, 1] }}
                 className="w-full max-w-lg relative z-10 my-8"
             >
-                {/* Brand Header */}
-                <div className="text-center mb-6">
-                    <motion.div 
-                        initial={{ scale: 0.8, opacity: 0 }}
-                        animate={{ scale: 1, opacity: 1 }}
-                        transition={{ delay: 0.1, duration: 0.4 }}
-                        className="inline-flex items-center justify-center w-12 h-12 rounded-2xl bg-gradient-to-b from-primary-400 to-primary-600 shadow-[0_0_35px_rgba(59,130,246,0.35)] border border-primary-300/30 mb-3"
-                    >
-                        <GraduationCap className="w-6 h-6 text-white drop-shadow-md" />
-                    </motion.div>
-                    <h1 className="text-2xl font-bold tracking-tight text-white mb-1">
-                        Tạo tài khoản mới
-                    </h1>
-                    <p className="text-xs text-surface-400 font-medium">
-                        Tham gia nền tảng khảo thí AI thế hệ mới tại Đại học FPT
-                    </p>
-                </div>
-
                 {/* Glassmorphism Card */}
                 <div className="glass bg-surface-900/70 border border-white/10 rounded-2xl p-6 sm:p-8 backdrop-blur-2xl shadow-[0_20px_60px_rgba(0,0,0,0.6)] relative overflow-hidden">
                     <div className="absolute top-0 left-0 right-0 h-[1px] bg-gradient-to-r from-transparent via-primary-400/50 to-transparent" />
 
-                    {/* Role Selector Tabs */}
-                    <div className="mb-6">
-                        <label className="block text-xs font-semibold text-surface-400 mb-2 uppercase tracking-wider">
-                            Chọn vai trò của bạn
-                        </label>
-                        <div className="grid grid-cols-2 p-1 bg-surface-950/70 rounded-xl border border-white/10 relative">
-                            <button
-                                type="button"
-                                onClick={() => setRole(Role.STUDENT)}
-                                className={cn(
-                                    "relative py-2.5 px-3 rounded-lg text-xs font-semibold flex items-center justify-center gap-2 transition-colors cursor-pointer outline-none z-10",
-                                    role === Role.STUDENT ? "text-white" : "text-surface-400 hover:text-surface-200"
-                                )}
-                            >
-                                {role === Role.STUDENT && (
-                                    <motion.div
-                                        layoutId="roleActiveTab"
-                                        className="absolute inset-0 bg-primary-600/30 border border-primary-500/40 rounded-lg shadow-sm"
-                                        transition={{ type: "spring", stiffness: 400, damping: 30 }}
-                                    />
-                                )}
-                                <UserCheck className="w-4 h-4 relative z-10 text-primary-400" />
-                                <span className="relative z-10">Sinh viên (Student)</span>
-                            </button>
+                    <div className="mb-5">
+                        <h2 className="text-xl font-bold text-white tracking-tight">Tạo tài khoản mới</h2>
+                        <p className="text-xs text-surface-400 mt-1">
+                            Đăng ký tài khoản thành viên hệ thống AIVES
+                        </p>
+                    </div>
 
-                            <button
-                                type="button"
-                                onClick={() => setRole(Role.LECTURER)}
-                                className={cn(
-                                    "relative py-2.5 px-3 rounded-lg text-xs font-semibold flex items-center justify-center gap-2 transition-colors cursor-pointer outline-none z-10",
-                                    role === Role.LECTURER ? "text-white" : "text-surface-400 hover:text-surface-200"
-                                )}
-                            >
-                                {role === Role.LECTURER && (
-                                    <motion.div
-                                        layoutId="roleActiveTab"
-                                        className="absolute inset-0 bg-accent-600/30 border border-accent-500/40 rounded-lg shadow-sm"
-                                        transition={{ type: "spring", stiffness: 400, damping: 30 }}
-                                    />
-                                )}
-                                <BookOpen className="w-4 h-4 relative z-10 text-accent-400" />
-                                <span className="relative z-10">Giảng viên (Lecturer)</span>
-                            </button>
-                        </div>
-
-                        {/* Role helper caption */}
-                        <p className="text-[11px] text-surface-500 mt-2 italic px-1">
-                            {role === Role.STUDENT
-                                ? '• Tài khoản Sinh viên: Thi vấn đáp với giám khảo AI, tra cứu điểm số và biên bản thi.'
-                                : '• Tài khoản Giảng viên: Tạo đề thi vấn đáp, xem hàng đợi chấm thi và phân tích thống kê.'}
+                    {/* Admin role assignment policy note */}
+                    <div className="mb-5 p-3 rounded-xl bg-primary-500/10 border border-primary-500/20 flex items-start gap-2.5 text-xs text-primary-300">
+                        <ShieldAlert className="w-4 h-4 text-primary-400 shrink-0 mt-0.5" />
+                        <p className="leading-relaxed">
+                            <span className="font-semibold text-white">Chính sách phân quyền:</span> Sau khi đăng ký, tài khoản sẽ được Quản trị viên (Admin) xét duyệt và phân quyền vai trò (Sinh viên hoặc Giảng viên).
                         </p>
                     </div>
 

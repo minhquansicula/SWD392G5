@@ -1,11 +1,10 @@
 // ============================================================
-// AIVES — Login Page (Linear / Vercel Glassmorphism Style)
+// AIVES — Login Page (Minimal & Focused)
 // ============================================================
 import { useState } from 'react';
 import { Link, useNavigate, useLocation } from 'react-router-dom';
 import { motion, AnimatePresence } from 'framer-motion';
 import { 
-    GraduationCap, 
     Lock, 
     User, 
     ArrowRight, 
@@ -14,12 +13,9 @@ import {
     Sparkles, 
     AlertCircle, 
     Loader2, 
-    Sun, 
-    Moon,
     CheckCircle2
 } from 'lucide-react';
 import { useAuthStore } from '../store/authStore';
-import { useThemeStore } from '../store/themeStore';
 import { Role } from '../types';
 import { DEMO_ACCOUNTS } from '../lib/authApi';
 import { cn } from '../lib/utils';
@@ -28,7 +24,6 @@ export default function Login() {
     const navigate = useNavigate();
     const location = useLocation();
     const { login, isLoading, error, clearError } = useAuthStore();
-    const { theme, toggleTheme } = useThemeStore();
 
     const [usernameOrEmail, setUsernameOrEmail] = useState('');
     const [password, setPassword] = useState('');
@@ -44,7 +39,9 @@ export default function Login() {
             navigate(from, { replace: true });
             return;
         }
-        if (user.role === Role.STUDENT) {
+        if (user.role === Role.ADMIN) {
+            navigate('/admin/users', { replace: true });
+        } else if (user.role === Role.STUDENT) {
             navigate('/my-schedules', { replace: true });
         } else {
             navigate('/exams', { replace: true });
@@ -73,12 +70,11 @@ export default function Login() {
             });
             handleRedirectByRole(user);
         } catch (err) {
-            // Handled by store, but set local error as fallback
             setLocalError(err.message || 'Đăng nhập thất bại');
         }
     };
 
-    // Quick demo login handler
+    // Quick demo login handler (1-touch)
     const handleQuickLogin = async (account) => {
         setUsernameOrEmail(account.username);
         setPassword(account.password);
@@ -105,54 +101,22 @@ export default function Login() {
             <div className="absolute bottom-1/4 -right-20 w-96 h-96 bg-accent-500/10 rounded-full blur-[140px] pointer-events-none" />
             <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[600px] h-[600px] bg-primary-500/5 rounded-full blur-[160px] pointer-events-none" />
 
-            {/* Top Bar (Theme Toggle) */}
-            <header className="absolute top-6 right-6 z-30 flex items-center gap-3">
-                <button
-                    onClick={toggleTheme}
-                    className="p-2.5 rounded-xl border border-white/10 bg-surface-900/60 backdrop-blur-xl text-surface-400 hover:text-white hover:bg-white/5 transition-all shadow-sm cursor-pointer"
-                    title={theme === 'dark' ? 'Chuyển sang Giao diện Sáng' : 'Chuyển sang Giao diện Tối'}
-                >
-                    {theme === 'dark' ? <Sun className="w-4 h-4 text-warning-400" /> : <Moon className="w-4 h-4 text-primary-400" />}
-                </button>
-            </header>
-
             {/* Main Auth Container */}
             <motion.div
-                initial={{ opacity: 0, y: 20, scale: 0.98 }}
+                initial={{ opacity: 0, y: 15, scale: 0.98 }}
                 animate={{ opacity: 1, y: 0, scale: 1 }}
-                transition={{ duration: 0.5, ease: [0.16, 1, 0.3, 1] }}
+                transition={{ duration: 0.4, ease: [0.16, 1, 0.3, 1] }}
                 className="w-full max-w-md relative z-10"
             >
-                {/* Brand Header */}
-                <div className="text-center mb-8">
-                    <motion.div 
-                        initial={{ scale: 0.8, opacity: 0 }}
-                        animate={{ scale: 1, opacity: 1 }}
-                        transition={{ delay: 0.1, duration: 0.4 }}
-                        className="inline-flex items-center justify-center w-14 h-14 rounded-2xl bg-gradient-to-b from-primary-400 to-primary-600 shadow-[0_0_35px_rgba(59,130,246,0.35)] border border-primary-300/30 mb-4"
-                    >
-                        <GraduationCap className="w-7 h-7 text-white drop-shadow-md" />
-                    </motion.div>
-                    <h1 className="text-2xl font-bold tracking-tight text-white mb-1.5 flex items-center justify-center gap-2">
-                        AIVES
-                        <span className="text-[10px] font-semibold px-2 py-0.5 rounded-full bg-primary-500/10 text-primary-400 border border-primary-500/20 font-mono">
-                            v2.0
-                        </span>
-                    </h1>
-                    <p className="text-xs text-surface-400 font-medium">
-                        Hệ thống Đánh giá & Thi Vấn đáp Trực tuyến Thông minh
-                    </p>
-                </div>
-
                 {/* Glassmorphism Card */}
                 <div className="glass bg-surface-900/70 border border-white/10 rounded-2xl p-6 sm:p-8 backdrop-blur-2xl shadow-[0_20px_60px_rgba(0,0,0,0.6)] relative overflow-hidden">
                     {/* Subtle card top glow accent */}
                     <div className="absolute top-0 left-0 right-0 h-[1px] bg-gradient-to-r from-transparent via-primary-400/50 to-transparent" />
 
                     <div className="mb-6">
-                        <h2 className="text-lg font-semibold text-white">Đăng nhập tài khoản</h2>
-                        <p className="text-xs text-surface-400 mt-0.5">
-                            Nhập thông tin xác thực để truy cập không gian làm việc
+                        <h2 className="text-xl font-bold text-white tracking-tight">Đăng nhập</h2>
+                        <p className="text-xs text-surface-400 mt-1">
+                            Nhập thông tin xác thực để truy cập hệ thống AIVES
                         </p>
                     </div>
 
@@ -295,7 +259,7 @@ export default function Login() {
                             <Sparkles className="w-3 h-3 text-warning-400" />
                             <span>Đăng nhập 1-chạm với tài khoản Demo:</span>
                         </p>
-                        <div className="grid grid-cols-2 gap-2">
+                        <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
                             {DEMO_ACCOUNTS.map((acc) => (
                                 <button
                                     key={acc.username}

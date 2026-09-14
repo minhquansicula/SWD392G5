@@ -10,12 +10,22 @@ const STORAGE_SESSION_KEY = 'aives_auth_session';
 // Default initial credentials for mock users
 const INITIAL_CREDENTIALS = [
     {
+        id: 'usr-admin-001',
+        username: 'admin',
+        email: 'admin@fpt.edu.vn',
+        fullName: 'Quản trị viên Hệ thống',
+        role: Role.ADMIN,
+        password: 'password123',
+        createdAt: '2026-01-01T08:00:00.000Z',
+    },
+    {
         id: 'usr-lecturer-001',
         username: 'dr.nguyen',
         email: 'dr.nguyen@fpt.edu.vn',
         fullName: 'TS. Nguyễn Văn An',
         role: Role.LECTURER,
         password: 'password123',
+        createdAt: '2026-01-10T09:30:00.000Z',
     },
     {
         id: 'usr-student-001',
@@ -24,6 +34,7 @@ const INITIAL_CREDENTIALS = [
         fullName: 'Trần Thị Bình',
         role: Role.STUDENT,
         password: 'password123',
+        createdAt: '2026-02-15T14:20:00.000Z',
     },
     {
         id: 'usr-student-002',
@@ -32,6 +43,7 @@ const INITIAL_CREDENTIALS = [
         fullName: 'Lê Văn Cường',
         role: Role.STUDENT,
         password: 'password123',
+        createdAt: '2026-02-16T10:15:00.000Z',
     },
     {
         id: 'usr-student-003',
@@ -40,6 +52,7 @@ const INITIAL_CREDENTIALS = [
         fullName: 'Phạm Thị Dung',
         role: Role.STUDENT,
         password: 'password123',
+        createdAt: '2026-02-18T11:45:00.000Z',
     },
     {
         id: 'usr-student-004',
@@ -48,6 +61,7 @@ const INITIAL_CREDENTIALS = [
         fullName: 'Hồ Văn Em',
         role: Role.STUDENT,
         password: 'password123',
+        createdAt: '2026-02-20T16:00:00.000Z',
     },
 ];
 
@@ -56,10 +70,15 @@ export function getRegisteredUsers() {
     try {
         const stored = localStorage.getItem(STORAGE_USERS_KEY);
         const registered = stored ? JSON.parse(stored) : [];
-        // Combine initial and stored users (avoiding duplicates by username)
+        // Combine initial and stored users (stored overrides initial if same id/username)
         const combined = [...INITIAL_CREDENTIALS];
         registered.forEach((u) => {
-            if (!combined.some((item) => item.username.toLowerCase() === u.username.toLowerCase())) {
+            const existingIdx = combined.findIndex(
+                (item) => item.id === u.id || item.username.toLowerCase() === u.username.toLowerCase()
+            );
+            if (existingIdx >= 0) {
+                combined[existingIdx] = { ...combined[existingIdx], ...u };
+            } else {
                 combined.push(u);
             }
         });
@@ -69,8 +88,16 @@ export function getRegisteredUsers() {
     }
 }
 
-// Quick demo accounts for one-click login
+// Quick demo accounts for one-click login (Admin, Lecturer, Student)
 export const DEMO_ACCOUNTS = [
+    {
+        role: Role.ADMIN,
+        title: 'Quản trị viên',
+        name: 'Quản trị viên Hệ thống',
+        username: 'admin',
+        password: 'password123',
+        badgeColor: 'text-purple-400 bg-purple-500/10 border-purple-500/20',
+    },
     {
         role: Role.LECTURER,
         title: 'Giảng viên',
@@ -145,7 +172,7 @@ export async function registerApi({ fullName, username, email, password, role })
     }
 
     const newUser = {
-        id: `usr-${role.toLowerCase()}-${Date.now().toString(36)}`,
+        id: `usr-${(role || Role.STUDENT).toLowerCase()}-${Date.now().toString(36)}`,
         username: trimmedUsername,
         email: trimmedEmail,
         fullName: fullName.trim(),
@@ -171,6 +198,74 @@ export async function registerApi({ fullName, username, email, password, role })
         user: safeUser,
         token,
     };
+}
+
+// ------------------------------------------------------------
+// ADMIN MANAGEMENT APIS
+// ------------------------------------------------------------
+
+/**
+ * Get all users for Admin
+ */
+export async function getAllUsersApi() {
+    await new Promise((resolve) => setTimeout(resolve, 200));
+    const users = getRegisteredUsers();
+    return users.map(({ password, ...u }) => ({
+        ...u,
+        createdAt: u.createdAt || new Date().toISOString(),
+    }));
+}
+
+/**
+ * Update user role (Admin role assignment)
+ */
+export async function updateUserRoleApi(userId, newRole) {
+    await new Promise((resolve) => setTimeout(resolve, 300));
+    const stored = localStorage.getItem(STORAGE_USERS_KEY);
+    let registered = stored ? JSON.parse(stored) : [];
+
+    const existingIdx = registered.findIndex((u) => u.id === userId);
+    if (existingIdx >= 0) {
+        registered[existingIdx].role = newRole;
+    } else {
+        const initialUser = INITIAL_CREDENTIALS.find((u) => u.id === userId);
+        if (initialUser) {
+            registered.push({ ...initialUser, role: newRole });
+        } else {
+            throw new Error('Không tìm thấy người dùng để phân quyền.');
+        }
+    }
+    localStorage.setItem(STORAGE_USERS_KEY, JSON.stringify(registered));
+
+    // Also update current active session if Admin changed their own role
+    const activeSession = getInitialSession();
+    if (activeSession?.user?.id === userId) {
+        activeSession.user.role = newRole;
+        saveSession(activeSession.user, activeSession.token, true);
+    }
+
+    return { id: userId, role: newRole };
+}
+
+/**
+ * Delete a user (Admin only)
+ */
+export async function deleteUserApi(userId) {
+    await new Promise((resolve) => setTimeout(resolve, 300));
+    const stored = localStorage.getItem(STORAGE_USERS_KEY);
+    if (stored) {
+        let registered = JSON.parse(stored);
+        registered = registered.filter((u) => u.id !== userId);
+        localStorage.setItem(STORAGE_USERS_KEY, JSON.stringify(registered));
+    }
+    return { success: true };
+}
+
+/**
+ * Create user directly by Admin
+ */
+export async function createUserByAdminApi({ fullName, username, email, password, role }) {
+    return registerApi({ fullName, username, email, password, role });
 }
 
 export function saveSession(user, token, rememberMe = true) {
