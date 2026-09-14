@@ -1,4 +1,4 @@
-import { Navigate } from 'react-router-dom';
+import { Navigate, useLocation } from 'react-router-dom';
 import { Loader2, Inbox } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { useAuthStore } from '../store/authStore';
@@ -7,7 +7,13 @@ import { cn } from '../lib/utils';
 
 // ---------- ProtectedRoute ----------
 export function ProtectedRoute({ children, roles }) {
-    const { currentUser } = useAuthStore();
+    const { currentUser, isAuthenticated } = useAuthStore();
+    const location = useLocation();
+
+    if (!isAuthenticated || !currentUser) {
+        return <Navigate to="/login" state={{ from: location }} replace />;
+    }
+
     if (roles && !roles.includes(currentUser.role)) {
         const fallback = currentUser.role === Role.STUDENT ? '/my-schedules' : '/exams';
         return <Navigate to={fallback} replace />;

@@ -2,7 +2,7 @@
 // AIVES — Layout Component (App Shell)
 // ============================================================
 import { Outlet, NavLink, useLocation, useNavigate } from 'react-router-dom';
-import { GraduationCap, BookOpen, Calendar, BarChart3, Settings, Sun, Moon } from 'lucide-react';
+import { GraduationCap, BookOpen, Calendar, BarChart3, Settings, Sun, Moon, LogOut } from 'lucide-react';
 import { motion } from 'framer-motion';
 import { useAuthStore } from '../store/authStore';
 import { useThemeStore } from '../store/themeStore';
@@ -11,7 +11,7 @@ import { mockUsers } from '../mocks/data';
 import { cn } from '../lib/utils';
 
 export default function Layout() {
-    const { currentUser, switchToUser } = useAuthStore();
+    const { currentUser, switchToUser, logout } = useAuthStore();
     const { theme, toggleTheme } = useThemeStore();
     const location = useLocation();
     const navigate = useNavigate();
@@ -20,6 +20,11 @@ export default function Layout() {
     if (location.pathname.startsWith('/viva/')) {
         return <Outlet />;
     }
+
+    const handleLogout = () => {
+        logout();
+        navigate('/login', { replace: true });
+    };
 
     const handleSwitchUser = (userId) => {
         switchToUser(userId);
@@ -31,7 +36,7 @@ export default function Layout() {
         }
     };
 
-    const isLecturer = currentUser.role === Role.LECTURER;
+    const isLecturer = currentUser?.role === Role.LECTURER;
     const lecturerLinks = [
         { to: '/exams', icon: BookOpen, label: 'Exams' },
         { to: '/analytics/exam-001', icon: BarChart3, label: 'Analytics' },
@@ -100,7 +105,7 @@ export default function Layout() {
                     })}
                 </nav>
 
-                {/* Role Switcher (Mock utility) */}
+                {/* Role Switcher (Mock utility) & Logout */}
                 <div className="p-4 border-t border-white/5 bg-black/20">
                     <div className="flex items-center justify-between mb-3 px-2">
                         <p className="text-[10px] font-semibold text-surface-500 uppercase tracking-widest">Switch Identity</p>
@@ -113,7 +118,7 @@ export default function Layout() {
                                 onClick={() => handleSwitchUser(user.id)} 
                                 className={cn(
                                     "w-full flex items-center justify-between gap-2 px-2.5 py-2 rounded-lg text-xs transition-all outline-none cursor-pointer",
-                                    currentUser.id === user.id 
+                                    currentUser?.id === user.id 
                                         ? 'bg-primary-500/10 text-primary-300 border border-primary-500/20' 
                                         : 'text-surface-400 hover:bg-white/5 hover:text-surface-200 border border-transparent'
                                 )}
@@ -133,6 +138,15 @@ export default function Layout() {
                             </button>
                         ))}
                     </div>
+
+                    <button
+                        onClick={handleLogout}
+                        className="w-full mt-3 flex items-center justify-center gap-2 px-2.5 py-2 rounded-lg text-xs font-medium text-surface-400 hover:text-danger-400 hover:bg-danger-500/10 transition-colors border border-transparent hover:border-danger-500/20 cursor-pointer"
+                        title="Đăng xuất khỏi hệ thống"
+                    >
+                        <LogOut className="w-3.5 h-3.5" />
+                        <span>Đăng xuất</span>
+                    </button>
                 </div>
             </motion.aside>
 
@@ -150,7 +164,7 @@ export default function Layout() {
                         </p>
                     </div>
                     
-                    <div className="flex items-center gap-4">
+                    <div className="flex items-center gap-3 sm:gap-4">
                         <button
                             onClick={toggleTheme}
                             className="p-2 rounded-xl border border-white/10 hover:bg-white/5 transition-colors text-surface-400 hover:text-white flex items-center gap-2 text-xs font-semibold cursor-pointer"
@@ -171,13 +185,26 @@ export default function Layout() {
 
                         <div className="h-5 w-[1px] bg-white/10 hidden sm:block" />
 
-                        <div className="text-right hidden sm:block">
-                            <p className="text-sm font-semibold text-white">{currentUser.fullName}</p>
-                            <p className="text-[11px] text-surface-400">{currentUser.role}</p>
-                        </div>
-                        <div className="w-8 h-8 rounded-full bg-gradient-to-tr from-surface-700 to-surface-600 flex items-center justify-center text-white text-xs font-bold border border-white/10 shadow-sm">
-                            {currentUser.fullName.charAt(0)}
-                        </div>
+                        {currentUser && (
+                            <div className="flex items-center gap-3">
+                                <div className="text-right hidden sm:block">
+                                    <p className="text-sm font-semibold text-white">{currentUser.fullName}</p>
+                                    <p className="text-[11px] text-surface-400">{currentUser.role}</p>
+                                </div>
+                                <div className="w-8 h-8 rounded-full bg-gradient-to-tr from-surface-700 to-surface-600 flex items-center justify-center text-white text-xs font-bold border border-white/10 shadow-sm">
+                                    {currentUser.fullName ? currentUser.fullName.charAt(0) : 'U'}
+                                </div>
+                            </div>
+                        )}
+
+                        <button
+                            onClick={handleLogout}
+                            className="p-2 rounded-xl border border-white/10 hover:bg-danger-500/10 hover:border-danger-500/30 text-surface-400 hover:text-danger-400 transition-colors flex items-center gap-1.5 text-xs font-semibold cursor-pointer"
+                            title="Đăng xuất khỏi hệ thống"
+                        >
+                            <LogOut className="w-4 h-4" />
+                            <span className="hidden md:inline">Thoát</span>
+                        </button>
                     </div>
                 </header>
 

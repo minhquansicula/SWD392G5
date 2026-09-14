@@ -7,7 +7,11 @@ import { ProtectedRoute } from './components/ui';
 import { Role } from './types';
 import { useAuthStore } from './store/authStore';
 
-// Pages
+// Auth Pages
+import Login from './pages/Login';
+import Register from './pages/Register';
+
+// Protected Feature Pages
 import ExamList from './pages/ExamList';
 import ExamCreate from './pages/ExamCreate';
 import ExamDetail from './pages/ExamDetail';
@@ -19,21 +23,55 @@ import StudentResults from './pages/StudentResults';
 import Analytics from './pages/Analytics';
 import NotFound from './pages/NotFound';
 
-// Smart root redirect according to user role
+// Smart root redirect according to auth state and user role
 function RootRedirect() {
-    const { currentUser } = useAuthStore();
-    if (currentUser?.role === Role.STUDENT) {
+    const { currentUser, isAuthenticated } = useAuthStore();
+    if (!isAuthenticated || !currentUser) {
+        return <Navigate to="/login" replace />;
+    }
+    if (currentUser.role === Role.STUDENT) {
         return <Navigate to="/my-schedules" replace />;
     }
     return <Navigate to="/exams" replace />;
 }
 
+// Guest Guard: If user is already authenticated, prevent access to login/register
+function GuestRoute({ children }) {
+    const { currentUser, isAuthenticated } = useAuthStore();
+    if (isAuthenticated && currentUser) {
+        if (currentUser.role === Role.STUDENT) {
+            return <Navigate to="/my-schedules" replace />;
+        }
+        return <Navigate to="/exams" replace />;
+    }
+    return <>{children}</>;
+}
+
 function App() {
     return (
         <Routes>
-            {/* Dynamic root route based on identity */}
+            {/* Dynamic root route based on auth & identity */}
             <Route path="/" element={<RootRedirect />} />
 
+            {/* Public Authentication Routes */}
+            <Route 
+                path="/login" 
+                element={
+                    <GuestRoute>
+                        <Login />
+                    </GuestRoute>
+                } 
+            />
+            <Route 
+                path="/register" 
+                element={
+                    <GuestRoute>
+                        <Register />
+                    </GuestRoute>
+                } 
+            />
+
+            {/* Application Shell (Protected Routes) */}
             <Route element={<Layout />}>
                 {/* LECTURER & ADMIN ROUTES */}
                 <Route 
