@@ -19,6 +19,7 @@ import java.util.UUID;
 @Table(name = "exams")
 public class Exam {
     @Id
+    @GeneratedValue(strategy = GenerationType.UUID)
     @ColumnDefault("gen_random_uuid()")
     @Column(name = "id", nullable = false)
     private UUID id;
@@ -26,7 +27,7 @@ public class Exam {
     @ManyToOne(fetch = FetchType.LAZY)
     @OnDelete(action = OnDeleteAction.CASCADE)
     @JoinColumn(name = "course_id")
-    private Cours course;
+    private Course course;
 
     @Size(max = 255)
     @NotNull
@@ -53,6 +54,5 @@ public class Exam {
     @OnDelete(action = OnDeleteAction.SET_NULL)
     @JoinColumn(name = "created_by")
     private User createdBy;
-
 
 }

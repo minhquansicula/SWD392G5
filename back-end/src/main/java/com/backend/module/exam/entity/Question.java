@@ -24,7 +24,7 @@ public class Question {
     @ManyToOne(fetch = FetchType.LAZY)
     @OnDelete(action = OnDeleteAction.CASCADE)
     @JoinColumn(name = "course_id")
-    private Cours course;
+    private Course course;
 
     @NotNull
     @Column(name = "content", nullable = false, length = Integer.MAX_VALUE)
@@ -33,6 +33,5 @@ public class Question {
     @Size(max = 50)
     @Column(name = "difficulty_level", length = 50)
     private String difficultyLevel;
-
 
 }

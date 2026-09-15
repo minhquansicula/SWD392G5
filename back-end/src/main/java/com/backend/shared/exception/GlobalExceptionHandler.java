@@ -19,6 +19,17 @@ import java.util.stream.Collectors;
 public class GlobalExceptionHandler {
 
     /**
+     * Xử lý lỗi không tìm thấy resource (404 Not Found).
+     */
+    @ExceptionHandler(ResourceNotFoundException.class)
+    public ResponseEntity<ApiResponse<Void>> handleResourceNotFound(ResourceNotFoundException ex) {
+        log.warn("Resource not found: {}", ex.getMessage());
+        return ResponseEntity
+                .status(HttpStatus.NOT_FOUND)
+                .body(ApiResponse.error(ex.getMessage()));
+    }
+
+    /**
      * Xử lý lỗi username bị trùng (409 Conflict).
      */
     @ExceptionHandler(DuplicateUsernameException.class)
