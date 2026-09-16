@@ -1,7 +1,10 @@
 package com.backend.module.auth.entity;
 
+import com.backend.module.auth.enums.Role;
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
+import jakarta.persistence.EnumType;
+import jakarta.persistence.Enumerated;
 import jakarta.persistence.Id;
 import jakarta.persistence.Table;
 import jakarta.validation.constraints.NotNull;
@@ -37,10 +40,10 @@ public class User {
     @Column(name = "full_name", nullable = false)
     private String fullName;
 
-    @Size(max = 50)
     @NotNull
+    @Enumerated(EnumType.STRING)
     @Column(name = "role", nullable = false, length = 50)
-    private String role;
+    private Role role;
 
 
 }

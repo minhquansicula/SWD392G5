@@ -1,6 +1,6 @@
 package com.backend.module.exam.entity;
 
-import com.backend.module.auth.entity.User;
+import com.backend.module.auth.core.entity.User;
 import jakarta.persistence.*;
 import jakarta.validation.constraints.NotNull;
 import jakarta.validation.constraints.Size;
@@ -26,7 +26,7 @@ public class Exam {
     @ManyToOne(fetch = FetchType.LAZY)
     @OnDelete(action = OnDeleteAction.CASCADE)
     @JoinColumn(name = "course_id")
-    private Cours course;
+    private Course course;
 
     @Size(max = 255)
     @NotNull
