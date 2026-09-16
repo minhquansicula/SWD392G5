@@ -9,13 +9,13 @@ spring:
   application:
     name: aives-backend
   profiles:
-    active: dev
+    active: local
 
   # DataSource (PostgreSQL 16)
   datasource:
     url: ${SPRING_DATASOURCE_URL:jdbc:postgresql://localhost:5432/aives_db}
-    username: ${SPRING_DATASOURCE_USERNAME:postgres}
-    password: ${SPRING_DATASOURCE_PASSWORD:postgres}
+    username: ${SPRING_DATASOURCE_USERNAME}
+    password: ${SPRING_DATASOURCE_PASSWORD}
     driver-class-name: org.postgresql.Driver
 
   # Flyway Migration Configuration

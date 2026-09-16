@@ -1,245 +1,107 @@
-@import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap');
 @import "tailwindcss";
 
+@custom-variant dark (&:where(.dark, .dark *));
+
 @theme {
-  --font-sans: 'Inter', ui-sans-serif, system-ui, sans-serif;
-
-  /* Premium Linear/Vercel dark theme colors */
-  --color-primary-50: #eff6ff;
-  --color-primary-100: #dbeafe;
-  --color-primary-200: #bfdbfe;
-  --color-primary-300: #93c5fd;
-  --color-primary-400: #60a5fa;
-  --color-primary-500: #3b82f6; /* Vercel blue */
-  --color-primary-600: #2563eb;
-  --color-primary-700: #1d4ed8;
-  --color-primary-800: #1e40af;
-  --color-primary-900: #1e3a8a;
-
-  /* Success/Accent - Mint/Teal */
-  --color-accent-400: #34d399;
-  --color-accent-500: #10b981;
-  --color-accent-600: #059669;
-
-  /* Danger */
-  --color-danger-400: #f87171;
-  --color-danger-500: #ef4444;
-  --color-danger-600: #dc2626;
-
-  /* Warning */
-  --color-warning-400: #fbbf24;
-  --color-warning-500: #f59e0b;
-  --color-warning-600: #d97706;
-
-  /* Surfaces mapped to CSS variables for dynamic Dark & Light themes */
-  --color-surface-50: var(--surface-50);
-  --color-surface-100: var(--surface-100);
-  --color-surface-200: var(--surface-200);
-  --color-surface-300: var(--surface-300);
-  --color-surface-400: var(--surface-400);
-  --color-surface-500: var(--surface-500);
-  --color-surface-600: var(--surface-600);
-  --color-surface-700: var(--surface-700);
-  --color-surface-800: var(--surface-800);
-  --color-surface-900: var(--surface-900);
-  --color-surface-950: var(--surface-950);
+  --font-sans: 'Be Vietnam Pro', 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+  --font-display: 'Be Vietnam Pro', 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+  --font-mono: 'JetBrains Mono', ui-monospace, monospace;
 }
 
-/* ----------------------------------------------------
-   THEME COLOR SCHEMES
-   ---------------------------------------------------- */
-
-/* Default: Dark Theme (Obsidian & Dark Grays) */
-:root, html.dark {
-  color-scheme: dark;
-  --surface-50: #fafafa;
-  --surface-100: #f4f4f5;
-  --surface-200: #e4e4e7;
-  --surface-300: #d4d4d8;
-  --surface-400: #a1a1aa;
-  --surface-500: #71717a;
-  --surface-600: #52525b;
-  --surface-700: #27272a;
-  --surface-800: #18181b;
-  --surface-900: #0f0f11;
-  --surface-950: #050505;
-
-  --border-color-card: rgba(255, 255, 255, 0.08);
-  --border-color-light: rgba(255, 255, 255, 0.05);
-  --glass-bg: rgba(24, 24, 27, 0.6);
-  --glass-light-bg: rgba(39, 39, 42, 0.4);
+@layer base {
+  :root {
+    --font-display: 'Be Vietnam Pro', 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+    --font-sans: 'Be Vietnam Pro', 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+    --font-mono: 'JetBrains Mono', ui-monospace, monospace;
+  }
+  body {
+    font-family: var(--font-sans);
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+    text-rendering: optimizeLegibility;
+    @apply bg-slate-100 text-slate-900 dark:bg-slate-950 dark:text-slate-100 transition-colors duration-200;
+  }
+  h1, h2, h3, h4, h5, h6 {
+    font-family: var(--font-display);
+    letter-spacing: -0.015em;
+  }
 }
 
-/* Light Theme: "Exam Paper & Red Pen" (from design brief) */
-html.light {
-  color-scheme: light;
-  --surface-50: #141310;
-  --surface-100: #24231F; /* Ink black text */
-  --surface-200: #383730;
-  --surface-300: #504f46;
-  --surface-400: #6B6A61; /* Faded ink text */
-  --surface-500: #8c8a7e;
-  --surface-600: #b5b3a5;
-  --surface-700: #DAD8CC; /* Paper rule hairline border */
-  --surface-800: #EDEDE6; /* Secondary paper panel */
-  --surface-900: #FFFFFF; /* Pure card paper */
-  --surface-950: #F5F5F0; /* Primary exam paper background */
-
-  --border-color-card: #DAD8CC;
-  --border-color-light: #E5E3D8;
-  --glass-bg: rgba(255, 255, 255, 0.95);
-  --glass-light-bg: rgba(247, 247, 243, 0.85);
-}
-
-/* Base styles */
-body {
-  font-family: var(--font-sans);
-  background-color: var(--color-surface-950);
-  color: var(--color-surface-200);
-  -webkit-font-smoothing: antialiased;
-  -moz-osx-font-smoothing: grayscale;
-  background-attachment: fixed;
-  transition: background-color 0.25s ease, color 0.25s ease;
-}
-
-html.dark body {
-  background-image: radial-gradient(circle at top center, rgba(30, 41, 59, 0.4) 0%, transparent 50%);
-}
-
-html.light body {
-  background-image: radial-gradient(circle at top center, rgba(46, 74, 102, 0.05) 0%, transparent 60%);
-}
-
-/* Typography refinements */
-html.dark h1, html.dark h2, html.dark h3, html.dark h4, html.dark h5, html.dark h6 {
-  color: #ffffff;
-  letter-spacing: -0.02em;
-}
-
-html.light h1, html.light h2, html.light h3, html.light h4, html.light h5, html.light h6 {
-  color: #24231F;
-  letter-spacing: -0.02em;
-}
-
-::selection {
-  background: var(--color-primary-500);
-  color: #fff;
-}
-
-/* Scrollbar styling */
+/* Custom scrollbars for clean educational dashboard look */
 ::-webkit-scrollbar {
-  width: 8px;
-  height: 8px;
+  width: 6px;
+  height: 6px;
 }
-
 ::-webkit-scrollbar-track {
   background: transparent;
 }
-
 ::-webkit-scrollbar-thumb {
-  background: var(--color-surface-700);
-  border-radius: 4px;
-  border: 2px solid var(--color-surface-950);
-}
-
-::-webkit-scrollbar-thumb:hover {
-  background: var(--color-surface-500);
-}
-
-/* Glassmorphism & UI Elements */
-.glass {
-  background: var(--glass-bg);
-  backdrop-filter: blur(24px);
-  -webkit-backdrop-filter: blur(24px);
-  border: 1px solid var(--border-color-card);
-  box-shadow: 0 4px 24px -4px rgba(0, 0, 0, 0.5);
-}
-
-.glass-light {
-  background: var(--glass-light-bg);
-  backdrop-filter: blur(12px);
-  -webkit-backdrop-filter: blur(12px);
-  border: 1px solid var(--border-color-light);
-}
-
-html.light .glass {
-  box-shadow: 0 4px 20px -2px rgba(0, 0, 0, 0.05);
-}
-
-.glow-effect {
-  position: relative;
-}
-
-.glow-effect::before {
-  content: '';
-  position: absolute;
-  top: 0; left: 0; right: 0; bottom: 0;
-  border-radius: inherit;
-  padding: 1px;
-  background: linear-gradient(to bottom, rgba(255,255,255,0.1), rgba(255,255,255,0));
-  -webkit-mask: linear-gradient(#fff 0 0) content-box, linear-gradient(#fff 0 0);
-  -webkit-mask-composite: xor;
-  mask-composite: exclude;
-  pointer-events: none;
-}
-
-/* Light mode overrides for elements that used white text or dark borders */
-html.light .text-white:not([class*="bg-primary"]):not([class*="bg-accent"]):not([class*="bg-danger"]):not([class*="bg-warning"]):not([class*="bg-indigo"]):not([class*="bg-purple"]) {
-  color: #24231F !important;
-}
-
-html.light [class*="border-white/"] {
-  border-color: #DAD8CC !important;
-}
-
-html.light [class*="bg-white/5"] {
-  background-color: rgba(0, 0, 0, 0.03) !important;
-}
-
-html.light [class*="bg-white/10"] {
-  background-color: rgba(0, 0, 0, 0.06) !important;
-}
-
-html.light [class*="bg-black/"] {
-  background-color: rgba(0, 0, 0, 0.03) !important;
-}
-
-/* Gradient text */
-.gradient-text {
-  background: linear-gradient(135deg, #ffffff, #a1a1aa);
-  -webkit-background-clip: text;
-  -webkit-text-fill-color: transparent;
-  background-clip: text;
-}
-
-html.light .gradient-text {
-  background: linear-gradient(135deg, #24231F, #6B6A61);
-  -webkit-background-clip: text;
-  -webkit-text-fill-color: transparent;
-  background-clip: text;
-}
-
-.gradient-primary {
-  background: linear-gradient(135deg, var(--color-primary-500), #8b5cf6);
-  -webkit-background-clip: text;
-  -webkit-text-fill-color: transparent;
-  background-clip: text;
-}
-
-/* Audio visualization waves */
-.audio-wave {
-  width: 4px;
+  background: rgba(156, 163, 175, 0.4);
   border-radius: 9999px;
-  background-color: var(--color-primary-500);
+}
+::-webkit-scrollbar-thumb:hover {
+  background: rgba(107, 114, 128, 0.6);
 }
 
-/* Pulse animation for recording */
-@keyframes pulse-ring {
-  0% { transform: scale(1); opacity: 0.6; box-shadow: 0 0 0 0 rgba(239, 68, 68, 0.4); }
-  70% { transform: scale(1.15); opacity: 0; box-shadow: 0 0 0 15px rgba(239, 68, 68, 0); }
-  100% { transform: scale(1); opacity: 0; box-shadow: 0 0 0 0 rgba(239, 68, 68, 0); }
+/* Moving Mesh Gradient & Ambient Floating Orbs for Auth Landing Page */
+@keyframes gradientFlow {
+  0% {
+    background-position: 0% 50%;
+  }
+  50% {
+    background-position: 100% 50%;
+  }
+  100% {
+    background-position: 0% 50%;
+  }
 }
 
-.animate-pulse-ring {
-  animation: pulse-ring 2s cubic-bezier(0.4, 0, 0.6, 1) infinite;
+@keyframes floatOrb1 {
+  0%, 100% {
+    transform: translate(0px, 0px) scale(1);
+  }
+  33% {
+    transform: translate(45px, -50px) scale(1.15);
+  }
+  66% {
+    transform: translate(-35px, 35px) scale(0.92);
+  }
+}
+
+@keyframes floatOrb2 {
+  0%, 100% {
+    transform: translate(0px, 0px) scale(1);
+  }
+  33% {
+    transform: translate(-50px, 45px) scale(1.12);
+  }
+  66% {
+    transform: translate(40px, -30px) scale(0.95);
+  }
+}
+
+@keyframes floatOrb3 {
+  0%, 100% {
+    transform: translate(0px, 0px) scale(1);
+  }
+  50% {
+    transform: translate(35px, 40px) scale(1.1);
+  }
+}
+
+.animate-gradient-flow {
+  background-size: 250% 250%;
+  animation: gradientFlow 15s ease infinite;
+}
+
+.animate-float-1 {
+  animation: floatOrb1 16s ease-in-out infinite;
+}
+
+.animate-float-2 {
+  animation: floatOrb2 20s ease-in-out infinite;
+}
+
+.animate-float-3 {
+  animation: floatOrb3 14s ease-in-out infinite;
 }
