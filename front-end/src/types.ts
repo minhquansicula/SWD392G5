@@ -1,4 +1,16 @@
-export type ModuleType = 'exams' | 'interview' | 'analytics' | 'specs';
+export type ModuleType = 'exams' | 'interview' | 'analytics' | 'admin';
+
+export type UserRole = 'ADMIN' | 'LECTURER' | 'STUDENT';
+
+export interface UserAccount {
+  id: string;
+  username: string;
+  email: string;
+  fullName: string;
+  role: UserRole;
+  password?: string;
+  createdAt: string;
+}
 
 export type ExamSubView = 'list' | 'create' | 'detail' | 'assignment';
 export type AnalyticsSubView = 'student' | 'class';

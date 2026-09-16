@@ -272,7 +272,7 @@ export const SystemSpecModal: React.FC<SystemSpecModalProps> = ({ isOpen, onClos
                 <div className="p-3 rounded-lg bg-slate-100 dark:bg-slate-800">
                   <strong className="text-slate-900 dark:text-white">Typography Hierarchy:</strong>
                   <p className="text-slate-600 dark:text-slate-400 mt-1">
-                    Headings: <code className="text-indigo-600 dark:text-indigo-400">font-display ('Outfit')</code> for modern academic authority. Body text: <code className="text-indigo-600 dark:text-indigo-400">font-sans ('Plus Jakarta Sans')</code> for high legibility during extended oral reading. Numbers & timestamps: <code className="text-indigo-600 dark:text-indigo-400">font-mono ('JetBrains Mono')</code>.
+                    Headings: <code className="text-indigo-600 dark:text-indigo-400">font-display ('Be Vietnam Pro')</code> chuẩn tiếng Việt & hiện đại. Body text: <code className="text-indigo-600 dark:text-indigo-400">font-sans ('Be Vietnam Pro' / 'Inter')</code> sắc nét, tối ưu đọc tiếng Việt. Số & thời gian: <code className="text-indigo-600 dark:text-indigo-400">font-mono ('JetBrains Mono')</code>.
                   </p>
                 </div>
                 <div className="p-3 rounded-lg bg-slate-100 dark:bg-slate-800">

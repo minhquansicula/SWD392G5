@@ -6,6 +6,7 @@ import {
   StudentAssignment,
   StudentEvaluationReport,
   ClassAnalyticsData,
+  UserAccount,
 } from './types';
 import {
   mockExams,
@@ -14,21 +15,35 @@ import {
   mockClassAnalytics,
 } from './data/mockData';
 import { Language } from './utils/i18n';
-import { Header } from './components/common/Header';
-import { SystemSpecModal } from './components/common/SystemSpecModal';
+import { Sidebar } from './components/common/Sidebar';
+import { TopBar } from './components/common/TopBar';
 import { ExamListPage } from './components/exams/ExamListPage';
 import { CreateExamModal } from './components/exams/CreateExamModal';
 import { StudentAssignmentPage } from './components/exams/StudentAssignmentPage';
 import { ExamDetailPage } from './components/exams/ExamDetailPage';
 import { LiveVivaRoom } from './components/interview/LiveVivaRoom';
 import { ResultAnalyticsView } from './components/analytics/ResultAnalyticsView';
+import { UserManagementPage } from './components/admin/UserManagementPage';
+import { AuthModal } from './components/auth/AuthModal';
+import { AuthLandingPage } from './components/auth/AuthLandingPage';
+import {
+  getCurrentSession,
+  clearSession,
+  loginUser,
+  DEMO_ACCOUNTS,
+} from './services/authService';
 
 export default function App() {
+  // Authentication & Current User Session
+  const [currentUser, setCurrentUser] = useState<UserAccount | null>(() => getCurrentSession());
+  const [isAuthModalOpen, setIsAuthModalOpen] = useState(false);
+  const [authModalTab, setAuthModalTab] = useState<'login' | 'register'>('login');
+
   // Navigation & View state
   const [activeModule, setActiveModule] = useState<ModuleType>('exams');
   const [examSubView, setExamSubView] = useState<ExamSubView>('list');
   const [isCreateModalOpen, setIsCreateModalOpen] = useState(false);
-  const [isSpecsModalOpen, setIsSpecsModalOpen] = useState(false);
+  const [isMobileSidebarOpen, setIsMobileSidebarOpen] = useState(false);
 
   // App Theme & Preferences (Default to Simple Mode & Vietnamese for clean simplicity)
   const [isDarkMode, setIsDarkMode] = useState<boolean>(() => {
@@ -44,6 +59,13 @@ export default function App() {
   const [userRole, setUserRole] = useState<'faculty' | 'student'>('faculty');
   const [isSimpleMode, setIsSimpleMode] = useState(true);
   const [language, setLanguage] = useState<Language>('vi');
+
+  // Sync userRole with currentUser
+  useEffect(() => {
+    if (currentUser) {
+      setUserRole(currentUser.role === 'STUDENT' ? 'student' : 'faculty');
+    }
+  }, [currentUser]);
 
   // Active Entities
   const [exams, setExams] = useState<Exam[]>(mockExams);
@@ -83,7 +105,6 @@ export default function App() {
     if (candidate) {
       setSelectedCandidate(candidate);
     } else {
-      // Pick first ready or in-progress candidate or default
       const cand = assignments.find((a) => a.examId === exam.id) || assignments[0];
       setSelectedCandidate(cand);
     }
@@ -92,7 +113,6 @@ export default function App() {
 
   // Finish Viva -> updates candidate score and navigates to report
   const handleFinishViva = (score: number = 44) => {
-    // Update assignment status
     const updated = assignments.map((a) =>
       a.id === selectedCandidate.id
         ? { ...a, status: 'completed' as const, score }
@@ -100,7 +120,6 @@ export default function App() {
     );
     setAssignments(updated);
 
-    // Update report
     setStudentReport({
       ...studentReport,
       totalScore: score,
@@ -110,10 +129,52 @@ export default function App() {
     setActiveModule('analytics');
   };
 
+  // 1-Touch Demo Switcher Handler
+  const handleSwitchUser = async (username: string) => {
+    const demo = DEMO_ACCOUNTS.find((d) => d.username === username);
+    if (demo) {
+      try {
+        const user = await loginUser(demo.username, demo.password);
+        setCurrentUser(user);
+      } catch (err) {
+        console.error('Failed to switch user:', err);
+      }
+    }
+  };
+
+  // Logout Handler
+  const handleLogout = () => {
+    clearSession();
+    setCurrentUser(null);
+  };
+
+  // Refresh current user session from storage (e.g. after Admin role updates)
+  const handleRefreshCurrentUser = () => {
+    const session = getCurrentSession();
+    setCurrentUser(session);
+  };
+
+  // Dedicated Authentication Landing Page with moving gradient animation
+  if (!currentUser) {
+    return (
+      <div className={isDarkMode ? 'dark' : ''}>
+        <AuthLandingPage
+          onLoginSuccess={(user) => {
+            setCurrentUser(user);
+          }}
+          language={language}
+          setLanguage={setLanguage}
+          isDarkMode={isDarkMode}
+          setIsDarkMode={setIsDarkMode}
+        />
+      </div>
+    );
+  }
+
   return (
-    <div className="min-h-screen bg-slate-100 dark:bg-slate-950 text-slate-900 dark:text-slate-100 flex flex-col font-sans transition-colors duration-200">
-      {/* Universal Navigation Header */}
-      <Header
+    <div className="min-h-screen bg-slate-50 dark:bg-slate-950 text-slate-900 dark:text-slate-100 flex font-sans transition-colors duration-200">
+      {/* Modern Left Sidebar Navigation */}
+      <Sidebar
         activeModule={activeModule}
         setActiveModule={(m) => {
           setActiveModule(m);
@@ -123,134 +184,151 @@ export default function App() {
         setIsDarkMode={setIsDarkMode}
         isSoundEnabled={isSoundEnabled}
         setIsSoundEnabled={setIsSoundEnabled}
-        userRole={userRole}
-        setUserRole={setUserRole}
         isSimpleMode={isSimpleMode}
         setIsSimpleMode={setIsSimpleMode}
         language={language}
         setLanguage={setLanguage}
-        onOpenSpecsModal={() => setIsSpecsModalOpen(true)}
+        currentUser={currentUser}
+        onOpenAuthModal={(tab = 'login') => {
+          setAuthModalTab(tab);
+          setIsAuthModalOpen(true);
+        }}
+        onSwitchUser={handleSwitchUser}
+        onLogout={handleLogout}
+        isOpenMobile={isMobileSidebarOpen}
+        onCloseMobile={() => setIsMobileSidebarOpen(false)}
       />
 
-      {/* Main Container */}
-      <main className="flex-1 max-w-7xl w-full mx-auto px-4 sm:px-6 lg:px-8 py-6">
-        {/* MODULE 1: EXAM & SCHEDULE MANAGEMENT */}
-        {activeModule === 'exams' && (
-          <>
-            {examSubView === 'list' && (
-              <ExamListPage
-                exams={exams}
-                onSelectExam={(exam, view) => {
-                  setSelectedExam(exam);
-                  setExamSubView(view);
-                }}
-                onLaunchViva={(exam) => handleLaunchViva(exam)}
-                onOpenCreateExam={() => setIsCreateModalOpen(true)}
-                onViewAnalytics={(examId) => {
-                  const ex = exams.find((e) => e.id === examId) || exams[0];
-                  setSelectedExam(ex);
-                  setActiveModule('analytics');
-                }}
-                isSimpleMode={isSimpleMode}
-                language={language}
-              />
-            )}
+      {/* Main Content Area */}
+      <div className="flex-1 flex flex-col min-w-0">
+        {/* Slim Top Bar */}
+        <TopBar
+          activeModule={activeModule}
+          language={language}
+          onOpenMobileSidebar={() => setIsMobileSidebarOpen(true)}
+          currentUser={currentUser}
+        />
 
-            {examSubView === 'detail' && (
-              <ExamDetailPage
-                exam={selectedExam}
-                onBack={() => setExamSubView('list')}
-                onLaunchViva={() => handleLaunchViva(selectedExam)}
-                onGoToAssignments={() => setExamSubView('assignment')}
-                onGoToAnalytics={() => setActiveModule('analytics')}
-              />
-            )}
+        {/* Main View Container */}
+        <main className="flex-1 max-w-7xl w-full mx-auto px-4 sm:px-6 lg:px-8 py-6">
+          {/* MODULE 1: EXAM & SCHEDULE MANAGEMENT */}
+          {activeModule === 'exams' && (
+            <>
+              {examSubView === 'list' && (
+                <ExamListPage
+                  exams={exams}
+                  onSelectExam={(exam, view) => {
+                    setSelectedExam(exam);
+                    setExamSubView(view);
+                  }}
+                  onLaunchViva={(exam) => handleLaunchViva(exam)}
+                  onOpenCreateExam={() => setIsCreateModalOpen(true)}
+                  onViewAnalytics={(examId) => {
+                    const ex = exams.find((e) => e.id === examId) || exams[0];
+                    setSelectedExam(ex);
+                    setActiveModule('analytics');
+                  }}
+                  isSimpleMode={isSimpleMode}
+                  language={language}
+                />
+              )}
 
-            {examSubView === 'assignment' && (
-              <StudentAssignmentPage
-                exam={selectedExam}
-                assignments={assignments.filter((a) => a.examId === selectedExam.id)}
-                onBack={() => setExamSubView('list')}
-                onLaunchVivaForStudent={(candidate) =>
-                  handleLaunchViva(selectedExam, candidate)
+              {examSubView === 'detail' && (
+                <ExamDetailPage
+                  exam={selectedExam}
+                  onBack={() => setExamSubView('list')}
+                  onLaunchViva={() => handleLaunchViva(selectedExam)}
+                  onGoToAssignments={() => setExamSubView('assignment')}
+                  onGoToAnalytics={() => setActiveModule('analytics')}
+                />
+              )}
+
+              {examSubView === 'assignment' && (
+                <StudentAssignmentPage
+                  exam={selectedExam}
+                  assignments={assignments.filter((a) => a.examId === selectedExam.id)}
+                  onBack={() => setExamSubView('list')}
+                  onLaunchVivaForStudent={(candidate) =>
+                    handleLaunchViva(selectedExam, candidate)
+                  }
+                  onUpdateAssignments={(updated) => {
+                    const other = assignments.filter((a) => a.examId !== selectedExam.id);
+                    setAssignments([...other, ...updated]);
+                  }}
+                />
+              )}
+            </>
+          )}
+
+          {/* MODULE 2: LIVE AI VIVA ORAL INTERVIEW */}
+          {activeModule === 'interview' && (
+            <LiveVivaRoom
+              exam={selectedExam}
+              candidate={selectedCandidate}
+              onFinishViva={handleFinishViva}
+              onExit={() => {
+                setActiveModule('exams');
+                setExamSubView('list');
+              }}
+              isSoundEnabled={isSoundEnabled}
+              isSimpleMode={isSimpleMode}
+              language={language}
+            />
+          )}
+
+          {/* MODULE 3: RESULT & ANALYTICS DASHBOARD */}
+          {activeModule === 'analytics' && (
+            <ResultAnalyticsView
+              report={studentReport}
+              analytics={classAnalytics}
+              assignments={assignments}
+              isSimpleMode={isSimpleMode}
+              language={language}
+              onSelectCandidate={(candId) => {
+                if (candId === 'stu-9922') {
+                  setStudentReport({
+                    ...studentReport,
+                    studentId: 'stu-9922',
+                    studentName: 'Marcus Chen',
+                    matriculationNo: 'CS2023-8849',
+                    totalScore: 38,
+                    percentage: 76,
+                    gradeLetter: 'B+',
+                    cohortPercentile: 72.4,
+                    durationSpentMinutes: 15.0,
+                  });
+                } else {
+                  setStudentReport(mockStudentEvaluation);
                 }
-                onUpdateAssignments={(updated) => {
-                  // Merge with global assignments
-                  const other = assignments.filter((a) => a.examId !== selectedExam.id);
-                  setAssignments([...other, ...updated]);
-                }}
-              />
-            )}
-          </>
-        )}
+              }}
+            />
+          )}
 
-        {/* MODULE 2: LIVE AI VIVA ORAL INTERVIEW */}
-        {activeModule === 'interview' && (
-          <LiveVivaRoom
-            exam={selectedExam}
-            candidate={selectedCandidate}
-            onFinishViva={handleFinishViva}
-            onExit={() => {
-              setActiveModule('exams');
-              setExamSubView('list');
-            }}
-            isSoundEnabled={isSoundEnabled}
-            isSimpleMode={isSimpleMode}
-            language={language}
-          />
-        )}
+          {/* MODULE 4: ADMIN USER & ROLE MANAGEMENT */}
+          {activeModule === 'admin' && (
+            <UserManagementPage
+              language={language}
+              currentUserId={currentUser?.id}
+              onRefreshCurrentUser={handleRefreshCurrentUser}
+            />
+          )}
+        </main>
 
-        {/* MODULE 3: RESULT & ANALYTICS DASHBOARD */}
-        {activeModule === 'analytics' && (
-          <ResultAnalyticsView
-            report={studentReport}
-            analytics={classAnalytics}
-            assignments={assignments}
-            isSimpleMode={isSimpleMode}
-            language={language}
-            onSelectCandidate={(candId) => {
-              if (candId === 'stu-9922') {
-                // Marcus Chen
-                setStudentReport({
-                  ...studentReport,
-                  studentId: 'stu-9922',
-                  studentName: 'Marcus Chen',
-                  matriculationNo: 'CS2023-8849',
-                  totalScore: 38,
-                  percentage: 76,
-                  gradeLetter: 'B+',
-                  cohortPercentile: 72.4,
-                  durationSpentMinutes: 15.0,
-                });
-              } else {
-                // Elena Rostova
-                setStudentReport(mockStudentEvaluation);
-              }
-            }}
-          />
-        )}
-      </main>
-
-      {/* Footer */}
-      <footer className="border-t border-slate-200 dark:border-slate-800 bg-white/70 dark:bg-slate-900/70 py-4 text-xs text-slate-500 dark:text-slate-400">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 flex flex-col sm:flex-row items-center justify-between gap-2">
-          <div className="flex items-center gap-2">
-            <span className="font-bold text-slate-900 dark:text-white font-display">
-              AIVES
-            </span>
-            <span>— AI-Powered Oral Viva Voce Examination System</span>
+        {/* Footer */}
+        <footer className="border-t border-slate-200 dark:border-slate-800 bg-white/70 dark:bg-slate-900/70 py-4 text-xs text-slate-500 dark:text-slate-400">
+          <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 flex flex-col sm:flex-row items-center justify-between gap-2">
+            <div className="flex items-center gap-2">
+              <span className="font-bold text-slate-900 dark:text-white font-display">
+                AIVES
+              </span>
+              <span>— AI-Powered Oral Viva Voce Examination System</span>
+            </div>
+            <div className="flex items-center gap-4">
+              <span>WCAG 2.1 AA Compliant</span>
+            </div>
           </div>
-          <div className="flex items-center gap-4">
-            <button
-              onClick={() => setIsSpecsModalOpen(true)}
-              className="text-indigo-600 dark:text-indigo-400 hover:underline font-medium"
-            >
-              View UI & Architecture Specs
-            </button>
-            <span>WCAG 2.1 AA Compliant</span>
-          </div>
-        </div>
-      </footer>
+        </footer>
+      </div>
 
       {/* Create Exam Wizard Modal */}
       <CreateExamModal
@@ -259,10 +337,15 @@ export default function App() {
         onCreateExam={handleCreateExam}
       />
 
-      {/* System Specifications & Architecture Modal */}
-      <SystemSpecModal
-        isOpen={isSpecsModalOpen}
-        onClose={() => setIsSpecsModalOpen(false)}
+      {/* Authentication Modal (Login & Registration with 1-touch demo and admin role policy) */}
+      <AuthModal
+        isOpen={isAuthModalOpen}
+        onClose={() => setIsAuthModalOpen(false)}
+        language={language}
+        initialTab={authModalTab}
+        onSuccess={(user) => {
+          setCurrentUser(user);
+        }}
       />
     </div>
   );
