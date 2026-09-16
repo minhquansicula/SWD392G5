@@ -1,6 +1,7 @@
 package com.backend.module.auth.core.service;
 
 import com.backend.module.auth.api.dto.CreateUserRequest;
+import com.backend.module.auth.api.dto.UpdateUserRequest;
 import com.backend.module.auth.api.dto.UserDto;
 import com.backend.module.auth.api.exception.UserAlreadyExistsException;
 import com.backend.module.auth.api.exception.UserNotFoundException;
@@ -66,6 +67,30 @@ public class AdminUserServiceImpl implements AdminUserService {
                 .username(savedUser.getUsername())
                 .fullName(savedUser.getFullName())
                 .role(savedUser.getRole().name())
+                .build();
+    }
+
+    @Override
+    @Transactional
+    public UserDto updateUser(UUID id, UpdateUserRequest request) {
+        User user = userRepository.findById(id)
+                .orElseThrow(() -> new UserNotFoundException(id.toString()));
+
+        if (request.getFullName() != null && !request.getFullName().isBlank()) {
+            user.setFullName(request.getFullName().trim());
+        }
+
+        if (request.getRole() != null && !request.getRole().isBlank()) {
+            user.setRole(Role.valueOf(request.getRole().trim().toUpperCase()));
+        }
+
+        User updatedUser = userRepository.save(user);
+
+        return UserDto.builder()
+                .id(updatedUser.getId())
+                .username(updatedUser.getUsername())
+                .fullName(updatedUser.getFullName())
+                .role(updatedUser.getRole().name())
                 .build();
     }
 
