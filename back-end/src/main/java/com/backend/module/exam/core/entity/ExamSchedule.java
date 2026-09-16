@@ -1,4 +1,4 @@
-package com.backend.module.exam.entity;
+package com.backend.module.exam.core.entity;
 
 import com.backend.module.auth.core.entity.User;
 import jakarta.persistence.*;
