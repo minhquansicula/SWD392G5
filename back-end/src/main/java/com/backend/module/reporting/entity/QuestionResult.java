@@ -1,7 +1,7 @@
 package com.backend.module.reporting.entity;
 
-import com.backend.module.exam.entity.ExamSchedule;
-import com.backend.module.exam.entity.Question;
+import com.backend.module.exam.core.entity.ExamSchedule;
+import com.backend.module.exam.core.entity.Question;
 import jakarta.persistence.*;
 import lombok.Getter;
 import lombok.Setter;
