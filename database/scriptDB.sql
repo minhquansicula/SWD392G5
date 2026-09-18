@@ -45,6 +45,18 @@ CREATE TABLE exam_schedules (
     final_score DECIMAL(5, 2)
 );
 
+CREATE TABLE assigned_questions (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    exam_schedule_id UUID NOT NULL REFERENCES exam_schedules(id) ON DELETE RESTRICT,
+    question_id UUID NOT NULL REFERENCES questions(id) ON DELETE RESTRICT,
+    question_order INT NOT NULL CHECK (question_order > 0),
+    content_snapshot TEXT NOT NULL,
+    assigned_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    CONSTRAINT uq_assigned_question UNIQUE (exam_schedule_id, question_id),
+    CONSTRAINT uq_assigned_question_order UNIQUE (exam_schedule_id, question_order)
+);
+CREATE INDEX ix_assigned_questions_question_id ON assigned_questions(question_id);
+
 CREATE TABLE transcripts (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     exam_schedule_id UUID REFERENCES exam_schedules(id) ON DELETE CASCADE,
