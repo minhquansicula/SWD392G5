@@ -17,6 +17,7 @@ import java.util.UUID;
 @Table(name = "questions")
 public class Question {
     @Id
+    @GeneratedValue(strategy = GenerationType.UUID)
     @ColumnDefault("gen_random_uuid()")
     @Column(name = "id", nullable = false)
     private UUID id;

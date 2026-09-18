@@ -76,6 +76,7 @@ public class AuthService {
                 .username(savedUser.getUsername())
                 .fullName(savedUser.getFullName())
                 .role(savedUser.getRole())
+                .createdAt(savedUser.getCreatedAt())
                 .token(token)
                 .build();
     }
@@ -113,6 +114,7 @@ public class AuthService {
                 .username(user.getUsername())
                 .fullName(user.getFullName())
                 .role(user.getRole())
+                .createdAt(user.getCreatedAt())
                 .token(token)
                 .build();
     }

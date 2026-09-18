@@ -11,4 +11,14 @@ import java.util.UUID;
  */
 @Repository
 public interface CourseRepository extends JpaRepository<Course, UUID> {
+
+    /**
+     * Kiểm tra mã môn học đã tồn tại chưa (dùng khi tạo mới).
+     */
+    boolean existsByCourseCode(String courseCode);
+
+    /**
+     * Kiểm tra mã môn học đã tồn tại ở bản ghi khác chưa (dùng khi cập nhật, loại trừ chính nó).
+     */
+    boolean existsByCourseCodeAndIdNot(String courseCode, UUID id);
 }

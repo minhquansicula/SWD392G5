@@ -18,6 +18,32 @@ import java.util.stream.Collectors;
 @RestControllerAdvice
 public class GlobalExceptionHandler {
 
+    @ExceptionHandler(ScheduleConflictException.class)
+    public ResponseEntity<ApiResponse<Void>> handleScheduleConflict(ScheduleConflictException ex) {
+        return ResponseEntity.status(HttpStatus.CONFLICT).body(ApiResponse.<Void>builder()
+                .success(false).code(ex.getCode()).message(ex.getMessage()).build());
+    }
+
+    @ExceptionHandler(org.springframework.security.access.AccessDeniedException.class)
+    public ResponseEntity<ApiResponse<Void>> handleAccessDenied(Exception ex) {
+        return ResponseEntity.status(HttpStatus.FORBIDDEN).body(ApiResponse.error(ex.getMessage()));
+    }
+
+    @ExceptionHandler({org.springframework.dao.DataIntegrityViolationException.class,
+            org.springframework.dao.PessimisticLockingFailureException.class})
+    public ResponseEntity<ApiResponse<Void>> handleDataConflict(Exception ex) {
+        log.warn("Database conflict", ex);
+        return ResponseEntity.status(HttpStatus.CONFLICT).body(ApiResponse.<Void>builder()
+                .success(false).code("DATA_CONFLICT")
+                .message("Dữ liệu xung đột hoặc đang được cập nhật. Vui lòng tải lại và thử lại.").build());
+    }
+
+    @ExceptionHandler({org.springframework.http.converter.HttpMessageNotReadableException.class,
+            org.springframework.web.method.annotation.MethodArgumentTypeMismatchException.class})
+    public ResponseEntity<ApiResponse<Void>> handleMalformedRequest(Exception ex) {
+        return ResponseEntity.badRequest().body(ApiResponse.error("Payload, UUID hoặc thời gian không hợp lệ"));
+    }
+
     /**
      * Xử lý lỗi không tìm thấy resource (404 Not Found).
      */
@@ -35,6 +61,17 @@ public class GlobalExceptionHandler {
     @ExceptionHandler(DuplicateUsernameException.class)
     public ResponseEntity<ApiResponse<Void>> handleDuplicateUsername(DuplicateUsernameException ex) {
         log.warn("Duplicate username: {}", ex.getMessage());
+        return ResponseEntity
+                .status(HttpStatus.CONFLICT)
+                .body(ApiResponse.error(ex.getMessage()));
+    }
+
+    /**
+     * Xử lý lỗi mã môn học bị trùng (409 Conflict).
+     */
+    @ExceptionHandler(DuplicateCourseCodeException.class)
+    public ResponseEntity<ApiResponse<Void>> handleDuplicateCourseCode(DuplicateCourseCodeException ex) {
+        log.warn("Duplicate course code: {}", ex.getMessage());
         return ResponseEntity
                 .status(HttpStatus.CONFLICT)
                 .body(ApiResponse.error(ex.getMessage()));

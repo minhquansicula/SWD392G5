@@ -12,6 +12,7 @@ import lombok.Getter;
 import lombok.Setter;
 import org.hibernate.annotations.ColumnDefault;
 
+import java.time.OffsetDateTime;
 import java.util.UUID;
 
 @Getter
@@ -44,6 +45,10 @@ public class User {
     @NotNull
     @Column(name = "role", nullable = false, length = 50)
     private String role;
+
+    @ColumnDefault("CURRENT_TIMESTAMP")
+    @Column(name = "created_at", insertable = false, updatable = false)
+    private OffsetDateTime createdAt;
 
 
 }

@@ -5,6 +5,7 @@ import lombok.Builder;
 import lombok.Data;
 import lombok.NoArgsConstructor;
 
+import java.time.OffsetDateTime;
 import java.util.UUID;
 
 /**
@@ -21,4 +22,5 @@ public class UserResponse {
     private String username;
     private String fullName;
     private String role;
+    private OffsetDateTime createdAt;
 }

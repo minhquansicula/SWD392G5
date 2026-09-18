@@ -5,26 +5,21 @@ import lombok.Builder;
 import lombok.Data;
 import lombok.NoArgsConstructor;
 
-import java.time.OffsetDateTime;
 import java.util.UUID;
 
 /**
- * DTO trả về thông tin bài thi.
+ * DTO trả về thông tin chi tiết câu hỏi.
  */
 @Data
 @Builder
 @NoArgsConstructor
 @AllArgsConstructor
-public class ExamResponse {
+public class QuestionResponse {
 
     private UUID id;
     private UUID courseId;
     private String courseCode;
     private String courseName;
-    private String title;
-    private OffsetDateTime startDate;
-    private OffsetDateTime endDate;
-    private Integer maxMainQuestions;
-    private Integer maxFollowupQuestions;
-    private String createdBy;
+    private String content;
+    private String difficultyLevel;
 }

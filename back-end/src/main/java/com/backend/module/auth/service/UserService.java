@@ -103,6 +103,7 @@ public class UserService {
                 .username(user.getUsername())
                 .fullName(user.getFullName())
                 .role(user.getRole())
+                .createdAt(user.getCreatedAt())
                 .build();
     }
 }
