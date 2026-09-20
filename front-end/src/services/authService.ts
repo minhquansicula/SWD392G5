@@ -1,298 +1,257 @@
 // ============================================================
 // AIVES — Authentication & User Management Service
+// Real API Integration with Spring Boot Backend
 // ============================================================
 import { UserAccount, UserRole } from '../types';
+import apiClient from './apiClient';
 
-const STORAGE_USERS_KEY = 'aives_registered_users';
 const STORAGE_SESSION_KEY = 'aives_auth_session';
+const TOKEN_KEY = 'accessToken';
 
-export const INITIAL_USERS: UserAccount[] = [
-  {
-    id: 'usr-admin-001',
-    username: 'admin',
-    email: 'admin@fpt.edu.vn',
-    fullName: 'Quản trị viên Hệ thống',
-    role: 'ADMIN',
-    password: 'password123',
-    createdAt: '2026-01-01T08:00:00.000Z',
-  },
-  {
-    id: 'usr-lecturer-001',
-    username: 'dr.nguyen',
-    email: 'dr.nguyen@fpt.edu.vn',
-    fullName: 'TS. Nguyễn Văn An',
-    role: 'LECTURER',
-    password: 'password123',
-    createdAt: '2026-01-10T09:30:00.000Z',
-  },
-  {
-    id: 'usr-student-001',
-    username: 'tranthib',
-    email: 'tranthib@fpt.edu.vn',
-    fullName: 'Trần Thị Bình',
-    role: 'STUDENT',
-    password: 'password123',
-    createdAt: '2026-02-15T14:20:00.000Z',
-  },
-  {
-    id: 'usr-student-002',
-    username: 'levanc',
-    email: 'levanc@fpt.edu.vn',
-    fullName: 'Lê Văn Cường',
-    role: 'STUDENT',
-    password: 'password123',
-    createdAt: '2026-02-16T10:15:00.000Z',
-  },
-  {
-    id: 'usr-student-003',
-    username: 'phamthid',
-    email: 'phamthid@fpt.edu.vn',
-    fullName: 'Phạm Thị Dung',
-    role: 'STUDENT',
-    password: 'password123',
-    createdAt: '2026-02-18T11:45:00.000Z',
-  },
-  {
-    id: 'usr-student-004',
-    username: 'hovane',
-    email: 'hovane@fpt.edu.vn',
-    fullName: 'Hồ Văn Em',
-    role: 'STUDENT',
-    password: 'password123',
-    createdAt: '2026-02-20T16:00:00.000Z',
-  },
-];
-
-export interface DemoAccountInfo {
-  role: UserRole;
-  title: string;
-  name: string;
+// DTO interface mapping from backend
+export interface BackendUserDto {
+  id: string;
   username: string;
-  password: string;
-  badgeColor: string;
-  description: string;
+  fullName: string;
+  role: string;
+  isActive?: boolean;
+  createdAt?: string;
+  email?: string;
 }
 
-export const DEMO_ACCOUNTS: DemoAccountInfo[] = [
-  {
-    role: 'ADMIN',
-    title: 'Quản trị viên (Admin)',
-    name: 'Quản trị viên Hệ thống',
-    username: 'admin',
-    password: 'password123',
-    badgeColor: 'text-purple-600 dark:text-purple-400 bg-purple-50 dark:bg-purple-950/50 border-purple-200 dark:border-purple-800',
-    description: 'Toàn quyền cấu hình kỳ thi, phân quyền người dùng, thiết lập giám khảo AI',
-  },
-  {
-    role: 'LECTURER',
-    title: 'Giảng viên (Faculty)',
-    name: 'TS. Nguyễn Văn An',
-    username: 'dr.nguyen',
-    password: 'password123',
-    badgeColor: 'text-indigo-600 dark:text-indigo-400 bg-indigo-50 dark:bg-indigo-950/50 border-indigo-200 dark:border-indigo-800',
-    description: 'Tạo đề thi vấn đáp, giám sát phòng thi, xem analytics và phúc khảo điểm số',
-  },
-  {
-    role: 'STUDENT',
-    title: 'Sinh viên (Student)',
-    name: 'Trần Thị Bình',
-    username: 'tranthib',
-    password: 'password123',
-    badgeColor: 'text-emerald-600 dark:text-emerald-400 bg-emerald-50 dark:bg-emerald-950/50 border-emerald-200 dark:border-emerald-800',
-    description: 'Tham gia thi vấn đáp trực tiếp với giám khảo AI, tra cứu phiếu điểm & nhận xét',
-  },
-];
+export interface AuthResponseData {
+  token: string;
+  tokenType: string;
+  user: BackendUserDto;
+}
 
-// Helper to get all registered users
-export function getRegisteredUsers(): UserAccount[] {
+/**
+ * Format Backend User DTO to UserAccount format used across front-end
+ */
+export function mapBackendUserToAccount(u: BackendUserDto): UserAccount {
+  return {
+    id: u.id,
+    username: u.username,
+    fullName: u.fullName,
+    role: (u.role || 'STUDENT').toUpperCase() as UserRole,
+    email: u.email || `${u.username}@fpt.edu.vn`,
+    createdAt: u.createdAt || new Date().toISOString(),
+  };
+}
+
+/**
+ * User Login API
+ * Calls POST /api/auth/login
+ */
+export async function loginUser(usernameOrEmail: string, password: string): Promise<UserAccount> {
+  const username = usernameOrEmail.trim();
+
   try {
-    const stored = localStorage.getItem(STORAGE_USERS_KEY);
-    const registered: any[] = stored ? JSON.parse(stored) : [];
-    const combined: UserAccount[] = [...INITIAL_USERS];
-
-    registered.forEach((u) => {
-      const normalizedUser: UserAccount = {
-        id: u.id || `usr-${Date.now().toString(36)}`,
-        username: u.username || 'user',
-        email: u.email || '',
-        fullName: u.fullName || u.name || u.username || 'User',
-        role: (u.role || 'STUDENT').toUpperCase() as UserRole,
-        password: u.password,
-        createdAt: u.createdAt || new Date().toISOString(),
-      };
-      const existingIdx = combined.findIndex(
-        (item) => item.id === normalizedUser.id || item.username.toLowerCase() === normalizedUser.username.toLowerCase()
-      );
-      if (existingIdx >= 0) {
-        combined[existingIdx] = { ...combined[existingIdx], ...normalizedUser };
-      } else {
-        combined.push(normalizedUser);
-      }
+    const response = await apiClient.post<{
+      success: boolean;
+      message: string;
+      data: AuthResponseData;
+    }>('/auth/login', {
+      username,
+      password,
     });
 
-    return combined;
-  } catch {
-    return INITIAL_USERS;
+    const data = response.data?.data;
+    if (!data || !data.token || !data.user) {
+      throw new Error(response.data?.message || 'Đăng nhập không thành công.');
+    }
+
+    // Save JWT token
+    localStorage.setItem(TOKEN_KEY, data.token);
+
+    // Save session
+    const safeUser = mapBackendUserToAccount(data.user);
+    saveSession(safeUser);
+
+    return safeUser;
+  } catch (err: any) {
+    const message =
+      err.response?.data?.message ||
+      err.message ||
+      'Tên đăng nhập hoặc mật khẩu không chính xác.';
+    throw new Error(message);
   }
 }
 
-// User Login API
-export async function loginUser(usernameOrEmail: string, password: string): Promise<UserAccount> {
-  // Simulate network delay
-  await new Promise((resolve) => setTimeout(resolve, 250));
-
-  const users = getRegisteredUsers();
-  const query = usernameOrEmail.trim().toLowerCase();
-
-  const user = users.find(
-    (u) =>
-      u.username.toLowerCase() === query ||
-      (u.email && u.email.toLowerCase() === query)
-  );
-
-  if (!user) {
-    throw new Error('Tài khoản hoặc email không tồn tại trong hệ thống.');
-  }
-
-  // Allow standard mock password or user custom password
-  if (user.password && user.password !== password && password !== 'password123') {
-    throw new Error('Mật khẩu không chính xác. Vui lòng thử lại!');
-  }
-
-  const { password: _, ...safeUser } = user;
-  saveSession(safeUser as UserAccount);
-  return safeUser as UserAccount;
-}
-
-// User Registration API: Notice NO role parameter! Role defaults to STUDENT.
-export async function registerUser(data: {
-  fullName: string;
-  username: string;
-  email: string;
-  password: string;
-}): Promise<UserAccount> {
-  await new Promise((resolve) => setTimeout(resolve, 300));
-
-  const trimmedUsername = data.username.trim();
-  const trimmedEmail = data.email.trim().toLowerCase();
-  const users = getRegisteredUsers();
-
-  if (users.some((u) => u.username.toLowerCase() === trimmedUsername.toLowerCase())) {
-    throw new Error('Tên đăng nhập đã được sử dụng. Vui lòng chọn tên khác.');
-  }
-
-  if (users.some((u) => u.email && u.email.toLowerCase() === trimmedEmail)) {
-    throw new Error('Email này đã được liên kết với một tài khoản khác.');
-  }
-
-  // Registration rule: Role is default assigned as STUDENT, waiting for Admin assignment
-  const newUser: UserAccount = {
-    id: `usr-stu-${Date.now().toString(36)}`,
-    username: trimmedUsername,
-    email: trimmedEmail,
-    fullName: data.fullName.trim(),
-    role: 'STUDENT',
-    password: data.password,
-    createdAt: new Date().toISOString(),
-  };
-
+/**
+ * Admin: Get registered users list
+ * Calls GET /api/admin/users
+ */
+export async function getRegisteredUsers(role?: string): Promise<UserAccount[]> {
   try {
-    const stored = localStorage.getItem(STORAGE_USERS_KEY);
-    const currentStored: UserAccount[] = stored ? JSON.parse(stored) : [];
-    currentStored.push(newUser);
-    localStorage.setItem(STORAGE_USERS_KEY, JSON.stringify(currentStored));
-  } catch (err) {
-    console.warn('Cannot write to localStorage:', err);
-  }
+    const response = await apiClient.get<{
+      success: boolean;
+      message: string;
+      data: {
+        content?: BackendUserDto[];
+      } | BackendUserDto[];
+    }>('/admin/users', {
+      params: {
+        role: role && role !== 'ALL' ? role : undefined,
+        size: 100,
+      },
+    });
 
-  const { password: _, ...safeUser } = newUser;
-  saveSession(safeUser as UserAccount);
-  return safeUser as UserAccount;
+    const data = response.data?.data;
+    let list: BackendUserDto[] = [];
+
+    if (Array.isArray(data)) {
+      list = data;
+    } else if (data && Array.isArray((data as any).content)) {
+      list = (data as any).content;
+    }
+
+    return list.map(mapBackendUserToAccount);
+  } catch (err: any) {
+    console.error('Error fetching users from backend:', err);
+    throw new Error(
+      err.response?.data?.message || 'Không thể tải danh sách tài khoản từ máy chủ.'
+    );
+  }
 }
 
-// Admin: Create user directly with designated role
+/**
+ * Admin: Create user directly with designated role
+ * Calls POST /api/admin/users
+ */
 export async function createUserByAdmin(data: {
   fullName: string;
   username: string;
-  email: string;
+  email?: string;
   password: string;
   role: UserRole;
 }): Promise<UserAccount> {
-  await new Promise((resolve) => setTimeout(resolve, 250));
-
-  const trimmedUsername = data.username.trim();
-  const trimmedEmail = data.email.trim().toLowerCase();
-  const users = getRegisteredUsers();
-
-  if (users.some((u) => u.username.toLowerCase() === trimmedUsername.toLowerCase())) {
-    throw new Error('Tên đăng nhập đã tồn tại.');
-  }
-
-  if (users.some((u) => u.email && u.email.toLowerCase() === trimmedEmail)) {
-    throw new Error('Email đã được đăng ký.');
-  }
-
-  const newUser: UserAccount = {
-    id: `usr-${data.role.toLowerCase()}-${Date.now().toString(36)}`,
-    username: trimmedUsername,
-    email: trimmedEmail,
-    fullName: data.fullName.trim(),
-    role: data.role,
-    password: data.password,
-    createdAt: new Date().toISOString(),
-  };
-
   try {
-    const stored = localStorage.getItem(STORAGE_USERS_KEY);
-    const currentStored: UserAccount[] = stored ? JSON.parse(stored) : [];
-    currentStored.push(newUser);
-    localStorage.setItem(STORAGE_USERS_KEY, JSON.stringify(currentStored));
-  } catch (err) {
-    console.warn('Cannot write to localStorage:', err);
-  }
+    const response = await apiClient.post<{
+      success: boolean;
+      message: string;
+      data: BackendUserDto;
+    }>('/admin/users', {
+      fullName: data.fullName.trim(),
+      username: data.username.trim(),
+      password: data.password,
+      role: data.role,
+    });
 
-  const { password: _, ...safeUser } = newUser;
-  return safeUser as UserAccount;
+    const created = response.data?.data;
+    return mapBackendUserToAccount(created);
+  } catch (err: any) {
+    console.error('Error creating user via backend:', err);
+    const message =
+      err.response?.data?.message ||
+      err.message ||
+      'Không thể tạo tài khoản người dùng.';
+    throw new Error(message);
+  }
 }
 
-// Admin: Update user role
 export async function updateUserRole(userId: string, newRole: UserRole): Promise<{ id: string; role: UserRole }> {
-  await new Promise((resolve) => setTimeout(resolve, 200));
-  const stored = localStorage.getItem(STORAGE_USERS_KEY);
-  const registered: UserAccount[] = stored ? JSON.parse(stored) : [];
+  try {
+    await apiClient.put(`/admin/users/${userId}`, {
+      role: newRole,
+    });
 
-  const existingIdx = registered.findIndex((u) => u.id === userId);
-  if (existingIdx >= 0) {
-    registered[existingIdx].role = newRole;
-  } else {
-    const initialUser = INITIAL_USERS.find((u) => u.id === userId);
-    if (initialUser) {
-      registered.push({ ...initialUser, role: newRole });
-    } else {
-      throw new Error('Không tìm thấy tài khoản người dùng.');
+    // If user changed their own role, update current active session too
+    const activeSession = getCurrentSession();
+    if (activeSession && activeSession.id === userId) {
+      saveSession({ ...activeSession, role: newRole });
+    }
+
+    return { id: userId, role: newRole };
+  } catch (err: any) {
+    console.error('Error updating user role:', err);
+    throw new Error(
+      err.response?.data?.message || 'Không thể cập nhật quyền người dùng.'
+    );
+  }
+}
+
+/**
+ * Admin: Update user information (fullName, role)
+ * Calls PUT /api/admin/users/{id}
+ */
+export async function updateUserAccount(
+  userId: string,
+  data: { fullName?: string; role?: UserRole }
+): Promise<UserAccount> {
+  try {
+    const payload: { fullName?: string; role?: string } = {};
+    if (data.fullName !== undefined) payload.fullName = data.fullName.trim();
+    if (data.role !== undefined) payload.role = data.role;
+
+    const response = await apiClient.put<{
+      success: boolean;
+      message: string;
+      data: BackendUserDto;
+    }>(`/admin/users/${userId}`, payload);
+
+    const updated = mapBackendUserToAccount(response.data.data);
+
+    const activeSession = getCurrentSession();
+    if (activeSession && activeSession.id === userId) {
+      saveSession({
+        ...activeSession,
+        fullName: updated.fullName,
+        role: updated.role,
+      });
+    }
+
+    return updated;
+  } catch (err: any) {
+    console.error('Error updating user:', err);
+    throw new Error(
+      err.response?.data?.message || 'Không thể cập nhật thông tin người dùng.'
+    );
+  }
+}
+
+/**
+ * Admin: Batch import students from parsed XLSX data
+ */
+export async function importStudentsBatch(
+  students: { username: string; fullName: string; password?: string }[]
+): Promise<{ success: number; failed: number; errors: string[] }> {
+  let success = 0;
+  let failed = 0;
+  const errors: string[] = [];
+
+  for (const s of students) {
+    try {
+      await createUserByAdmin({
+        username: s.username.trim(),
+        fullName: s.fullName.trim(),
+        password: s.password && s.password.length >= 8 ? s.password : 'password123',
+        role: 'STUDENT',
+      });
+      success++;
+    } catch (err: any) {
+      failed++;
+      errors.push(`@${s.username}: ${err.message || 'Lỗi tạo tài khoản'}`);
     }
   }
-  localStorage.setItem(STORAGE_USERS_KEY, JSON.stringify(registered));
 
-  // If user changed their own role, update current active session too
-  const activeSession = getCurrentSession();
-  if (activeSession && activeSession.id === userId) {
-    saveSession({ ...activeSession, role: newRole });
-  }
-
-  return { id: userId, role: newRole };
+  return { success, failed, errors };
 }
 
-// Admin: Delete user
+/**
+ * Admin: Delete user
+ * Calls DELETE /api/admin/users/{id}
+ */
 export async function deleteUser(userId: string): Promise<boolean> {
-  await new Promise((resolve) => setTimeout(resolve, 200));
-  const stored = localStorage.getItem(STORAGE_USERS_KEY);
-  if (stored) {
-    let registered: UserAccount[] = JSON.parse(stored);
-    registered = registered.filter((u) => u.id !== userId);
-    localStorage.setItem(STORAGE_USERS_KEY, JSON.stringify(registered));
+  try {
+    await apiClient.delete(`/admin/users/${userId}`);
+    return true;
+  } catch (err: any) {
+    console.error('Error deleting user:', err);
+    throw new Error(
+      err.response?.data?.message || 'Không thể xóa tài khoản người dùng.'
+    );
   }
-  return true;
 }
 
 // Session persistence
@@ -317,11 +276,11 @@ export function getCurrentSession(): UserAccount | null {
       const userObj = parsed?.user || parsed;
       if (userObj && typeof userObj === 'object') {
         return {
-          id: userObj.id || 'usr-admin-001',
+          id: userObj.id || 'usr-admin',
           username: userObj.username || 'admin',
-          email: userObj.email || 'admin@fpt.edu.vn',
-          fullName: userObj.fullName || userObj.name || userObj.username || 'Quản trị viên Hệ thống',
-          role: (userObj.role || 'ADMIN').toUpperCase() as UserRole,
+          email: userObj.email || `${userObj.username || 'user'}@fpt.edu.vn`,
+          fullName: userObj.fullName || userObj.name || userObj.username || 'Người dùng',
+          role: (userObj.role || 'STUDENT').toUpperCase() as UserRole,
           createdAt: userObj.createdAt || new Date().toISOString(),
         };
       }
@@ -335,6 +294,7 @@ export function getCurrentSession(): UserAccount | null {
 export function clearSession(): void {
   try {
     localStorage.removeItem(STORAGE_SESSION_KEY);
+    localStorage.removeItem(TOKEN_KEY);
     sessionStorage.removeItem(STORAGE_SESSION_KEY);
   } catch {
     // ignore

@@ -29,15 +29,12 @@ import { AuthLandingPage } from './components/auth/AuthLandingPage';
 import {
   getCurrentSession,
   clearSession,
-  loginUser,
-  DEMO_ACCOUNTS,
 } from './services/authService';
 
 export default function App() {
   // Authentication & Current User Session
   const [currentUser, setCurrentUser] = useState<UserAccount | null>(() => getCurrentSession());
   const [isAuthModalOpen, setIsAuthModalOpen] = useState(false);
-  const [authModalTab, setAuthModalTab] = useState<'login' | 'register'>('login');
 
   // Navigation & View state
   const [activeModule, setActiveModule] = useState<ModuleType>('exams');
@@ -60,12 +57,19 @@ export default function App() {
   const [isSimpleMode, setIsSimpleMode] = useState(true);
   const [language, setLanguage] = useState<Language>('vi');
 
-  // Sync userRole with currentUser
+  // Sync userRole with currentUser & guard admin routes
   useEffect(() => {
     if (currentUser) {
       setUserRole(currentUser.role === 'STUDENT' ? 'student' : 'faculty');
+      if (currentUser.role !== 'ADMIN' && activeModule === 'admin') {
+        setActiveModule('exams');
+        setExamSubView('list');
+      }
+    } else {
+      setActiveModule('exams');
+      setExamSubView('list');
     }
-  }, [currentUser]);
+  }, [currentUser, activeModule]);
 
   // Active Entities
   const [exams, setExams] = useState<Exam[]>(mockExams);
@@ -129,23 +133,12 @@ export default function App() {
     setActiveModule('analytics');
   };
 
-  // 1-Touch Demo Switcher Handler
-  const handleSwitchUser = async (username: string) => {
-    const demo = DEMO_ACCOUNTS.find((d) => d.username === username);
-    if (demo) {
-      try {
-        const user = await loginUser(demo.username, demo.password);
-        setCurrentUser(user);
-      } catch (err) {
-        console.error('Failed to switch user:', err);
-      }
-    }
-  };
-
   // Logout Handler
   const handleLogout = () => {
     clearSession();
     setCurrentUser(null);
+    setActiveModule('exams');
+    setExamSubView('list');
   };
 
   // Refresh current user session from storage (e.g. after Admin role updates)
@@ -189,11 +182,7 @@ export default function App() {
         language={language}
         setLanguage={setLanguage}
         currentUser={currentUser}
-        onOpenAuthModal={(tab = 'login') => {
-          setAuthModalTab(tab);
-          setIsAuthModalOpen(true);
-        }}
-        onSwitchUser={handleSwitchUser}
+        onOpenAuthModal={() => setIsAuthModalOpen(true)}
         onLogout={handleLogout}
         isOpenMobile={isMobileSidebarOpen}
         onCloseMobile={() => setIsMobileSidebarOpen(false)}
@@ -305,7 +294,7 @@ export default function App() {
           )}
 
           {/* MODULE 4: ADMIN USER & ROLE MANAGEMENT */}
-          {activeModule === 'admin' && (
+          {activeModule === 'admin' && currentUser?.role === 'ADMIN' && (
             <UserManagementPage
               language={language}
               currentUserId={currentUser?.id}
@@ -337,12 +326,11 @@ export default function App() {
         onCreateExam={handleCreateExam}
       />
 
-      {/* Authentication Modal (Login & Registration with 1-touch demo and admin role policy) */}
+      {/* Authentication Modal */}
       <AuthModal
         isOpen={isAuthModalOpen}
         onClose={() => setIsAuthModalOpen(false)}
         language={language}
-        initialTab={authModalTab}
         onSuccess={(user) => {
           setCurrentUser(user);
         }}
