@@ -21,7 +21,8 @@ import java.util.*;
 @Service
 @RequiredArgsConstructor
 public class ExamScheduleService {
-    // Canonical UUID text ordering matches PostgreSQL UUID ordering, including the sign bit.
+    // Canonical UUID text ordering matches PostgreSQL UUID ordering, including the
+    // sign bit.
     private static final Comparator<ExamSchedule> SCHEDULE_ORDER = Comparator
             .comparing((ExamSchedule s) -> s.getScheduledStartTime().toInstant())
             .thenComparing(s -> s.getId().toString());
@@ -61,7 +62,7 @@ public class ExamScheduleService {
     }
 
     private List<ExamScheduleResponse> addSlots(UUID examId, List<CreateExamSchedulesRequest.Slot> slots,
-                                               String username) {
+            String username) {
         if (slots == null || slots.isEmpty() || slots.size() > 1000 || slots.stream().anyMatch(Objects::isNull)) {
             throw new IllegalArgumentException("Danh sách phải có từ 1 đến 1000 slot hợp lệ");
         }
@@ -79,7 +80,8 @@ public class ExamScheduleService {
                 throw conflict("DUPLICATE_EXAM_STUDENT", "Sinh viên đã có lịch trong kỳ thi: " + slot.getStudentId());
             }
             validateWindow(exam, slot.getScheduledStartTime(), slot.getScheduledEndTime());
-            validateOverlap(roster, slot.getStudentId(), slot.getScheduledStartTime(), slot.getScheduledEndTime(), null);
+            validateOverlap(roster, slot.getStudentId(), slot.getScheduledStartTime(), slot.getScheduledEndTime(),
+                    null);
             ExamSchedule schedule = new ExamSchedule();
             schedule.setExam(exam);
             schedule.setStudent(students.get(slot.getStudentId()));
@@ -112,7 +114,8 @@ public class ExamScheduleService {
         if (!"STUDENT".equals(student.getRole())) {
             throw new AccessDeniedException("Chỉ sinh viên được xem lịch thi cá nhân");
         }
-        List<ExamSchedule> personal = scheduleRepository.findByStudentIdOrderByScheduledStartTimeAscIdAsc(student.getId());
+        List<ExamSchedule> personal = scheduleRepository
+                .findByStudentIdOrderByScheduledStartTimeAscIdAsc(student.getId());
         if (personal.isEmpty()) {
             return List.of();
         }
@@ -126,7 +129,8 @@ public class ExamScheduleService {
     }
 
     @Transactional
-    public ExamScheduleResponse update(UUID examId, UUID scheduleId, UpdateExamScheduleRequest request, String username) {
+    public ExamScheduleResponse update(UUID examId, UUID scheduleId, UpdateExamScheduleRequest request,
+            String username) {
         Exam exam = lockManagedExam(examId, username);
         List<ExamSchedule> roster = scheduleRepository.findByExamIdOrderByScheduledStartTimeAscIdAsc(examId);
         ExamSchedule schedule = findSchedule(roster, scheduleId);
@@ -136,9 +140,11 @@ public class ExamScheduleService {
             throw new IllegalArgumentException("Phải cung cấp ít nhất một mốc thời gian cần cập nhật");
         }
         OffsetDateTime start = request.getScheduledStartTime() != null
-                ? request.getScheduledStartTime() : schedule.getScheduledStartTime();
+                ? request.getScheduledStartTime()
+                : schedule.getScheduledStartTime();
         OffsetDateTime end = request.getScheduledEndTime() != null
-                ? request.getScheduledEndTime() : schedule.getScheduledEndTime();
+                ? request.getScheduledEndTime()
+                : schedule.getScheduledEndTime();
         validateWindow(exam, start, end);
         validateOverlap(roster, schedule.getStudent().getId(), start, end, scheduleId);
         schedule.setScheduledStartTime(start);
@@ -205,7 +211,7 @@ public class ExamScheduleService {
     }
 
     private void validateOverlap(List<ExamSchedule> roster, UUID studentId,
-                                 OffsetDateTime start, OffsetDateTime end, UUID excludedId) {
+            OffsetDateTime start, OffsetDateTime end, UUID excludedId) {
         for (ExamSchedule other : roster) {
             if (excludedId != null && excludedId.equals(other.getId())) {
                 continue;
