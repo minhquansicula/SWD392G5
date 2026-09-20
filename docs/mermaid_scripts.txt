@@ -1,0 +1,160 @@
+=====================================================
+MỤC 1 — Nhóm chức năng 2: Quản lý kỳ thi và lịch thi
+=====================================================
+(Copy toàn bộ đoạn code bên dưới, dán vào mermaid.live)
+
+flowchart LR
+    subgraph GV["Lane 1 — Giảng viên"]
+        direction TB
+        A([Bắt đầu])
+        B["Chọn môn học<br/>Nhập tên và thời gian kỳ thi"]
+        C["Cấu hình số câu chính<br/>Tổng số câu đào sâu tối đa mỗi sinh viên<br/>Số câu đào sâu tối đa mỗi câu chính"]
+        D["Cấu hình thời gian trả lời<br/>câu chính và câu đào sâu"]
+        E["Chọn danh sách sinh viên<br/>Phân khung giờ cho từng sinh viên"]
+        F["Gửi yêu cầu tạo kỳ thi"]
+        G["Điều chỉnh cấu hình hoặc lịch thi"]
+        H["Xem kỳ thi và lịch đã tạo"]
+        Z([Kết thúc])
+    end
+
+    subgraph HT["Lane 2 — Hệ thống"]
+        direction TB
+        I["Kiểm tra quyền giảng viên<br/>và dữ liệu đầu vào"]
+        J{"Cấu hình và lịch<br/>hợp lệ?"}
+        K["Thông báo lỗi cụ thể"]
+        L["Kiểm tra ngân hàng câu hỏi theo môn<br/>và khả năng tránh trùng giữa<br/>các thí sinh liên tiếp"]
+        M{"Đủ câu hỏi theo<br/>chính sách chọn đề?"}
+        N["Thông báo cần bổ sung câu hỏi<br/>hoặc điều chỉnh cấu hình"]
+        O["Lưu exams và exam_schedules<br/>Trạng thái lịch: PENDING"]
+        P["Hiển thị lịch thi cho giảng viên<br/>và từng sinh viên"]
+    end
+
+    subgraph SV["Lane 3 — Sinh viên"]
+        direction TB
+        Q["Đăng nhập và xem lịch thi"]
+        R["Xem môn học, khung giờ<br/>và quy định trả lời"]
+    end
+
+    A --> B --> C --> D --> E --> F --> I --> J
+    J -- Không --> K --> G
+    G --> C
+    J -- Có --> L --> M
+    M -- Không --> N --> G
+    M -- Có --> O --> P
+    P --> H --> Z
+    P --> Q --> R
+
+
+=====================================================
+MỤC 2 — Nhóm chức năng 3: Lõi phỏng vấn AI
+=====================================================
+(Copy toàn bộ đoạn code bên dưới, dán vào mermaid.live)
+
+flowchart LR
+    subgraph SV["Lane 1 — Sinh viên"]
+        direction TB
+        A([Bắt đầu])
+        B["Mở lịch thi<br/>Yêu cầu bắt đầu"]
+        C["Nhận thông báo<br/>chưa đủ điều kiện vào thi"]
+        D["Nghe câu hỏi"]
+        E["Trả lời bằng giọng nói<br/>Kết thúc trả lời hoặc hết giờ"]
+        F["Nhận thông báo hoàn tất lượt thi"]
+        Z([Kết thúc])
+    end
+
+    subgraph HT["Lane 2 — Hệ thống điều phối thi"]
+        direction TB
+        G["Kiểm tra danh tính, lịch thi<br/>khung giờ và trạng thái"]
+        H{"Được phép<br/>bắt đầu?"}
+        I["Cập nhật IN_PROGRESS<br/>Ghi actual_start_time"]
+        J{"Còn thời gian lượt thi<br/>và chưa đủ số câu chính?"}
+        K["Chọn câu chính ngẫu nhiên hoặc thích ứng<br/>Loại câu đã dùng trong lượt thi<br/>và câu cần tránh từ thí sinh liền trước"]
+        L["Lưu exam_questions: MAIN<br/>Nội dung chụp tại thời điểm chọn<br/>Trạng thái SELECTED"]
+        M["Phát âm thanh câu hỏi<br/>Ghi transcript AI và asked_at<br/>Chuyển trạng thái ASKED"]
+        N["Mở thu âm và đặt answer_deadline_at<br/>theo giới hạn câu hỏi và thời gian còn lại"]
+        O["Hiển thị bản STT tạm thời<br/>Chốt transcript STUDENT khi kết thúc<br/>Đánh dấu is_final = true"]
+        P["Cập nhật ANSWERED hoặc TIMED_OUT<br/>Ghi answered_at nếu có câu trả lời"]
+        Q{"Cần hỏi thêm, còn thời gian<br/>và chưa chạm cả hai<br/>giới hạn đào sâu?"}
+        R["Lưu exam_questions: FOLLOW_UP<br/>Liên kết câu chính qua parent_exam_question_id<br/>Tăng bộ đếm đào sâu"]
+        S["Lưu question_results cho câu MAIN<br/>ai_score, max_score, ai_feedback"]
+        T["Tổng hợp điểm thang 10<br/>Lưu final_score và actual_end_time<br/>Cập nhật COMPLETED"]
+    end
+
+    subgraph AI["Lane 3 — Dịch vụ AI: TTS, STT và LLM"]
+        direction TB
+        U["TTS: chuyển nội dung câu hỏi<br/>thành giọng nói"]
+        V["STT: chuyển âm thanh thành văn bản<br/>gần thời gian thực"]
+        W["Phân tích câu trả lời trong ngữ cảnh<br/>Phát hiện thiếu ý, mơ hồ hoặc mâu thuẫn<br/>Đề xuất có cần hỏi thêm"]
+        X["Sinh câu hỏi đào sâu<br/>dựa trên câu trả lời và lịch sử trao đổi"]
+        Y["Chấm câu chính theo tiêu chí đánh giá<br/>Sử dụng câu trả lời chính và đào sâu<br/>làm bằng chứng"]
+    end
+
+    A --> B --> G --> H
+    H -- Không --> C --> Z
+    H -- Có --> I --> J
+    J -- Có --> K --> L --> U
+    U --> M --> D --> N
+    N --> E --> V --> O --> P --> W --> Q
+    Q -- Có --> X --> R --> U
+    Q -- Không --> Y --> S --> J
+    J -- Không --> T --> F --> Z
+
+
+=====================================================
+MỤC 3 — Nhóm chức năng 6: Phản hồi và báo cáo
+=====================================================
+(Copy toàn bộ đoạn code bên dưới, dán vào mermaid.live)
+
+flowchart LR
+    subgraph SV["Lane 1 — Sinh viên"]
+        direction TB
+        A([Bắt đầu xem kết quả])
+        B["Chọn lượt thi của bản thân"]
+        C["Nhận thông báo<br/>kết quả chưa sẵn sàng hoặc không có quyền"]
+        D["Xem điểm tổng kết<br/>Điểm từng câu chính và nhận xét AI"]
+        E["Xem lại câu hỏi, câu đào sâu<br/>và nội dung trả lời"]
+        F([Kết thúc xem kết quả])
+    end
+
+    subgraph HT["Lane 2 — Hệ thống báo cáo"]
+        direction TB
+        G["Kiểm tra quyền sở hữu lượt thi<br/>Trạng thái COMPLETED và kết quả chấm"]
+        H{"Đủ điều kiện<br/>xem kết quả?"}
+        I["Truy vấn exam_schedules,<br/>exam_questions, question_results<br/>và transcripts"]
+        J["Tạo báo cáo kết quả cá nhân"]
+        K["Kiểm tra quyền giảng viên<br/>đối với kỳ thi được chọn"]
+        L{"Có quyền?"}
+        M["Thông báo từ chối truy cập"]
+        N["Tổng hợp các lượt thi đã hoàn tất<br/>và có kết quả hợp lệ"]
+        O["Tính phân bố điểm<br/>Tỷ lệ trả lời tốt<br/>Xếp hạng câu hỏi khó"]
+        P["Hiển thị bảng thống kê"]
+        Q["Ghép mã sinh viên, họ tên<br/>môn học và điểm tổng kết"]
+        R["Kiểm tra dữ liệu bắt buộc<br/>và ánh xạ vào mẫu trường"]
+        S{"Dữ liệu xuất<br/>hợp lệ?"}
+        T["Thông báo thông tin còn thiếu"]
+        U["Tạo tệp bảng điểm<br/>theo định dạng của mẫu"]
+    end
+
+    subgraph GV["Lane 3 — Giảng viên"]
+        direction TB
+        V([Bắt đầu xem thống kê])
+        W["Chọn kỳ thi<br/>và điều kiện lọc"]
+        X["Xem thống kê toàn bộ<br/>sinh viên trong kỳ thi"]
+        Y{"Xuất bảng điểm?"}
+        AA["Chọn mẫu của trường"]
+        AB["Bổ sung dữ liệu hoặc điều chỉnh mẫu"]
+        AC["Tải bảng điểm"]
+        AD([Kết thúc])
+    end
+
+    A --> B --> G --> H
+    H -- Không --> C --> F
+    H -- Có --> I --> J --> D --> E --> F
+
+    V --> W --> K --> L
+    L -- Không --> M --> AD
+    L -- Có --> N --> O --> P --> X --> Y
+    Y -- Không --> AD
+    Y -- Có --> AA --> Q --> R --> S
+    S -- Không --> T --> AB --> Q
+    S -- Có --> U --> AC --> AD
