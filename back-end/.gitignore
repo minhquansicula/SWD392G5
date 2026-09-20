@@ -31,3 +31,11 @@ build/
 
 ### VS Code ###
 .vscode/
+
+### Local Configs & Credentials ###
+*local.yml
+*local.yaml
+*local.properties
+.env
+*.env
+uploads/

@@ -9,13 +9,13 @@ spring:
   application:
     name: aives-backend
   profiles:
-    active: dev
+    active: local
 
-  # DataSource (PostgreSQL 16 - Neon)
+  # DataSource (PostgreSQL 16)
   datasource:
-    url: ${SPRING_DATASOURCE_URL:jdbc:postgresql://ep-dry-block-b3yhbez5-pooler.c-4.ap-southeast-1.aws.neon.tech:5432/neondb?sslmode=require}
-    username: ${SPRING_DATASOURCE_USERNAME:neondb_owner}
-    password: ${SPRING_DATASOURCE_PASSWORD:npg_P7CZhEKTy2Dp}
+    url: ${SPRING_DATASOURCE_URL:jdbc:postgresql://localhost:5432/aives_db}
+    username: ${SPRING_DATASOURCE_USERNAME}
+    password: ${SPRING_DATASOURCE_PASSWORD}
     driver-class-name: org.postgresql.Driver
 
   # Flyway Migration Configuration

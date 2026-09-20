@@ -1,4 +1,4 @@
-package com.backend.module.exam.entity;
+package com.backend.module.exam.core.entity;
 
 import jakarta.persistence.*;
 import jakarta.validation.constraints.NotNull;
@@ -24,7 +24,7 @@ public class Question {
     @ManyToOne(fetch = FetchType.LAZY)
     @OnDelete(action = OnDeleteAction.CASCADE)
     @JoinColumn(name = "course_id")
-    private Cours course;
+    private Course course;
 
     @NotNull
     @Column(name = "content", nullable = false, length = Integer.MAX_VALUE)

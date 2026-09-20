@@ -1,6 +1,6 @@
-package com.backend.module.exam.entity;
+package com.backend.module.exam.core.entity;
 
-import com.backend.module.auth.entity.User;
+import com.backend.module.auth.core.entity.User;
 import jakarta.persistence.*;
 import jakarta.validation.constraints.Size;
 import lombok.Getter;

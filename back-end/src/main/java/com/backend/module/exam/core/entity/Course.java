@@ -1,4 +1,4 @@
-package com.backend.module.auth.entity;
+package com.backend.module.exam.core.entity;
 
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
@@ -15,32 +15,22 @@ import java.util.UUID;
 @Getter
 @Setter
 @Entity
-@Table(name = "users")
-public class User {
+@Table(name = "courses")
+public class Course {
     @Id
     @ColumnDefault("gen_random_uuid()")
     @Column(name = "id", nullable = false)
     private UUID id;
 
-    @Size(max = 255)
-    @NotNull
-    @Column(name = "username", nullable = false)
-    private String username;
-
-    @Size(max = 255)
-    @NotNull
-    @Column(name = "password_hash", nullable = false)
-    private String passwordHash;
-
-    @Size(max = 255)
-    @NotNull
-    @Column(name = "full_name", nullable = false)
-    private String fullName;
-
     @Size(max = 50)
     @NotNull
-    @Column(name = "role", nullable = false, length = 50)
-    private String role;
+    @Column(name = "course_code", nullable = false, length = 50)
+    private String courseCode;
+
+    @Size(max = 255)
+    @NotNull
+    @Column(name = "course_name", nullable = false)
+    private String courseName;
 
 
 }
