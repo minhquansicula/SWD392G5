@@ -3,17 +3,13 @@ import {
   BrainCircuit,
   Lock,
   User,
-  Mail,
   Eye,
   EyeOff,
   Sparkles,
   AlertCircle,
   CheckCircle2,
-  ShieldAlert,
   ArrowRight,
   ShieldCheck,
-  GraduationCap,
-  Users,
   Languages,
   Sun,
   Moon,
@@ -22,8 +18,8 @@ import {
   Award,
   Zap,
 } from 'lucide-react';
-import { UserAccount, UserRole } from '../../types';
-import { DEMO_ACCOUNTS, loginUser, registerUser } from '../../services/authService';
+import { UserAccount } from '../../types';
+import { loginUser } from '../../services/authService';
 import { Language, translations } from '../../utils/i18n';
 
 interface AuthLandingPageProps {
@@ -44,21 +40,10 @@ export const AuthLandingPage: React.FC<AuthLandingPageProps> = ({
   const isVi = language === 'vi';
   const t = translations[language];
 
-  const [activeTab, setActiveTab] = useState<'login' | 'register'>('login');
-
   // Login form state
   const [loginIdentifier, setLoginIdentifier] = useState('');
   const [loginPassword, setLoginPassword] = useState('');
   const [showLoginPassword, setShowLoginPassword] = useState(false);
-
-  // Register form state (Strictly NO role picker!)
-  const [regFullName, setRegFullName] = useState('');
-  const [regUsername, setRegUsername] = useState('');
-  const [regEmail, setRegEmail] = useState('');
-  const [regPassword, setRegPassword] = useState('');
-  const [regConfirmPassword, setRegConfirmPassword] = useState('');
-  const [showRegPassword, setShowRegPassword] = useState(false);
-  const [agreeTerms, setAgreeTerms] = useState(true);
 
   // Feedback states
   const [isLoading, setIsLoading] = useState(false);
@@ -72,7 +57,7 @@ export const AuthLandingPage: React.FC<AuthLandingPageProps> = ({
     setSuccessMessage('');
 
     if (!loginIdentifier.trim()) {
-      setErrorMessage(isVi ? 'Vui lòng nhập tên tài khoản hoặc email' : 'Please enter your username or email');
+      setErrorMessage(isVi ? 'Vui lòng nhập tên tài khoản' : 'Please enter your username');
       return;
     }
     if (!loginPassword) {
@@ -94,139 +79,54 @@ export const AuthLandingPage: React.FC<AuthLandingPageProps> = ({
     }
   };
 
-  // Quick 1-touch demo login
-  const handleDemoLogin = async (username: string, password: string) => {
-    setLoginIdentifier(username);
-    setLoginPassword(password);
-    setErrorMessage('');
-    setSuccessMessage('');
-    setIsLoading(true);
-    try {
-      const user = await loginUser(username, password);
-      setSuccessMessage(isVi ? `Đăng nhập thành công với vai trò ${user.role}!` : `Logged in as ${user.role}!`);
-      setTimeout(() => {
-        onLoginSuccess(user);
-      }, 400);
-    } catch (err: any) {
-      setErrorMessage(err.message || 'Demo login failed');
-    } finally {
-      setIsLoading(false);
-    }
-  };
-
-  // Handle user registration (Strictly no role selection!)
-  const handleRegisterSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
-    setErrorMessage('');
-    setSuccessMessage('');
-
-    if (!regFullName.trim()) {
-      setErrorMessage(isVi ? 'Vui lòng nhập họ và tên' : 'Please enter your full name');
-      return;
-    }
-    if (!regUsername.trim()) {
-      setErrorMessage(isVi ? 'Vui lòng nhập tên tài khoản' : 'Please choose a username');
-      return;
-    }
-    if (regUsername.trim().length < 3) {
-      setErrorMessage(isVi ? 'Tên tài khoản phải có ít nhất 3 ký tự' : 'Username must be at least 3 characters');
-      return;
-    }
-    if (/\s/.test(regUsername.trim())) {
-      setErrorMessage(isVi ? 'Tên tài khoản không được chứa dấu cách' : 'Username cannot contain spaces');
-      return;
-    }
-    if (!regEmail.trim()) {
-      setErrorMessage(isVi ? 'Vui lòng nhập email hợp lệ' : 'Please enter a valid email');
-      return;
-    }
-    if (!regPassword || regPassword.length < 6) {
-      setErrorMessage(isVi ? 'Mật khẩu phải từ 6 ký tự trở lên' : 'Password must be at least 6 characters');
-      return;
-    }
-    if (regPassword !== regConfirmPassword) {
-      setErrorMessage(isVi ? 'Mật khẩu xác nhận không trùng khớp' : 'Passwords do not match');
-      return;
-    }
-    if (!agreeTerms) {
-      setErrorMessage(isVi ? 'Bạn cần đồng ý với quy chế thi vấn đáp' : 'Please accept terms & conditions');
-      return;
-    }
-
-    setIsLoading(true);
-    try {
-      const user = await registerUser({
-        fullName: regFullName,
-        username: regUsername,
-        email: regEmail,
-        password: regPassword,
-      });
-      setSuccessMessage(
-        isVi
-          ? 'Đăng ký thành công! Quyền hạn mặc định là Sinh viên (Admin sẽ phân quyền sau).'
-          : 'Account created! Default role assigned (Admin will assign specific role).'
-      );
-      setTimeout(() => {
-        onLoginSuccess(user);
-      }, 700);
-    } catch (err: any) {
-      setErrorMessage(err.message || (isVi ? 'Đăng ký không thành công' : 'Registration failed'));
-    } finally {
-      setIsLoading(false);
-    }
-  };
-
   return (
-    <div className="min-h-screen relative overflow-hidden bg-slate-950 text-slate-100 flex flex-col justify-between select-none">
-      {/* ============================================================ */}
-      {/* ANIMATED MOVING GRADIENTS & AMBIENT GLOW BACKDROP */}
-      {/* ============================================================ */}
-      <div className="absolute inset-0 pointer-events-none overflow-hidden z-0">
-        {/* Animated Orb 1 - Violet & Indigo */}
-        <div className="absolute -top-24 -left-24 w-[600px] h-[600px] bg-gradient-to-tr from-indigo-600/35 via-violet-600/30 to-purple-600/25 rounded-full blur-[140px] animate-float-1" />
+    <div className="min-h-screen w-full bg-[#0B0F19] text-white flex flex-col justify-between relative overflow-hidden font-sans selection:bg-indigo-500 selection:text-white">
+      {/* Background dynamic ambient glow lights */}
+      <div className="absolute -top-40 -left-40 w-96 h-96 bg-indigo-600/30 rounded-full blur-[128px] pointer-events-none animate-pulse" />
+      <div className="absolute top-1/3 -right-40 w-96 h-96 bg-purple-600/25 rounded-full blur-[128px] pointer-events-none" />
+      <div className="absolute -bottom-40 left-1/3 w-96 h-96 bg-pink-600/20 rounded-full blur-[128px] pointer-events-none" />
 
-        {/* Animated Orb 2 - Cyan & Emerald */}
-        <div className="absolute -bottom-28 -right-20 w-[650px] h-[650px] bg-gradient-to-bl from-teal-500/25 via-emerald-600/20 to-indigo-600/20 rounded-full blur-[150px] animate-float-2" />
-
-        {/* Animated Orb 3 - Rose & Amber Accent */}
-        <div className="absolute top-1/3 right-1/4 w-[450px] h-[450px] bg-gradient-to-r from-rose-500/18 to-indigo-500/20 rounded-full blur-[160px] animate-float-3" />
-
-        {/* Micro-dot grid texture */}
-        <div className="absolute inset-0 bg-[linear-gradient(to_right,#ffffff08_1px,transparent_1px),linear-gradient(to_bottom,#ffffff08_1px,transparent_1px)] bg-[size:40px_40px] opacity-70" />
-      </div>
+      {/* Grid overlay */}
+      <div
+        className="absolute inset-0 pointer-events-none opacity-20"
+        style={{
+          backgroundImage: `radial-gradient(rgba(255, 255, 255, 0.15) 1px, transparent 1px)`,
+          backgroundSize: '32px 32px',
+        }}
+      />
 
       {/* ============================================================ */}
-      {/* TOP HEADER / BRAND BAR */}
+      {/* TOP BAR / BRAND HEADER */}
       {/* ============================================================ */}
-      <header className="relative z-10 w-full max-w-7xl mx-auto px-6 py-5 flex items-center justify-between">
+      <header className="relative z-10 w-full max-w-7xl mx-auto px-6 py-6 flex items-center justify-between">
         <div className="flex items-center gap-3">
-          <div className="h-10 w-10 rounded-xl bg-gradient-to-tr from-indigo-600 to-violet-600 flex items-center justify-center text-white shadow-lg shadow-indigo-500/30 border border-white/20">
-            <BrainCircuit className="h-6 w-6" />
+          <div className="h-10 w-10 rounded-2xl bg-gradient-to-tr from-indigo-500 via-indigo-600 to-violet-600 flex items-center justify-center text-white shadow-lg shadow-indigo-500/30">
+            <BrainCircuit className="h-6 w-6 animate-pulse" />
           </div>
           <div>
-            <span className="font-bold text-xl tracking-tight text-white font-display block leading-tight">
-              AIVES
+            <span className="font-extrabold text-xl tracking-tight text-white font-display flex items-center gap-2">
+              {t.appName}
+              <span className="text-[10px] uppercase font-mono px-2 py-0.5 rounded-full bg-indigo-500/20 text-indigo-300 border border-indigo-500/30">
+                PRO 2026
+              </span>
             </span>
-            <span className="text-[11px] text-slate-400 font-medium">
-              {isVi ? 'Hệ thống Thi Vấn đáp AI Thông minh' : 'AI-Powered Oral Viva Voce Examination System'}
-            </span>
+            <p className="text-[11px] text-slate-400 font-medium">{t.appSub}</p>
           </div>
         </div>
 
-        {/* Top Controls: Language, Dark Mode Icon */}
-        <div className="flex items-center gap-2.5">
-
-          {/* Language Switcher */}
+        {/* Global Controls */}
+        <div className="flex items-center gap-2">
+          {/* Language Toggle */}
           <button
             onClick={() => setLanguage(language === 'vi' ? 'en' : 'vi')}
-            title="Chuyển đổi ngôn ngữ / Switch Language"
-            className="px-3 py-1.5 rounded-xl border border-white/10 bg-white/5 hover:bg-white/10 text-xs font-bold text-white transition-colors flex items-center gap-1 cursor-pointer"
+            title="Ngôn ngữ / Language"
+            className="px-3 py-1.5 rounded-xl border border-white/10 bg-white/5 hover:bg-white/10 text-slate-300 transition-colors flex items-center gap-1.5 text-xs font-semibold cursor-pointer"
           >
             <Languages className="w-3.5 h-3.5 text-indigo-400" />
             <span>{language.toUpperCase()}</span>
           </button>
 
-          {/* Theme Toggle (Icon only as requested) */}
+          {/* Theme Toggle */}
           <button
             onClick={() => setIsDarkMode(!isDarkMode)}
             title={isDarkMode ? 'Chuyển sang giao diện sáng' : 'Chuyển sang giao diện tối'}
@@ -335,42 +235,28 @@ export const AuthLandingPage: React.FC<AuthLandingPageProps> = ({
 
         {/* Right Column: Glassmorphism Auth Card */}
         <div className="w-full lg:w-5/12 max-w-md">
-          <div className="bg-slate-900/75 border border-white/15 rounded-3xl p-6 sm:p-8 backdrop-blur-2xl shadow-[0_25px_60px_rgba(0,0,0,0.6)] relative overflow-hidden">
+          <div className="bg-slate-900/80 border border-white/15 rounded-3xl p-6 sm:p-8 backdrop-blur-2xl shadow-[0_25px_60px_rgba(0,0,0,0.6)] relative overflow-hidden">
             {/* Top glowing accent line */}
             <div className="absolute top-0 left-0 right-0 h-[1.5px] bg-gradient-to-r from-transparent via-indigo-500 to-transparent" />
 
-            {/* Tab Switcher */}
-            <div className="flex items-center gap-1 p-1 bg-white/5 border border-white/10 rounded-2xl mb-6">
-              <button
-                type="button"
-                onClick={() => {
-                  setActiveTab('login');
-                  setErrorMessage('');
-                  setSuccessMessage('');
-                }}
-                className={`flex-1 py-2 text-xs font-bold rounded-xl transition-all cursor-pointer ${
-                  activeTab === 'login'
-                    ? 'bg-gradient-to-r from-indigo-600 to-violet-600 text-white shadow-md shadow-indigo-600/30'
-                    : 'text-slate-400 hover:text-white'
-                }`}
-              >
-                {isVi ? 'Đăng nhập' : 'Sign In'}
-              </button>
-              <button
-                type="button"
-                onClick={() => {
-                  setActiveTab('register');
-                  setErrorMessage('');
-                  setSuccessMessage('');
-                }}
-                className={`flex-1 py-2 text-xs font-bold rounded-xl transition-all cursor-pointer ${
-                  activeTab === 'register'
-                    ? 'bg-gradient-to-r from-indigo-600 to-violet-600 text-white shadow-md shadow-indigo-600/30'
-                    : 'text-slate-400 hover:text-white'
-                }`}
-              >
-                {isVi ? 'Đăng ký thành viên' : 'Register Account'}
-              </button>
+            {/* Card Header */}
+            <div className="mb-6">
+              <div className="flex items-center gap-2 mb-2">
+                <div className="p-1.5 rounded-lg bg-indigo-500/20 text-indigo-400">
+                  <ShieldCheck className="w-4 h-4" />
+                </div>
+                <span className="text-[11px] font-bold text-indigo-300 uppercase tracking-wider">
+                  {isVi ? 'Cổng đăng nhập hệ thống' : 'Authentication Portal'}
+                </span>
+              </div>
+              <h2 className="text-xl font-bold text-white tracking-tight">
+                {isVi ? 'Đăng nhập vào Hệ thống' : 'Sign in to your account'}
+              </h2>
+              <p className="text-xs text-slate-400 mt-1">
+                {isVi
+                  ? 'Vui lòng nhập tài khoản do Quản trị viên (Admin) cấp để tiếp tục.'
+                  : 'Please enter credentials provisioned by your system administrator.'}
+              </p>
             </div>
 
             {/* Error / Success Feedback */}
@@ -388,236 +274,85 @@ export const AuthLandingPage: React.FC<AuthLandingPageProps> = ({
               </div>
             )}
 
-            {/* TAB 1: LOGIN */}
-            {activeTab === 'login' && (
-              <div className="space-y-5">
-                {/* 1-Touch Demo Accounts Section */}
-                <div>
-                  <div className="flex items-center justify-between mb-2">
-                    <span className="text-[11px] font-bold text-slate-400 uppercase tracking-wider">
-                      {isVi ? '⚡ Đăng nhập 1 chạm (Tài khoản mẫu)' : '⚡ 1-Click Quick Demo'}
-                    </span>
-                    <span className="text-[10px] text-slate-500 font-mono">password123</span>
+            {/* LOGIN FORM */}
+            <form onSubmit={handleLoginSubmit} className="space-y-4">
+              <div>
+                <label className="block text-xs font-semibold text-slate-300 mb-1.5">
+                  {isVi ? 'Tên đăng nhập' : 'Username'}
+                </label>
+                <div className="relative">
+                  <div className="absolute inset-y-0 left-0 pl-3.5 flex items-center pointer-events-none text-slate-500">
+                    <User className="w-4 h-4" />
                   </div>
-
-                  <div className="grid grid-cols-3 gap-2">
-                    {DEMO_ACCOUNTS.map((acc) => (
-                      <button
-                        key={acc.username}
-                        type="button"
-                        onClick={() => handleDemoLogin(acc.username, acc.password)}
-                        className="p-2.5 rounded-xl border border-white/10 bg-white/5 hover:border-indigo-500 hover:bg-indigo-500/15 transition-all text-left group cursor-pointer"
-                      >
-                        <div className="flex items-center gap-1.5 mb-1">
-                          {acc.role === 'ADMIN' && <ShieldCheck className="w-3.5 h-3.5 text-purple-400 shrink-0" />}
-                          {acc.role === 'LECTURER' && (
-                            <GraduationCap className="w-3.5 h-3.5 text-indigo-400 shrink-0" />
-                          )}
-                          {acc.role === 'STUDENT' && <Users className="w-3.5 h-3.5 text-emerald-400 shrink-0" />}
-                          <span className="text-xs font-bold text-white truncate">
-                            {acc.role === 'ADMIN' ? 'Admin' : acc.role === 'LECTURER' ? 'Giảng viên' : 'Sinh viên'}
-                          </span>
-                        </div>
-                        <p className="text-[10px] text-slate-400 truncate font-mono">@{acc.username}</p>
-                      </button>
-                    ))}
-                  </div>
+                  <input
+                    type="text"
+                    required
+                    value={loginIdentifier}
+                    onChange={(e) => setLoginIdentifier(e.target.value)}
+                    placeholder={isVi ? 'Ví dụ: admin, lecturer1, student1' : 'Enter username'}
+                    className="w-full pl-10 pr-3.5 py-2.5 text-sm rounded-xl border border-white/15 bg-white/5 text-white placeholder-slate-500 focus:outline-hidden focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 transition-colors"
+                  />
                 </div>
-
-                <div className="relative flex items-center justify-center">
-                  <div className="border-t border-white/10 w-full" />
-                  <span className="bg-slate-900/90 px-3 text-[11px] font-medium text-slate-400 absolute">
-                    {isVi ? 'hoặc nhập tài khoản' : 'or enter credentials'}
-                  </span>
-                </div>
-
-                {/* Form Inputs */}
-                <form onSubmit={handleLoginSubmit} className="space-y-4">
-                  <div>
-                    <label className="block text-xs font-semibold text-slate-300 mb-1.5">
-                      {isVi ? 'Tên đăng nhập hoặc Email' : 'Username or Email'}
-                    </label>
-                    <div className="relative">
-                      <div className="absolute inset-y-0 left-0 pl-3.5 flex items-center pointer-events-none text-slate-500">
-                        <User className="w-4 h-4" />
-                      </div>
-                      <input
-                        type="text"
-                        value={loginIdentifier}
-                        onChange={(e) => setLoginIdentifier(e.target.value)}
-                        placeholder={isVi ? 'admin, dr.nguyen, tranthib...' : 'username or email'}
-                        className="w-full pl-10 pr-3.5 py-2.5 text-sm rounded-xl border border-white/15 bg-white/5 text-white placeholder-slate-500 focus:outline-hidden focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 transition-colors"
-                      />
-                    </div>
-                  </div>
-
-                  <div>
-                    <label className="block text-xs font-semibold text-slate-300 mb-1.5">
-                      {isVi ? 'Mật khẩu' : 'Password'}
-                    </label>
-                    <div className="relative">
-                      <div className="absolute inset-y-0 left-0 pl-3.5 flex items-center pointer-events-none text-slate-500">
-                        <Lock className="w-4 h-4" />
-                      </div>
-                      <input
-                        type={showLoginPassword ? 'text' : 'password'}
-                        value={loginPassword}
-                        onChange={(e) => setLoginPassword(e.target.value)}
-                        placeholder="••••••••"
-                        className="w-full pl-10 pr-10 py-2.5 text-sm rounded-xl border border-white/15 bg-white/5 text-white placeholder-slate-500 focus:outline-hidden focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 transition-colors"
-                      />
-                      <button
-                        type="button"
-                        onClick={() => setShowLoginPassword(!showLoginPassword)}
-                        className="absolute inset-y-0 right-0 pr-3.5 flex items-center text-slate-400 hover:text-white cursor-pointer"
-                      >
-                        {showLoginPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
-                      </button>
-                    </div>
-                  </div>
-
-                  <button
-                    type="submit"
-                    disabled={isLoading}
-                    className="w-full py-3 px-4 rounded-xl bg-gradient-to-r from-indigo-600 via-indigo-700 to-violet-600 hover:from-indigo-500 hover:to-violet-500 active:scale-[0.99] text-white text-sm font-bold shadow-lg shadow-indigo-600/30 transition-all flex items-center justify-center gap-2 cursor-pointer disabled:opacity-50"
-                  >
-                    {isLoading ? (
-                      <span>{isVi ? 'Đang xác thực...' : 'Authenticating...'}</span>
-                    ) : (
-                      <>
-                        <span>{isVi ? 'Đăng nhập vào Hệ thống' : 'Sign In to Workspace'}</span>
-                        <ArrowRight className="w-4 h-4" />
-                      </>
-                    )}
-                  </button>
-                </form>
               </div>
-            )}
 
-            {/* TAB 2: REGISTER (NO ROLE SELECTION!) */}
-            {activeTab === 'register' && (
-              <div className="space-y-4 max-h-[60vh] overflow-y-auto pr-1">
-                {/* Policy Notice Box */}
-                <div className="p-3 rounded-2xl bg-amber-500/10 border border-amber-500/25 text-amber-300 text-xs flex items-start gap-2.5">
-                  <ShieldAlert className="w-4 h-4 shrink-0 mt-0.5 text-amber-400" />
-                  <div>
-                    <p className="font-bold">{isVi ? 'Chính sách phân quyền tài khoản' : 'Account Role Policy'}</p>
-                    <p className="text-[11px] opacity-90 mt-0.5 leading-relaxed">
-                      {isVi
-                        ? 'Tài khoản mới tạo sẽ có vai trò mặc định là Sinh viên. Quản trị viên (Admin) của trường sẽ xét duyệt và phân quyền Giảng viên / Quản trị tương ứng.'
-                        : 'New accounts default to Student. Department Admins will assign Faculty/Admin permissions following verification.'}
-                    </p>
+              <div>
+                <label className="block text-xs font-semibold text-slate-300 mb-1.5">
+                  {isVi ? 'Mật khẩu' : 'Password'}
+                </label>
+                <div className="relative">
+                  <div className="absolute inset-y-0 left-0 pl-3.5 flex items-center pointer-events-none text-slate-500">
+                    <Lock className="w-4 h-4" />
                   </div>
-                </div>
-
-                <form onSubmit={handleRegisterSubmit} className="space-y-3">
-                  <div>
-                    <label className="block text-xs font-semibold text-slate-300 mb-1">
-                      {isVi ? 'Họ và tên của bạn' : 'Full Name'} *
-                    </label>
-                    <input
-                      type="text"
-                      value={regFullName}
-                      onChange={(e) => setRegFullName(e.target.value)}
-                      placeholder={isVi ? 'Nguyễn Văn A' : 'John Doe'}
-                      className="w-full px-3.5 py-2 text-sm rounded-xl border border-white/15 bg-white/5 text-white placeholder-slate-500 focus:outline-hidden focus:border-indigo-500"
-                    />
-                  </div>
-
-                  <div className="grid grid-cols-2 gap-3">
-                    <div>
-                      <label className="block text-xs font-semibold text-slate-300 mb-1">
-                        {isVi ? 'Tên đăng nhập' : 'Username'} *
-                      </label>
-                      <input
-                        type="text"
-                        value={regUsername}
-                        onChange={(e) => setRegUsername(e.target.value)}
-                        placeholder="nguyenvana"
-                        className="w-full px-3.5 py-2 text-sm rounded-xl border border-white/15 bg-white/5 text-white placeholder-slate-500 focus:outline-hidden focus:border-indigo-500"
-                      />
-                    </div>
-                    <div>
-                      <label className="block text-xs font-semibold text-slate-300 mb-1">
-                        {isVi ? 'Email FPT' : 'Email'} *
-                      </label>
-                      <input
-                        type="email"
-                        value={regEmail}
-                        onChange={(e) => setRegEmail(e.target.value)}
-                        placeholder="anv@fpt.edu.vn"
-                        className="w-full px-3.5 py-2 text-sm rounded-xl border border-white/15 bg-white/5 text-white placeholder-slate-500 focus:outline-hidden focus:border-indigo-500"
-                      />
-                    </div>
-                  </div>
-
-                  <div className="grid grid-cols-2 gap-3">
-                    <div>
-                      <label className="block text-xs font-semibold text-slate-300 mb-1">
-                        {isVi ? 'Mật khẩu' : 'Password'} *
-                      </label>
-                      <div className="relative">
-                        <input
-                          type={showRegPassword ? 'text' : 'password'}
-                          value={regPassword}
-                          onChange={(e) => setRegPassword(e.target.value)}
-                          placeholder="••••••••"
-                          className="w-full px-3.5 py-2 pr-9 text-sm rounded-xl border border-white/15 bg-white/5 text-white placeholder-slate-500 focus:outline-hidden focus:border-indigo-500"
-                        />
-                        <button
-                          type="button"
-                          onClick={() => setShowRegPassword(!showRegPassword)}
-                          className="absolute inset-y-0 right-0 pr-2.5 flex items-center text-slate-400 hover:text-white cursor-pointer"
-                        >
-                          {showRegPassword ? <EyeOff className="w-3.5 h-3.5" /> : <Eye className="w-3.5 h-3.5" />}
-                        </button>
-                      </div>
-                    </div>
-
-                    <div>
-                      <label className="block text-xs font-semibold text-slate-300 mb-1">
-                        {isVi ? 'Xác nhận mật khẩu' : 'Confirm'} *
-                      </label>
-                      <input
-                        type={showRegPassword ? 'text' : 'password'}
-                        value={regConfirmPassword}
-                        onChange={(e) => setRegConfirmPassword(e.target.value)}
-                        placeholder="••••••••"
-                        className="w-full px-3.5 py-2 text-sm rounded-xl border border-white/15 bg-white/5 text-white placeholder-slate-500 focus:outline-hidden focus:border-indigo-500"
-                      />
-                    </div>
-                  </div>
-
-                  <div className="flex items-center gap-2 pt-1">
-                    <input
-                      type="checkbox"
-                      id="agreeTermsLanding"
-                      checked={agreeTerms}
-                      onChange={(e) => setAgreeTerms(e.target.checked)}
-                      className="rounded border-slate-700 text-indigo-600 focus:ring-indigo-500 h-4 w-4 cursor-pointer"
-                    />
-                    <label htmlFor="agreeTermsLanding" className="text-xs text-slate-400 cursor-pointer">
-                      {isVi ? 'Tôi đồng ý với Quy chế thi vấn đáp AIVES' : 'I agree to the AIVES Examination Code'}
-                    </label>
-                  </div>
-
+                  <input
+                    type={showLoginPassword ? 'text' : 'password'}
+                    required
+                    value={loginPassword}
+                    onChange={(e) => setLoginPassword(e.target.value)}
+                    placeholder="••••••••"
+                    className="w-full pl-10 pr-10 py-2.5 text-sm rounded-xl border border-white/15 bg-white/5 text-white placeholder-slate-500 focus:outline-hidden focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 transition-colors"
+                  />
                   <button
-                    type="submit"
-                    disabled={isLoading}
-                    className="w-full mt-2 py-3 px-4 rounded-xl bg-gradient-to-r from-indigo-600 via-indigo-700 to-violet-600 hover:from-indigo-500 hover:to-violet-500 active:scale-[0.99] text-white text-sm font-bold shadow-lg shadow-indigo-600/30 transition-all flex items-center justify-center gap-2 cursor-pointer disabled:opacity-50"
+                    type="button"
+                    onClick={() => setShowLoginPassword(!showLoginPassword)}
+                    className="absolute inset-y-0 right-0 pr-3.5 flex items-center text-slate-400 hover:text-white cursor-pointer"
                   >
-                    {isLoading ? (
-                      <span>{isVi ? 'Đang tạo tài khoản...' : 'Creating account...'}</span>
-                    ) : (
-                      <>
-                        <span>{isVi ? 'Đăng Ký Tài Khoản Ngay' : 'Create Account'}</span>
-                        <CheckCircle2 className="w-4 h-4" />
-                      </>
-                    )}
+                    {showLoginPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
                   </button>
-                </form>
+                </div>
               </div>
-            )}
+
+              <button
+                type="submit"
+                disabled={isLoading}
+                className="w-full py-3 px-4 rounded-xl bg-gradient-to-r from-indigo-600 via-indigo-700 to-violet-600 hover:from-indigo-500 hover:to-violet-500 active:scale-[0.99] text-white text-sm font-bold shadow-lg shadow-indigo-600/30 transition-all flex items-center justify-center gap-2 cursor-pointer disabled:opacity-50 mt-2"
+              >
+                {isLoading ? (
+                  <span>{isVi ? 'Đang xác thực...' : 'Authenticating...'}</span>
+                ) : (
+                  <>
+                    <span>{isVi ? 'Đăng nhập vào Hệ thống' : 'Sign In to System'}</span>
+                    <ArrowRight className="w-4 h-4" />
+                  </>
+                )}
+              </button>
+            </form>
+
+            {/* Note about admin account provisioning */}
+            <div className="mt-5 pt-4 border-t border-white/10 text-center">
+              <p className="text-[11px] text-slate-400 leading-relaxed">
+                {isVi ? (
+                  <>
+                    🛡️ Hệ thống thi vấn đáp nội bộ. Sinh viên & Giảng viên nhận tài khoản từ{' '}
+                    <span className="text-indigo-300 font-medium">Quản trị viên (Admin)</span>.
+                  </>
+                ) : (
+                  <>
+                    🛡️ Internal Examination Portal. Accounts are provisioned exclusively by{' '}
+                    <span className="text-indigo-300 font-medium">System Administrators</span>.
+                  </>
+                )}
+              </p>
+            </div>
           </div>
         </div>
       </main>
