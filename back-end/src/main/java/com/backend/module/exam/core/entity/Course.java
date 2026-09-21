@@ -1,15 +1,15 @@
 package com.backend.module.exam.core.entity;
 
-import jakarta.persistence.Column;
-import jakarta.persistence.Entity;
-import jakarta.persistence.Id;
-import jakarta.persistence.Table;
+import com.backend.module.auth.core.entity.User;
+import jakarta.persistence.*;
 import jakarta.validation.constraints.NotNull;
 import jakarta.validation.constraints.Size;
 import lombok.Getter;
 import lombok.Setter;
 import org.hibernate.annotations.ColumnDefault;
 
+import java.util.HashSet;
+import java.util.Set;
 import java.util.UUID;
 
 @Getter
@@ -32,5 +32,11 @@ public class Course {
     @Column(name = "course_name", nullable = false)
     private String courseName;
 
-
+    @ManyToMany(fetch = FetchType.LAZY)
+    @JoinTable(
+        name = "course_lecturers",
+        joinColumns = @JoinColumn(name = "course_id"),
+        inverseJoinColumns = @JoinColumn(name = "lecturer_id")
+    )
+    private Set<User> lecturers = new HashSet<>();
 }
