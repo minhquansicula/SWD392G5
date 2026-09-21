@@ -24,7 +24,6 @@ interface ResultAnalyticsViewProps {
   assignments: StudentAssignment[];
   onSelectCandidate: (candidateId: string) => void;
   defaultSubTab?: 'student' | 'transcript' | 'class';
-  isSimpleMode?: boolean;
   language?: Language;
 }
 
@@ -34,7 +33,6 @@ export const ResultAnalyticsView: React.FC<ResultAnalyticsViewProps> = ({
   assignments,
   onSelectCandidate,
   defaultSubTab = 'student',
-  isSimpleMode = true,
   language = 'vi',
 }) => {
   const [activeTab, setActiveTab] = useState<'student' | 'transcript' | 'class'>(defaultSubTab);
@@ -70,19 +68,17 @@ export const ResultAnalyticsView: React.FC<ResultAnalyticsViewProps> = ({
             <span>{language === 'vi' ? 'Toàn Bộ Hội Thoại' : 'Verbatim Transcript'}</span>
           </button>
 
-          {!isSimpleMode && (
-            <button
-              onClick={() => setActiveTab('class')}
-              className={`flex items-center gap-2 px-3.5 py-2 rounded-xl transition-all whitespace-nowrap ${
-                activeTab === 'class'
-                  ? 'bg-indigo-600 text-white shadow-2xs'
-                  : 'text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800'
-              }`}
-            >
-              <BarChart3 className="h-4 w-4" />
-              <span>{language === 'vi' ? 'Phân Tích Cả Lớp' : 'Class Cohort Analytics'}</span>
-            </button>
-          )}
+          <button
+            onClick={() => setActiveTab('class')}
+            className={`flex items-center gap-2 px-3.5 py-2 rounded-xl transition-all whitespace-nowrap ${
+              activeTab === 'class'
+                ? 'bg-indigo-600 text-white shadow-2xs'
+                : 'text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800'
+            }`}
+          >
+            <BarChart3 className="h-4 w-4" />
+            <span>{language === 'vi' ? 'Phân Tích Cả Lớp' : 'Class Cohort Analytics'}</span>
+          </button>
         </div>
 
         {/* Candidate Selector for Individual View */}
@@ -109,7 +105,6 @@ export const ResultAnalyticsView: React.FC<ResultAnalyticsViewProps> = ({
         <StudentScoreReport
           report={report}
           onViewTranscriptTab={() => setActiveTab('transcript')}
-          isSimpleMode={isSimpleMode}
           language={language}
         />
       )}

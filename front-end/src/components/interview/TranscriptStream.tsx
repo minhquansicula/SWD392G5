@@ -7,7 +7,6 @@ interface TranscriptStreamProps {
   transcript: TranscriptEntry[];
   isAiSpeaking: boolean;
   isStudentSpeaking: boolean;
-  isSimpleMode?: boolean;
   language?: Language;
 }
 
@@ -15,7 +14,6 @@ export const TranscriptStream: React.FC<TranscriptStreamProps> = ({
   transcript,
   isAiSpeaking,
   isStudentSpeaking,
-  isSimpleMode = true,
   language = 'vi',
 }) => {
   const bottomRef = useRef<HTMLDivElement>(null);
@@ -105,8 +103,8 @@ export const TranscriptStream: React.FC<TranscriptStreamProps> = ({
                   {item.text}
                 </p>
 
-                {/* In Detailed Mode only: Show extracted concepts */}
-                {!isSimpleMode && item.highlightedConcepts && item.highlightedConcepts.length > 0 && (
+                {/* Highlighted concepts */}
+                {item.highlightedConcepts && item.highlightedConcepts.length > 0 && (
                   <div className="pt-2 border-t border-indigo-500/30 flex flex-wrap gap-1 items-center">
                     <span className="text-[10px] text-indigo-200 font-medium">
                       Khái niệm nhận diện:
