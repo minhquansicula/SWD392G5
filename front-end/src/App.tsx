@@ -24,6 +24,8 @@ import { ExamDetailPage } from './components/exams/ExamDetailPage';
 import { LiveVivaRoom } from './components/interview/LiveVivaRoom';
 import { ResultAnalyticsView } from './components/analytics/ResultAnalyticsView';
 import { UserManagementPage } from './components/admin/UserManagementPage';
+import { CourseManagementPage } from './components/admin/CourseManagementPage';
+import { SettingsPage } from './components/settings/SettingsPage';
 import { AuthModal } from './components/auth/AuthModal';
 import { AuthLandingPage } from './components/auth/AuthLandingPage';
 import {
@@ -42,7 +44,7 @@ export default function App() {
   const [isCreateModalOpen, setIsCreateModalOpen] = useState(false);
   const [isMobileSidebarOpen, setIsMobileSidebarOpen] = useState(false);
 
-  // App Theme & Preferences (Default to Simple Mode & Vietnamese for clean simplicity)
+  // App Theme & Preferences
   const [isDarkMode, setIsDarkMode] = useState<boolean>(() => {
     try {
       const saved = localStorage.getItem('aives_theme');
@@ -54,7 +56,6 @@ export default function App() {
   });
   const [isSoundEnabled, setIsSoundEnabled] = useState(true);
   const [userRole, setUserRole] = useState<'faculty' | 'student'>('faculty');
-  const [isSimpleMode, setIsSimpleMode] = useState(true);
   const [language, setLanguage] = useState<Language>('vi');
 
   // Sync userRole with currentUser & guard admin routes
@@ -177,8 +178,6 @@ export default function App() {
         setIsDarkMode={setIsDarkMode}
         isSoundEnabled={isSoundEnabled}
         setIsSoundEnabled={setIsSoundEnabled}
-        isSimpleMode={isSimpleMode}
-        setIsSimpleMode={setIsSimpleMode}
         language={language}
         setLanguage={setLanguage}
         currentUser={currentUser}
@@ -217,7 +216,6 @@ export default function App() {
                     setSelectedExam(ex);
                     setActiveModule('analytics');
                   }}
-                  isSimpleMode={isSimpleMode}
                   language={language}
                 />
               )}
@@ -260,7 +258,6 @@ export default function App() {
                 setExamSubView('list');
               }}
               isSoundEnabled={isSoundEnabled}
-              isSimpleMode={isSimpleMode}
               language={language}
             />
           )}
@@ -271,7 +268,6 @@ export default function App() {
               report={studentReport}
               analytics={classAnalytics}
               assignments={assignments}
-              isSimpleMode={isSimpleMode}
               language={language}
               onSelectCandidate={(candId) => {
                 if (candId === 'stu-9922') {
@@ -299,6 +295,28 @@ export default function App() {
               language={language}
               currentUserId={currentUser?.id}
               onRefreshCurrentUser={handleRefreshCurrentUser}
+              onNavigateToCourses={() => setActiveModule('courses')}
+            />
+          )}
+
+          {/* MODULE 5: COURSE MANAGEMENT */}
+          {activeModule === 'courses' && currentUser?.role === 'ADMIN' && (
+            <CourseManagementPage
+              language={language}
+              onNavigateToUsers={() => setActiveModule('admin')}
+            />
+          )}
+
+          {/* MODULE 6: SYSTEM SETTINGS */}
+          {activeModule === 'settings' && (
+            <SettingsPage
+              isDarkMode={isDarkMode}
+              setIsDarkMode={setIsDarkMode}
+              isSoundEnabled={isSoundEnabled}
+              setIsSoundEnabled={setIsSoundEnabled}
+              language={language}
+              setLanguage={setLanguage}
+              currentUser={currentUser}
             />
           )}
         </main>
