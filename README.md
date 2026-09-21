@@ -22,66 +22,15 @@
 
 ## 🏗️ System Architecture
 
-```mermaid
-graph TB
-    subgraph Frontend["Frontend — React 18 + TypeScript"]
-        UI["Viva Room UI"]
-        Recorder["MediaRecorder API"]
-        WS_Client["STOMP Client — Signaling"]
-        REST_Client["Axios — REST + Audio Upload"]
-    end
+AIVES is built as a **Modular Monolith** organized into distinct architectural layers:
 
-    subgraph Backend["Backend — Spring Boot 3 — Modular Monolith"]
-        direction TB
-        subgraph Mod2["Module 2: Exam & Schedule"]
-            ExamAPI["Exam CRUD APIs"]
-            ScheduleAPI["Schedule & Grading APIs"]
-            QuestionSelector["Question Selector — Strategy Pattern"]
-        end
-        subgraph Mod3["Module 3: AI Interview Core"]
-            WS_Server["STOMP Broker — Signaling"]
-            AudioEndpoint["Audio Upload — REST Multipart"]
-            SessionService["Interview Session Orchestrator"]
-            SessionDB["InterviewSession — DB State"]
-        end
-        subgraph Mod6["Module 6: Feedback & Reporting"]
-            ResultsAPI["Results & Feedback APIs"]
-            AnalyticsAPI["Analytics Aggregation"]
-            ExportAPI["CSV / PDF Export"]
-        end
-        subgraph AI["AI Provider Layer"]
-            STT["STT Provider — Whisper / Google"]
-            TTS["TTS Provider — Google / FPT.AI"]
-            LLM["LLM Provider — GPT-4o / Gemini"]
-        end
-        EventBus["Spring Events — Async Processing"]
-    end
-
-    subgraph DB["PostgreSQL 16"]
-        Tables["users · courses · questions · exams\nexam_schedules · transcripts\nquestion_results · interview_sessions"]
-    end
-
-    UI --> Recorder
-    Recorder -->|"audio/webm blob"| REST_Client
-    REST_Client -->|"POST /api/sessions/{id}/audio"| AudioEndpoint
-    REST_Client -->|"REST CRUD"| ExamAPI
-    REST_Client -->|"REST CRUD"| ScheduleAPI
-    REST_Client -->|"GET results"| ResultsAPI
-    WS_Client <-->|"STOMP signaling"| WS_Server
-    WS_Server --> SessionService
-    AudioEndpoint --> SessionService
-    SessionService --> STT
-    SessionService --> TTS
-    SessionService --> LLM
-    SessionService --> SessionDB
-    SessionService --> EventBus
-    EventBus --> ResultsAPI
-    SessionDB --> DB
-    ExamAPI --> DB
-    ScheduleAPI --> DB
-    ResultsAPI --> DB
-    AnalyticsAPI --> DB
-```
+- **Frontend (React 18 + TypeScript):** Viva Room UI, audio recording via MediaRecorder API, real-time signaling over STOMP WebSocket, and REST client (Axios) for CRUD operations and audio uploads.
+- **Backend (Spring Boot 3):**
+  - **Module 2 (Exam & Schedule):** Exam lifecycle CRUD, student timeslot scheduling, and randomized/adaptive question selection.
+  - **Module 3 (AI Interview Core):** STOMP signaling broker, multipart audio upload ingestion, session orchestration, and DB state persistence.
+  - **Module 6 (Feedback & Reporting):** Exam result aggregation, AI scoring queue for lecturer grading, and CSV/PDF export.
+  - **AI Provider Layer:** Pluggable interfaces for Speech-to-Text (Whisper / Google), Text-to-Speech (Google / FPT.AI), and LLMs (GPT-4o / Gemini).
+- **Database (PostgreSQL 16):** Persistent relational storage managed with Flyway migrations.
 
 ---
 
@@ -97,21 +46,7 @@ graph TB
 
 ## 🗄️ Database Schema
 
-```mermaid
-erDiagram
-    USERS ||--o{ EXAMS : "creates"
-    USERS ||--o{ EXAM_SCHEDULES : "is scheduled for"
-    USERS ||--o{ EXAM_SCHEDULES : "grades"
-    COURSES ||--o{ EXAMS : "has"
-    COURSES ||--o{ QUESTIONS : "contains"
-    EXAMS ||--o{ EXAM_SCHEDULES : "has"
-    EXAM_SCHEDULES ||--o{ TRANSCRIPTS : "logs"
-    EXAM_SCHEDULES ||--o{ QUESTION_RESULTS : "produces"
-    EXAM_SCHEDULES ||--|| INTERVIEW_SESSIONS : "tracked by"
-    QUESTIONS ||--o{ TRANSCRIPTS : "referenced in"
-    QUESTIONS ||--o{ QUESTION_RESULTS : "evaluated in"
-    TRANSCRIPTS ||--o{ TRANSCRIPTS : "follow-up chain"
-```
+The database model manages the relationships between users, courses, questions, exams, schedules, interview transcripts, and grading results.
 
 > 📄 **Full schema details:** [Database.md](docs/Database.md) · **ERD source:** [DrdDiagram.md](docs/DrdDiagram.md)
 
@@ -119,48 +54,16 @@ erDiagram
 
 ## ⚡ Interview Flow
 
-```mermaid
-sequenceDiagram
-    participant S as Student Browser
-    participant WS as STOMP Server
-    participant API as REST API
-    participant AI as AI Providers
-    participant DB as PostgreSQL
+The viva examination process follows a structured sequence:
 
-    S->>WS: StartSessionCommand
-    WS->>DB: Create InterviewSession (phase: AWAITING_QUESTION)
-    WS->>AI: TTS — synthesize question
-    AI-->>WS: Audio bytes
-    WS->>S: QUESTION_DELIVERED (question text + TTS audio URL)
+1. **Session Start:** Student enters the viva room; STOMP WebSocket initializes the DB-backed session.
+2. **Question Delivery:** AI synthesizes oral question audio via TTS and sends question text and audio URL to the student.
+3. **Response Capture:** Student listens and records their spoken response; audio (`webm/opus`) is uploaded via REST multipart.
+4. **Transcription & Evaluation:** STT transcribes speech into text; LLM analyzes answer context and evaluates completeness.
+5. **Adaptive Follow-up:** If the answer is incomplete or vague, LLM generates a targeted follow-up question; otherwise, advances to the next question.
+6. **Scoring & Review:** Upon session completion, LLM asynchronously generates suggested scores and feedback. Lecturers review transcripts and finalize official grades.
 
-    Note over S: Student listens, then records answer
-
-    S->>API: POST /api/sessions/{id}/audio (webm blob)
-    API-->>S: { audioUploadId }
-    S->>WS: AnswerSubmittedSignal { audioUploadId }
-
-    WS->>AI: STT — transcribe audio (vi-VN)
-    AI-->>WS: Transcript text
-    WS->>DB: Save Transcript (role: STUDENT)
-    WS->>AI: LLM — evaluate answer, decide follow-up
-    AI-->>WS: { action: FOLLOWUP | ADVANCE }
-
-    alt Follow-up needed
-        WS->>AI: TTS — synthesize follow-up
-        WS->>S: FOLLOWUP_QUESTION
-    else Advance to next question
-        WS->>S: QUESTION_DELIVERED (next question)
-    end
-
-    Note over WS: After all questions complete
-
-    WS->>S: SESSION_COMPLETE
-    WS->>DB: ExamSchedule.status = COMPLETED
-    WS-->>AI: Async — LLM score all questions
-    AI-->>DB: Save QuestionResults + aiSuggestedScore
-
-    Note over DB: Lecturer reviews and finalizes grade via PATCH /grade
-```
+> 📄 **Detailed business flow:** [Swimlane.md](docs/Swimlane.md)
 
 ---
 
@@ -334,6 +237,7 @@ aives:
 | [Project_requirement.md](docs/Project_requirement.md) | Functional requirements for Modules 2, 3, 6 |
 | [Database.md](docs/Database.md) | PostgreSQL schema specification |
 | [DrdDiagram.md](docs/DrdDiagram.md) | Entity Relationship Diagram (Mermaid) |
+| [Swimlane.md](docs/Swimlane.md) | Detailed business and interview flow swimlanes |
 | [implementation_tasks.md](docs/implementation_tasks.md) | Detailed implementation task checklist (v2) |
 | [Subject_detail.md](docs/Subject_detail.md) | SWD392 course syllabus |
 
