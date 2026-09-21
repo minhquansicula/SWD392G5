@@ -44,6 +44,14 @@ public class AdminUserController {
                 .body(ApiResponse.ok("Create new User successfully", createdUser));
     }
 
+    @Operation(summary = "Batch create Users", description = "Create multiple users in one transaction, e.g. from Excel")
+    @PostMapping("/batch")
+    public ResponseEntity<ApiResponse<java.util.List<UserDto>>> batchCreateUsers(@RequestBody java.util.List<CreateUserRequest> requests) {
+        java.util.List<UserDto> createdUsers = adminUserService.batchCreateUsers(requests);
+        return ResponseEntity.status(HttpStatus.CREATED)
+                .body(ApiResponse.ok("Batch created Users successfully", createdUsers));
+    }
+
     @Operation(summary = "Update User information")
     @PutMapping("/{id}")
     public ResponseEntity<ApiResponse<UserDto>> updateUser(

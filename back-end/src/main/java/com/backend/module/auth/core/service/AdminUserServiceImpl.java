@@ -17,6 +17,8 @@ import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.util.ArrayList;
+import java.util.List;
 import java.util.UUID;
 
 @Service
@@ -68,6 +70,45 @@ public class AdminUserServiceImpl implements AdminUserService {
                 .fullName(savedUser.getFullName())
                 .role(savedUser.getRole().name())
                 .build();
+    }
+
+    @Override
+    @Transactional
+    public List<UserDto> batchCreateUsers(List<CreateUserRequest> requests) {
+        if (requests == null || requests.isEmpty()) {
+            return List.of();
+        }
+
+        List<UserDto> createdList = new java.util.ArrayList<>();
+        for (CreateUserRequest request : requests) {
+            if (request.getUsername() == null || request.getUsername().isBlank()) {
+                continue;
+            }
+            String username = request.getUsername().trim();
+            if (userRepository.existsByUsername(username)) {
+                continue;
+            }
+
+            String rawPassword = (request.getPassword() != null && !request.getPassword().isBlank())
+                    ? request.getPassword()
+                    : "password123";
+
+            User user = User.builder()
+                    .username(username)
+                    .passwordHash(passwordEncoder.encode(rawPassword))
+                    .fullName(request.getFullName() != null ? request.getFullName().trim() : username)
+                    .role(request.getRole() != null ? request.getRole() : Role.STUDENT)
+                    .build();
+
+            User savedUser = userRepository.save(user);
+            createdList.add(UserDto.builder()
+                    .id(savedUser.getId())
+                    .username(savedUser.getUsername())
+                    .fullName(savedUser.getFullName())
+                    .role(savedUser.getRole().name())
+                    .build());
+        }
+        return createdList;
     }
 
     @Override

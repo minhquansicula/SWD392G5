@@ -122,7 +122,6 @@ export async function getRegisteredUsers(role?: string): Promise<UserAccount[]> 
 export async function createUserByAdmin(data: {
   fullName: string;
   username: string;
-  email?: string;
   password: string;
   role: UserRole;
 }): Promise<UserAccount> {
@@ -211,31 +210,42 @@ export async function updateUserAccount(
 }
 
 /**
- * Admin: Batch import students from parsed XLSX data
+ * Admin: Batch import students from parsed XLSX data via backend POST /api/admin/users/batch
  */
 export async function importStudentsBatch(
   students: { username: string; fullName: string; password?: string }[]
 ): Promise<{ success: number; failed: number; errors: string[] }> {
-  let success = 0;
-  let failed = 0;
-  const errors: string[] = [];
+  try {
+    const payload = students.map((s) => ({
+      username: s.username.trim(),
+      fullName: s.fullName.trim() || s.username.trim(),
+      password: s.password && s.password.length >= 8 ? s.password : 'password123',
+      role: 'STUDENT',
+    }));
 
-  for (const s of students) {
-    try {
-      await createUserByAdmin({
-        username: s.username.trim(),
-        fullName: s.fullName.trim(),
-        password: s.password && s.password.length >= 8 ? s.password : 'password123',
-        role: 'STUDENT',
-      });
-      success++;
-    } catch (err: any) {
-      failed++;
-      errors.push(`@${s.username}: ${err.message || 'Lỗi tạo tài khoản'}`);
+    const response = await apiClient.post<{
+      success: boolean;
+      message: string;
+      data: BackendUserDto[];
+    }>('/admin/users/batch', payload);
+
+    const createdList = response.data?.data || [];
+    const successCount = createdList.length;
+    const failedCount = students.length - successCount;
+    const errors: string[] = [];
+    if (failedCount > 0) {
+      errors.push(`${failedCount} sinh viên đã tồn tại trong hệ thống.`);
     }
-  }
 
-  return { success, failed, errors };
+    return {
+      success: successCount,
+      failed: failedCount,
+      errors,
+    };
+  } catch (err: any) {
+    console.error('Error importing students batch:', err);
+    throw new Error(err.response?.data?.message || 'Lỗi khi nhập danh sách sinh viên.');
+  }
 }
 
 /**
