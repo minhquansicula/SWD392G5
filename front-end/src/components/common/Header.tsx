@@ -30,8 +30,6 @@ interface HeaderProps {
   setIsSoundEnabled: (enabled: boolean) => void;
   userRole: 'faculty' | 'student';
   setUserRole: (role: 'faculty' | 'student') => void;
-  isSimpleMode: boolean;
-  setIsSimpleMode: (simple: boolean) => void;
   language: Language;
   setLanguage: (lang: Language) => void;
   currentUser?: UserAccount | null;
@@ -47,8 +45,8 @@ export const Header: React.FC<HeaderProps> = ({
   setIsDarkMode,
   isSoundEnabled,
   setIsSoundEnabled,
-  isSimpleMode,
-  setIsSimpleMode,
+  userRole,
+  setUserRole,
   language,
   setLanguage,
   currentUser,
@@ -177,19 +175,6 @@ export const Header: React.FC<HeaderProps> = ({
 
           {/* Right Action Controls */}
           <div className="flex items-center gap-2">
-            {/* Simple vs Detailed Mode Switcher */}
-            <button
-              onClick={() => setIsSimpleMode(!isSimpleMode)}
-              title={isSimpleMode ? t.simpleModeHint : t.detailedModeHint}
-              className={`hidden sm:flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-semibold border transition-all cursor-pointer ${
-                isSimpleMode
-                  ? 'bg-emerald-50 dark:bg-emerald-950/40 text-emerald-700 dark:text-emerald-300 border-emerald-300 dark:border-emerald-800 shadow-2xs'
-                  : 'bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 border-slate-200 dark:border-slate-700'
-              }`}
-            >
-              <Sparkles className={`h-3.5 w-3.5 ${isSimpleMode ? 'text-emerald-600' : 'text-slate-400'}`} />
-              <span>{isSimpleMode ? t.simpleModeOn : t.simpleModeOff}</span>
-            </button>
 
             {/* Language Switcher */}
             <button

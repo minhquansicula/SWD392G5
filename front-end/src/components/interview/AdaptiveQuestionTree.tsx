@@ -9,7 +9,6 @@ interface AdaptiveQuestionTreeProps {
   totalQuestions: number;
   hasAdaptiveFollowUpActive: boolean;
   activeFollowUpText?: string;
-  isSimpleMode?: boolean;
   language?: Language;
 }
 
@@ -19,7 +18,6 @@ export const AdaptiveQuestionTree: React.FC<AdaptiveQuestionTreeProps> = ({
   totalQuestions,
   hasAdaptiveFollowUpActive,
   activeFollowUpText,
-  isSimpleMode = true,
   language = 'vi',
 }) => {
   return (

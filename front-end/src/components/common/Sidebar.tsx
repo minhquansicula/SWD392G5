@@ -19,6 +19,8 @@ import {
   Check,
   X,
   Menu,
+  BookOpen,
+  Settings,
 } from 'lucide-react';
 import { ModuleType, UserAccount, UserRole } from '../../types';
 import { Language, translations } from '../../utils/i18n';
@@ -30,8 +32,6 @@ interface SidebarProps {
   setIsDarkMode: (dark: boolean) => void;
   isSoundEnabled: boolean;
   setIsSoundEnabled: (enabled: boolean) => void;
-  isSimpleMode: boolean;
-  setIsSimpleMode: (simple: boolean) => void;
   language: Language;
   setLanguage: (lang: Language) => void;
   currentUser?: UserAccount | null;
@@ -49,8 +49,6 @@ export const Sidebar: React.FC<SidebarProps> = ({
   setIsDarkMode,
   isSoundEnabled,
   setIsSoundEnabled,
-  isSimpleMode,
-  setIsSimpleMode,
   language,
   setLanguage,
   currentUser,
@@ -228,75 +226,30 @@ export const Sidebar: React.FC<SidebarProps> = ({
                 PRO
               </span>
             </button>
+
+            {/* Course Management */}
+            <button
+              onClick={() => handleNavClick('courses')}
+              className={`w-full flex items-center justify-between px-3 py-2.5 rounded-xl text-xs font-semibold transition-all cursor-pointer ${
+                activeModule === 'courses'
+                  ? 'bg-purple-50 dark:bg-purple-950/50 text-purple-700 dark:text-purple-300 shadow-2xs font-bold'
+                  : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white hover:bg-slate-100 dark:hover:bg-slate-800/60'
+              }`}
+            >
+              <div className="flex items-center gap-3 truncate">
+                <BookOpen
+                  className={`h-4 w-4 shrink-0 ${
+                    activeModule === 'courses' ? 'text-purple-600 dark:text-purple-400' : 'text-purple-500'
+                  }`}
+                />
+                <span className="truncate">{isVi ? 'Quản lý môn học' : 'Course Management'}</span>
+              </div>
+            </button>
           </div>
         )}
       </div>
 
-      {/* 3. UTILITY CONTROLS BAR (Theme, Sound, Lang, Simple Mode) */}
-      <div className="px-3 py-2.5 border-t border-slate-200 dark:border-slate-800/80 bg-slate-50/50 dark:bg-slate-900/40">
-        <div className="flex items-center justify-between gap-1">
-          {/* Simple Mode Toggle */}
-          <button
-            onClick={() => setIsSimpleMode(!isSimpleMode)}
-            title={isSimpleMode ? t.simpleModeHint : t.detailedModeHint}
-            className={`flex-1 flex items-center justify-center gap-1.5 py-1.5 px-2 rounded-lg text-xs font-semibold border transition-all cursor-pointer ${
-              isSimpleMode
-                ? 'bg-emerald-50 dark:bg-emerald-950/40 text-emerald-700 dark:text-emerald-300 border-emerald-300 dark:border-emerald-800 shadow-2xs'
-                : 'bg-white dark:bg-slate-800 text-slate-600 dark:text-slate-400 border-slate-200 dark:border-slate-700'
-            }`}
-          >
-            <Sparkles className={`h-3 w-3 ${isSimpleMode ? 'text-emerald-600' : 'text-slate-400'}`} />
-            <span className="text-[11px] truncate">
-              {isSimpleMode ? (isVi ? 'Tinh gọn' : 'Simple') : (isVi ? 'Chi tiết' : 'Detail')}
-            </span>
-          </button>
-
-          {/* Language Switcher */}
-          <button
-            onClick={() => setLanguage(language === 'vi' ? 'en' : 'vi')}
-            title="Ngôn ngữ / Language"
-            className="p-1.5 rounded-lg border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-800 text-slate-700 dark:text-slate-200 hover:bg-slate-100 transition-colors flex items-center justify-center cursor-pointer text-xs font-bold"
-          >
-            <span>{language.toUpperCase()}</span>
-          </button>
-
-          {/* Sound Toggle */}
-          <button
-            onClick={() => setIsSoundEnabled(!isSoundEnabled)}
-            title={isSoundEnabled ? t.soundOn : t.soundOff}
-            className="p-1.5 rounded-lg border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-800 text-slate-600 dark:text-slate-400 hover:bg-slate-100 transition-colors flex items-center justify-center cursor-pointer"
-          >
-            {isSoundEnabled ? (
-              <Volume2 className="h-3.5 w-3.5 text-emerald-600 dark:text-emerald-400" />
-            ) : (
-              <VolumeX className="h-3.5 w-3.5 text-slate-400" />
-            )}
-          </button>
-
-          {/* Dark / Light Mode Switcher (Icon only, no text, exactly as user requested) */}
-          <button
-            onClick={() => setIsDarkMode(!isDarkMode)}
-            title={
-              isDarkMode
-                ? isVi
-                  ? 'Chuyển sang Giao diện Sáng'
-                  : 'Switch to Light Mode'
-                : isVi
-                ? 'Chuyển sang Giao diện Tối'
-                : 'Switch to Dark Mode'
-            }
-            className="p-1.5 rounded-lg border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-800 hover:bg-slate-100 dark:hover:bg-slate-700 transition-colors flex items-center justify-center cursor-pointer"
-          >
-            {isDarkMode ? (
-              <Sun className="h-3.5 w-3.5 text-amber-400 shrink-0" />
-            ) : (
-              <Moon className="h-3.5 w-3.5 text-indigo-600 shrink-0" />
-            )}
-          </button>
-        </div>
-      </div>
-
-      {/* 4. USER ACCOUNT WIDGET (Bottom of Sidebar) */}
+      {/* 3. USER ACCOUNT WIDGET (Bottom of Sidebar) */}
       <div className="p-3 border-t border-slate-200 dark:border-slate-800/80 relative" ref={userMenuRef}>
         {currentUser ? (
           <div>
@@ -347,7 +300,21 @@ export const Sidebar: React.FC<SidebarProps> = ({
                   </p>
                 </div>
 
-                {/* Action Buttons */}
+                {/* Settings Action Button */}
+                <div className="pt-1 px-1">
+                  <button
+                    onClick={() => {
+                      setIsUserMenuOpen(false);
+                      handleNavClick('settings');
+                    }}
+                    className="w-full flex items-center gap-2 px-2.5 py-2 rounded-lg text-xs text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800/70 transition-colors text-left cursor-pointer font-medium"
+                  >
+                    <Settings className="w-4 h-4 text-slate-500" />
+                    <span>{isVi ? 'Cài đặt' : 'Settings'}</span>
+                  </button>
+                </div>
+
+                {/* Logout Action Button */}
                 <div className="pt-1 px-1">
                   <button
                     onClick={() => {

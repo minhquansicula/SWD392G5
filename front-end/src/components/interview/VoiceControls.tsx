@@ -17,7 +17,6 @@ interface VoiceControlsProps {
   isAiSpeaking: boolean;
   isEvaluating: boolean;
   suggestedAnswers?: string[];
-  isSimpleMode?: boolean;
   language?: Language;
 }
 
@@ -28,7 +27,6 @@ export const VoiceControls: React.FC<VoiceControlsProps> = ({
   onSubmitStudentAnswer,
   isAiSpeaking,
   isEvaluating,
-  isSimpleMode = true,
   language = 'vi',
 }) => {
   const [typedAnswer, setTypedAnswer] = useState('');

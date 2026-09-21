@@ -24,7 +24,6 @@ interface ExamListPageProps {
   onLaunchViva: (exam: Exam) => void;
   onOpenCreateExam: () => void;
   onViewAnalytics: (examId: string) => void;
-  isSimpleMode?: boolean;
   language?: Language;
 }
 
@@ -34,7 +33,6 @@ export const ExamListPage: React.FC<ExamListPageProps> = ({
   onLaunchViva,
   onOpenCreateExam,
   onViewAnalytics,
-  isSimpleMode = true,
   language = 'vi',
 }) => {
   const [searchTerm, setSearchTerm] = useState('');
@@ -108,62 +106,60 @@ export const ExamListPage: React.FC<ExamListPageProps> = ({
         </button>
       </div>
 
-      {/* When NOT in Simple Mode: Show Detailed KPI Overview */}
-      {!isSimpleMode && (
-        <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
-          <div className="p-4 rounded-xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 shadow-xs">
-            <div className="flex items-center justify-between text-slate-500 dark:text-slate-400 text-xs font-medium">
-              <span>Tổng số môn thi</span>
-              <Layers className="h-4 w-4 text-indigo-500" />
-            </div>
-            <p className="text-2xl font-bold text-slate-900 dark:text-white mt-2 font-display">
-              {exams.length}
-            </p>
-            <p className="text-[11px] text-emerald-600 dark:text-emerald-400 mt-1 font-medium">
-              3 Ngành đào tạo
-            </p>
+      {/* KPI Overview */}
+      <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
+        <div className="p-4 rounded-xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 shadow-xs">
+          <div className="flex items-center justify-between text-slate-500 dark:text-slate-400 text-xs font-medium">
+            <span>Tổng số môn thi</span>
+            <Layers className="h-4 w-4 text-indigo-500" />
           </div>
-
-          <div className="p-4 rounded-xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 shadow-xs">
-            <div className="flex items-center justify-between text-slate-500 dark:text-slate-400 text-xs font-medium">
-              <span>Thí sinh đã lên lịch</span>
-              <Users className="h-4 w-4 text-cyan-500" />
-            </div>
-            <p className="text-2xl font-bold text-slate-900 dark:text-white mt-2 font-display">
-              102
-            </p>
-            <p className="text-[11px] text-slate-500 dark:text-slate-400 mt-1">
-              52 ca thi đã hoàn thành
-            </p>
-          </div>
-
-          <div className="p-4 rounded-xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 shadow-xs">
-            <div className="flex items-center justify-between text-slate-500 dark:text-slate-400 text-xs font-medium">
-              <span>Điểm trung bình</span>
-              <Award className="h-4 w-4 text-amber-500" />
-            </div>
-            <p className="text-2xl font-bold text-slate-900 dark:text-white mt-2 font-display">
-              78.4%
-            </p>
-            <p className="text-[11px] text-emerald-600 dark:text-emerald-400 mt-1">
-              Đạt chuẩn đầu ra
-            </p>
-          </div>
-
-          <div className="p-4 rounded-xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 shadow-xs">
-            <div className="flex items-center justify-between text-slate-500 dark:text-slate-400 text-xs font-medium">
-              <span>Độ chính xác AI</span>
-              <CheckCircle2 className="h-4 w-4 text-emerald-500" />
-            </div>
-            <p className="text-2xl font-bold text-slate-900 dark:text-white mt-2 font-display">
-              99.1%
-            </p>
-            <p className="text-[11px] text-slate-500 dark:text-slate-400 mt-1">
-              Chuẩn hóa theo Bareme
-            </p>
-          </div>
+          <p className="text-2xl font-bold text-slate-900 dark:text-white mt-2 font-display">
+            {exams.length}
+          </p>
+          <p className="text-[11px] text-emerald-600 dark:text-emerald-400 mt-1 font-medium">
+            3 Ngành đào tạo
+          </p>
         </div>
-      )}
+
+        <div className="p-4 rounded-xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 shadow-xs">
+          <div className="flex items-center justify-between text-slate-500 dark:text-slate-400 text-xs font-medium">
+            <span>Thí sinh đã lên lịch</span>
+            <Users className="h-4 w-4 text-cyan-500" />
+          </div>
+          <p className="text-2xl font-bold text-slate-900 dark:text-white mt-2 font-display">
+            102
+          </p>
+          <p className="text-[11px] text-slate-500 dark:text-slate-400 mt-1">
+            52 ca thi đã hoàn thành
+          </p>
+        </div>
+
+        <div className="p-4 rounded-xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 shadow-xs">
+          <div className="flex items-center justify-between text-slate-500 dark:text-slate-400 text-xs font-medium">
+            <span>Điểm trung bình</span>
+            <Award className="h-4 w-4 text-amber-500" />
+          </div>
+          <p className="text-2xl font-bold text-slate-900 dark:text-white mt-2 font-display">
+            78.4%
+          </p>
+          <p className="text-[11px] text-emerald-600 dark:text-emerald-400 mt-1">
+            Đạt chuẩn đầu ra
+          </p>
+        </div>
+
+        <div className="p-4 rounded-xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 shadow-xs">
+          <div className="flex items-center justify-between text-slate-500 dark:text-slate-400 text-xs font-medium">
+            <span>Độ chính xác AI</span>
+            <CheckCircle2 className="h-4 w-4 text-emerald-500" />
+          </div>
+          <p className="text-2xl font-bold text-slate-900 dark:text-white mt-2 font-display">
+            99.1%
+          </p>
+          <p className="text-[11px] text-slate-500 dark:text-slate-400 mt-1">
+            Chuẩn hóa theo Bareme
+          </p>
+        </div>
+      </div>
 
       {/* Filter and Search Bar */}
       <div className="flex flex-col sm:flex-row gap-3 items-stretch sm:items-center justify-between p-3 rounded-xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 shadow-xs">
@@ -242,39 +238,37 @@ export const ExamListPage: React.FC<ExamListPageProps> = ({
                 </span>
               </div>
 
-              {/* Extra Details only in Detailed Mode */}
-              {!isSimpleMode && (
-                <div className="mt-3 space-y-3">
-                  <div className="flex flex-wrap gap-1.5">
-                    {exam.syllabusTopics.slice(0, 3).map((topic, i) => (
-                      <span
-                        key={i}
-                        className="px-2 py-0.5 text-[11px] rounded-md bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300"
-                      >
-                        {topic}
-                      </span>
-                    ))}
-                  </div>
+              {/* Topics and Progress */}
+              <div className="mt-3 space-y-3">
+                <div className="flex flex-wrap gap-1.5">
+                  {exam.syllabusTopics.slice(0, 3).map((topic, i) => (
+                    <span
+                      key={i}
+                      className="px-2 py-0.5 text-[11px] rounded-md bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300"
+                    >
+                      {topic}
+                    </span>
+                  ))}
+                </div>
 
-                  {/* Progress Bar */}
-                  <div>
-                    <div className="flex justify-between text-[11px] text-slate-500 mb-1">
-                      <span>Tiến độ thi của thí sinh</span>
-                      <span>
-                        {exam.completedCandidateCount}/{exam.assignedCandidateCount} ca
-                      </span>
-                    </div>
-                    <div className="w-full h-1.5 rounded-full bg-slate-100 dark:bg-slate-800 overflow-hidden">
-                      <div
-                        className="h-full bg-indigo-600 rounded-full"
-                        style={{
-                          width: `${(exam.completedCandidateCount / (exam.assignedCandidateCount || 1)) * 100}%`,
-                        }}
-                      />
-                    </div>
+                {/* Progress Bar */}
+                <div>
+                  <div className="flex justify-between text-[11px] text-slate-500 mb-1">
+                    <span>Tiến độ thi của thí sinh</span>
+                    <span>
+                      {exam.completedCandidateCount}/{exam.assignedCandidateCount} ca
+                    </span>
+                  </div>
+                  <div className="w-full h-1.5 rounded-full bg-slate-100 dark:bg-slate-800 overflow-hidden">
+                    <div
+                      className="h-full bg-indigo-600 rounded-full"
+                      style={{
+                        width: `${(exam.completedCandidateCount / (exam.assignedCandidateCount || 1)) * 100}%`,
+                      }}
+                    />
                   </div>
                 </div>
-              )}
+              </div>
             </div>
 
             {/* Clear Action Buttons */}

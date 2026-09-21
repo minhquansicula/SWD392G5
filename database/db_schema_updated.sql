@@ -23,6 +23,15 @@ CREATE TABLE courses (
     course_name VARCHAR(255) NOT NULL
 );
 
+CREATE TABLE course_lecturers (
+    course_id UUID NOT NULL REFERENCES courses(id) ON DELETE CASCADE,
+    lecturer_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    PRIMARY KEY (course_id, lecturer_id)
+);
+
+CREATE INDEX idx_course_lecturers_course ON course_lecturers(course_id);
+CREATE INDEX idx_course_lecturers_lecturer ON course_lecturers(lecturer_id);
+
 CREATE TABLE questions (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     -- NOT NULL: một câu hỏi bắt buộc phải thuộc một môn học.
