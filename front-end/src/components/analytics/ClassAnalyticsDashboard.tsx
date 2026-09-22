@@ -1,26 +1,62 @@
-import React, { useState } from 'react';
+import React, { useMemo, useState } from 'react';
 import {
-  BarChart3,
   Users,
   Award,
   TrendingUp,
-  AlertCircle,
   CheckCircle2,
-  HelpCircle,
-  FileSpreadsheet,
   Download,
 } from 'lucide-react';
+import {
+  Bar,
+  BarChart,
+  CartesianGrid,
+  Cell,
+  ResponsiveContainer,
+  Tooltip,
+  XAxis,
+  YAxis,
+} from 'recharts';
 import { ClassAnalyticsData } from '../../types';
 import { Badge } from '../common/Badge';
+import { downloadTextFile, getBestAnsweredRate, getHardestQuestions, toCsvRows } from '../../services/reportService';
 
 interface ClassAnalyticsDashboardProps {
   analytics: ClassAnalyticsData;
+  language?: 'vi' | 'en';
+  dataSourceLabel?: string;
 }
 
 export const ClassAnalyticsDashboard: React.FC<ClassAnalyticsDashboardProps> = ({
   analytics,
+  language = 'vi',
+  dataSourceLabel,
 }) => {
   const [activeTab, setActiveTab] = useState<'distribution' | 'difficulty' | 'topics'>('distribution');
+  const [exporting, setExporting] = useState(false);
+  const isVi = language === 'vi';
+  const hardestQuestions = useMemo(() => getHardestQuestions(analytics, 3), [analytics]);
+  const hardest = hardestQuestions[0];
+  const goodAnswerRate = useMemo(() => getBestAnsweredRate(analytics, 70), [analytics]);
+  const distributionChartData = useMemo(
+    () => analytics.scoreDistribution.map((item) => ({ name: item.range, students: item.count, percent: item.percentage })),
+    [analytics],
+  );
+  const difficultyChartData = useMemo(
+    () =>
+      [...analytics.questionDifficultyMetrics]
+        .sort((a, b) => a.avgScorePercent - b.avgScorePercent)
+        .map((q) => ({ name: `Q${q.questionIndex}`, score: q.avgScorePercent, topic: q.topic })),
+    [analytics],
+  );
+
+  const handleExport = () => {
+    setExporting(true);
+    try {
+      downloadTextFile(`aives-class-analytics-${analytics.examId}.csv`, toCsvRows(analytics));
+    } finally {
+      setTimeout(() => setExporting(false), 600);
+    }
+  };
 
   const getDifficultyBadge = (level: string) => {
     switch (level) {
@@ -40,21 +76,32 @@ export const ClassAnalyticsDashboard: React.FC<ClassAnalyticsDashboardProps> = (
       {/* Top Banner */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <div>
-          <h2 className="text-xl sm:text-2xl font-bold text-slate-900 dark:text-white font-display">
-            Cohort Performance & Psychometric Analysis
-          </h2>
+          <div className="flex flex-wrap items-center gap-2">
+            <h2 className="text-xl sm:text-2xl font-bold text-slate-900 dark:text-white font-display">
+              {isVi ? 'Hiệu suất cả lớp & phân tích câu hỏi' : 'Cohort Performance & Psychometric Analysis'}
+            </h2>
+            {dataSourceLabel && <Badge variant="warning" size="sm">{dataSourceLabel}</Badge>}
+          </div>
           <p className="text-xs sm:text-sm text-slate-500 dark:text-slate-400 mt-0.5">
             {analytics.examTitle} • {analytics.totalCompleted} candidates evaluated
           </p>
+          {hardest && (
+            <p className="mt-1 text-xs text-slate-600 dark:text-slate-300">
+              {isVi ? 'Câu khó nhất: ' : 'Hardest question: '}
+              <span className="font-bold text-rose-600 dark:text-rose-400">Q{hardest.questionIndex} • {hardest.topic} ({hardest.avgScorePercent}%)</span>
+              {isVi ? ` • Tỷ lệ câu trả lời tốt (≥70%): ${goodAnswerRate}%` : ` • Good-answer rate (≥70%): ${goodAnswerRate}%`}
+            </p>
+          )}
         </div>
 
         <div className="flex items-center gap-2">
           <button
-            onClick={() => alert('Cohort analytical export generated as CSV/XLSX.')}
-            className="flex items-center gap-1.5 px-3 py-2 text-xs font-semibold rounded-xl text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800 border border-slate-200 dark:border-slate-700 transition-colors"
+            onClick={handleExport}
+            disabled={exporting}
+            className="flex items-center gap-1.5 px-3 py-2 text-xs font-semibold rounded-xl text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800 border border-slate-200 dark:border-slate-700 transition-colors cursor-pointer disabled:opacity-60"
           >
             <Download className="h-3.5 w-3.5 text-indigo-500" />
-            <span>Export Psychometrics</span>
+            <span>{exporting ? (isVi ? 'Đang xuất...' : 'Exporting...') : (isVi ? 'Xuất CSV câu hỏi' : 'Export Psychometrics')}</span>
           </button>
         </div>
       </div>
@@ -116,8 +163,10 @@ export const ClassAnalyticsDashboard: React.FC<ClassAnalyticsDashboardProps> = (
       </div>
 
       {/* Sub-tab Switcher */}
-      <div className="flex border-b border-slate-200 dark:border-slate-800 text-xs font-semibold gap-4">
+      <div className="flex border-b border-slate-200 dark:border-slate-800 text-xs font-semibold gap-4 overflow-x-auto" role="tablist" aria-label={isVi ? 'Phân tích lớp học' : 'Class analytics'}>
         <button
+          role="tab"
+          aria-selected={activeTab === 'distribution'}
           onClick={() => setActiveTab('distribution')}
           className={`py-2.5 border-b-2 transition-colors ${
             activeTab === 'distribution'
@@ -129,6 +178,8 @@ export const ClassAnalyticsDashboard: React.FC<ClassAnalyticsDashboardProps> = (
         </button>
 
         <button
+          role="tab"
+          aria-selected={activeTab === 'difficulty'}
           onClick={() => setActiveTab('difficulty')}
           className={`py-2.5 border-b-2 transition-colors ${
             activeTab === 'difficulty'
@@ -140,6 +191,8 @@ export const ClassAnalyticsDashboard: React.FC<ClassAnalyticsDashboardProps> = (
         </button>
 
         <button
+          role="tab"
+          aria-selected={activeTab === 'topics'}
           onClick={() => setActiveTab('topics')}
           className={`py-2.5 border-b-2 transition-colors ${
             activeTab === 'topics'
@@ -165,6 +218,40 @@ export const ClassAnalyticsDashboard: React.FC<ClassAnalyticsDashboardProps> = (
             </div>
             <Badge variant="purple">Gaussian Bell-Curve Benchmark</Badge>
           </div>
+
+          {/* Accessible Recharts histogram + table fallback */}
+          <div className="h-72 w-full" role="img" aria-label={isVi ? 'Biểu đồ phân bố điểm cả lớp' : 'Class score distribution chart'}>
+            <ResponsiveContainer width="100%" height="100%">
+              <BarChart data={distributionChartData} margin={{ top: 12, right: 12, left: -12, bottom: 8 }}>
+                <CartesianGrid strokeDasharray="3 3" opacity={0.35} />
+                <XAxis dataKey="name" tick={{ fontSize: 10 }} interval={0} angle={-12} height={52} />
+                <YAxis allowDecimals={false} tick={{ fontSize: 11 }} />
+                <Tooltip />
+                <Bar dataKey="students" radius={[8, 8, 0, 0]}>
+                  {distributionChartData.map((entry, index) => (
+                    <Cell key={`${entry.name}-${index}`} fill={index >= 4 ? '#4f46e5' : '#93c5fd'} />
+                  ))}
+                </Bar>
+              </BarChart>
+            </ResponsiveContainer>
+          </div>
+          <details className="rounded-xl border border-slate-200 dark:border-slate-800 p-3 text-xs">
+            <summary className="cursor-pointer font-semibold">{isVi ? 'Xem bảng dữ liệu phân bố điểm' : 'View distribution data table'}</summary>
+            <div className="mt-2 overflow-x-auto">
+              <table className="w-full text-left">
+                <thead><tr><th className="py-1 pr-3">{isVi ? 'Khoảng điểm' : 'Range'}</th><th className="py-1 pr-3">{isVi ? 'Số SV' : 'Students'}</th><th className="py-1">{isVi ? 'Tỷ lệ' : 'Percent'}</th></tr></thead>
+                <tbody>
+                  {analytics.scoreDistribution.map((item) => (
+                    <tr key={item.range} className="border-t border-slate-100 dark:border-slate-800">
+                      <td className="py-1 pr-3">{item.range}</td>
+                      <td className="py-1 pr-3 font-mono">{item.count}</td>
+                      <td className="py-1 font-mono">{item.percentage}%</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </details>
 
           {/* Histogram Chart Bars */}
           <div className="h-64 flex items-end justify-between gap-3 pt-6 px-2 border-b border-slate-200 dark:border-slate-700">
@@ -206,11 +293,29 @@ export const ClassAnalyticsDashboard: React.FC<ClassAnalyticsDashboardProps> = (
         <div className="bg-white dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-800 shadow-xs overflow-hidden space-y-4">
           <div className="p-4 border-b border-slate-200 dark:border-slate-800 bg-slate-50/50 dark:bg-slate-900/50">
             <h3 className="text-base font-bold text-slate-900 dark:text-white font-display">
-              Psychometric Item Discrimination & Difficulty Analysis
+              {isVi ? 'Độ khó câu hỏi & khả năng phân loại' : 'Psychometric Item Discrimination & Difficulty Analysis'}
             </h3>
             <p className="text-xs text-slate-500 dark:text-slate-400">
-              Discrimination index (D &gt; 0.40 indicates exceptional ability to separate high and low performers)
+              {isVi
+                ? `Câu khó nhất là Q${hardest?.questionIndex} (${hardest?.avgScorePercent}%). Tỷ lệ trả lời tốt ≥70% đạt ${goodAnswerRate}%.`
+                : `Hardest item is Q${hardest?.questionIndex} (${hardest?.avgScorePercent}%). Good-answer rate ≥70% is ${goodAnswerRate}%.`}
             </p>
+          </div>
+
+          <div className="px-4 pt-4 h-64" role="img" aria-label={isVi ? 'Biểu đồ xếp hạng độ khó câu hỏi' : 'Question difficulty ranking chart'}>
+            <ResponsiveContainer width="100%" height="100%">
+              <BarChart data={difficultyChartData} layout="vertical" margin={{ top: 4, right: 16, left: 8, bottom: 4 }}>
+                <CartesianGrid strokeDasharray="3 3" opacity={0.35} />
+                <XAxis type="number" domain={[0, 100]} tick={{ fontSize: 11 }} />
+                <YAxis type="category" dataKey="name" width={44} tick={{ fontSize: 11 }} />
+                <Tooltip />
+                <Bar dataKey="score" radius={[0, 8, 8, 0]}>
+                  {difficultyChartData.map((entry, index) => (
+                    <Cell key={entry.name} fill={index === 0 ? '#e11d48' : index === 1 ? '#f59e0b' : '#10b981'} />
+                  ))}
+                </Bar>
+              </BarChart>
+            </ResponsiveContainer>
           </div>
 
           <div className="overflow-x-auto">

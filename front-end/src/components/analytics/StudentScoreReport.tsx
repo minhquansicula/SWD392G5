@@ -1,20 +1,14 @@
 import React, { useState } from 'react';
 import {
-  Award,
   Download,
-  Share2,
-  CheckCircle2,
-  AlertTriangle,
   Clock,
   ShieldCheck,
   TrendingUp,
   Sparkles,
-  Printer,
   ChevronDown,
   ChevronUp,
 } from 'lucide-react';
 import { StudentEvaluationReport } from '../../types';
-import { Badge } from '../common/Badge';
 import { Language, translations } from '../../utils/i18n';
 
 interface StudentScoreReportProps {
@@ -22,6 +16,7 @@ interface StudentScoreReportProps {
   onViewTranscriptTab: () => void;
   isSimpleMode?: boolean;
   language?: Language;
+  dataSourceLabel?: string;
 }
 
 export const StudentScoreReport: React.FC<StudentScoreReportProps> = ({
@@ -29,12 +24,32 @@ export const StudentScoreReport: React.FC<StudentScoreReportProps> = ({
   onViewTranscriptTab,
   isSimpleMode = true,
   language = 'vi',
+  dataSourceLabel,
 }) => {
   const [expandedQuestion, setExpandedQuestion] = useState<number | null>(1);
   const [downloadSuccess, setDownloadSuccess] = useState(false);
   const t = translations[language];
+  const excellentCount = report.questionFeedback.filter((q) => q.maxScore > 0 && q.score / q.maxScore >= 0.8).length;
 
   const handleExportReport = () => {
+    const lines = [
+      `${report.examTitle} - ${report.courseCode}`,
+      `${report.studentName} (${report.matriculationNo})`,
+      `Score: ${report.totalScore}/${report.maxScore} (${report.percentage}%) - Grade ${report.gradeLetter}`,
+      '',
+      ...report.questionFeedback.map(
+        (q) => `Q${q.questionNumber} [${q.topic}]: ${q.score}/${q.maxScore} | AI: ${q.examinerCritique}`,
+      ),
+    ];
+    const blob = new Blob([lines.join('\n')], { type: 'text/plain;charset=utf-8' });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = `phieu-diem-${report.matriculationNo}.txt`;
+    document.body.appendChild(link);
+    link.click();
+    link.remove();
+    setTimeout(() => URL.revokeObjectURL(url), 2000);
     setDownloadSuccess(true);
     setTimeout(() => setDownloadSuccess(false), 3000);
   };
@@ -48,13 +63,18 @@ export const StudentScoreReport: React.FC<StudentScoreReportProps> = ({
 
         <div className="relative flex flex-col md:flex-row md:items-center justify-between gap-6">
           <div className="space-y-1">
-            <div className="flex items-center gap-2">
+            <div className="flex flex-wrap items-center gap-2">
               <span className="px-2.5 py-0.5 rounded-full bg-indigo-500/30 text-indigo-200 border border-indigo-400/30 text-xs font-mono font-semibold">
                 {report.courseCode}
               </span>
               <span className="text-xs text-indigo-200">
                 Evaluated {report.evaluatedAt}
               </span>
+              {dataSourceLabel && (
+                <span className="px-2 py-0.5 rounded-full bg-amber-400/20 border border-amber-300/40 text-amber-100 text-[11px] font-semibold">
+                  {dataSourceLabel}
+                </span>
+              )}
             </div>
 
             <h2 className="text-2xl sm:text-3xl font-bold tracking-tight font-display">
@@ -225,7 +245,9 @@ export const StudentScoreReport: React.FC<StudentScoreReportProps> = ({
               {t.questionSummary}
             </h3>
             <p className="text-xs text-slate-500 dark:text-slate-400">
-              {language === 'vi' ? 'Đánh giá chi tiết câu trả lời của thí sinh cho từng câu' : 'Granular AI examiner breakdown of student verbal answers'}
+              {language === 'vi'
+                ? `Đánh giá chi tiết từng câu • ${excellentCount}/${report.questionFeedback.length} câu đạt tốt`
+                : `Granular AI examiner breakdown • ${excellentCount}/${report.questionFeedback.length} strong answers`}
             </p>
           </div>
           <button
@@ -239,6 +261,7 @@ export const StudentScoreReport: React.FC<StudentScoreReportProps> = ({
         <div className="space-y-3">
           {report.questionFeedback.map((q) => {
             const isExpanded = expandedQuestion === q.questionNumber;
+            const percent = q.maxScore > 0 ? Math.round((q.score / q.maxScore) * 100) : 0;
 
             return (
               <div
@@ -250,7 +273,8 @@ export const StudentScoreReport: React.FC<StudentScoreReportProps> = ({
                   onClick={() =>
                     setExpandedQuestion(isExpanded ? null : q.questionNumber)
                   }
-                  className="w-full flex items-center justify-between p-4 text-left hover:bg-slate-50/50 dark:hover:bg-slate-800/40 transition-colors"
+                  aria-expanded={isExpanded}
+                  className="w-full flex items-center justify-between p-4 text-left hover:bg-slate-50/50 dark:hover:bg-slate-800/40 transition-colors cursor-pointer"
                 >
                   <div className="flex items-center gap-3">
                     <span className="h-6 w-6 rounded-lg bg-indigo-100 dark:bg-indigo-950 text-indigo-700 dark:text-indigo-300 text-xs font-bold font-mono flex items-center justify-center">
@@ -268,7 +292,7 @@ export const StudentScoreReport: React.FC<StudentScoreReportProps> = ({
 
                   <div className="flex items-center gap-3">
                     <span className="font-mono text-xs sm:text-sm font-bold text-indigo-600 dark:text-indigo-400">
-                      {q.score}/{q.maxScore} pts
+                      {q.score}/{q.maxScore} pts ({percent}%)
                     </span>
                     {isExpanded ? (
                       <ChevronUp className="h-4 w-4 text-slate-400" />

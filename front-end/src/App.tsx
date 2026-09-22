@@ -56,16 +56,8 @@ export default function App() {
     }
   });
   const [isSoundEnabled, setIsSoundEnabled] = useState(true);
-  const [userRole, setUserRole] = useState<'faculty' | 'student'>('faculty');
   const [isSimpleMode, setIsSimpleMode] = useState(true);
   const [language, setLanguage] = useState<Language>('vi');
-
-  // Sync userRole with currentUser
-  useEffect(() => {
-    if (currentUser) {
-      setUserRole(currentUser.role === 'STUDENT' ? 'student' : 'faculty');
-    }
-  }, [currentUser]);
 
   // Active Entities
   const [exams, setExams] = useState<Exam[]>(mockExams);
@@ -75,7 +67,7 @@ export default function App() {
 
   // Analytics Data
   const [studentReport, setStudentReport] = useState<StudentEvaluationReport>(mockStudentEvaluation);
-  const [classAnalytics, setClassAnalytics] = useState<ClassAnalyticsData>(mockClassAnalytics);
+  const [classAnalytics] = useState<ClassAnalyticsData>(mockClassAnalytics);
 
   // Apply dark mode class to root HTML element & persist
   useEffect(() => {
@@ -281,9 +273,10 @@ export default function App() {
             <ResultAnalyticsView
               report={studentReport}
               analytics={classAnalytics}
-              assignments={assignments}
               isSimpleMode={isSimpleMode}
               language={language}
+              currentUser={currentUser}
+              examId={selectedExam.id}
               onSelectCandidate={(candId) => {
                 if (candId === 'stu-9922') {
                   setStudentReport({

@@ -3,25 +3,18 @@ import {
   Search,
   Bot,
   User,
-  Sparkles,
   Volume2,
-  Filter,
-  CheckCircle2,
-  Clock,
-  ShieldCheck,
 } from 'lucide-react';
 import { TranscriptEntry } from '../../types';
 
 interface TranscriptViewerProps {
   transcript: TranscriptEntry[];
-  candidateName: string;
-  examinerName: string;
+  candidateName?: string;
+  examinerName?: string;
 }
 
 export const TranscriptViewer: React.FC<TranscriptViewerProps> = ({
   transcript,
-  candidateName,
-  examinerName,
 }) => {
   const [searchTerm, setSearchTerm] = useState('');
   const [speakerFilter, setSpeakerFilter] = useState<'all' | 'examiner' | 'student'>('all');
