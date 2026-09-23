@@ -1,0 +1,1786 @@
+<!DOCTYPE html>
+<html lang="vi">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>TestSTT & LLM — AI Interview Lab (SWD392)</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link
+        href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@300;400;500;600;700;800&family=JetBrains+Mono:wght@400;500;600&display=swap"
+        rel="stylesheet">
+    <style>
+        :root {
+            --bg-base: #090d16;
+            --bg-surface: #0f172a;
+            --bg-card: rgba(30, 41, 59, 0.7);
+            --bg-card-hover: rgba(51, 65, 85, 0.8);
+            --border: rgba(148, 163, 184, 0.15);
+            --border-focus: rgba(99, 102, 241, 0.6);
+            --primary: #6366f1;
+            --primary-light: #818cf8;
+            --primary-glow: rgba(99, 102, 241, 0.35);
+            --secondary: #8b5cf6;
+            --gemini-cyan: #06b6d4;
+            --gemini-glow: rgba(6, 182, 212, 0.35);
+            --success: #10b981;
+            --success-bg: rgba(16, 185, 129, 0.15);
+            --warning: #f59e0b;
+            --warning-bg: rgba(245, 158, 11, 0.15);
+            --danger: #ef4444;
+            --danger-bg: rgba(239, 68, 68, 0.15);
+            --text-main: #f8fafc;
+            --text-muted: #94a3b8;
+            --text-dim: #64748b;
+            --radius-lg: 18px;
+            --radius-md: 12px;
+            --radius-sm: 8px;
+        }
+
+        * {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+        }
+
+        body {
+            font-family: 'Plus Jakarta Sans', -apple-system, BlinkMacSystemFont, sans-serif;
+            background: var(--bg-base);
+            background-image:
+                radial-gradient(at 10% 20%, rgba(99, 102, 241, 0.12) 0px, transparent 50%),
+                radial-gradient(at 90% 10%, rgba(139, 92, 246, 0.12) 0px, transparent 50%),
+                radial-gradient(at 50% 90%, rgba(6, 182, 212, 0.1) 0px, transparent 50%);
+            color: var(--text-main);
+            min-height: 100vh;
+            padding: 20px 16px;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+        }
+
+        .container {
+            max-width: 1380px;
+            width: 100%;
+            display: flex;
+            flex-direction: column;
+            gap: 20px;
+        }
+
+        /* Header */
+        header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 16px 24px;
+            background: var(--bg-card);
+            backdrop-filter: blur(16px);
+            border: 1px solid var(--border);
+            border-radius: var(--radius-lg);
+            box-shadow: 0 10px 30px rgba(0, 0, 0, 0.4);
+            flex-wrap: wrap;
+            gap: 12px;
+        }
+
+        .logo-wrap {
+            display: flex;
+            align-items: center;
+            gap: 14px;
+        }
+
+        .logo-badge {
+            width: 44px;
+            height: 44px;
+            background: linear-gradient(135deg, var(--primary), var(--gemini-cyan));
+            border-radius: 12px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-weight: 800;
+            font-size: 20px;
+            box-shadow: 0 4px 15px var(--primary-glow);
+        }
+
+        .logo-text h1 {
+            font-size: 18px;
+            font-weight: 700;
+            letter-spacing: -0.02em;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .logo-text p {
+            font-size: 12px;
+            color: var(--text-muted);
+        }
+
+        .badges-bar {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            flex-wrap: wrap;
+        }
+
+        .status-pill {
+            display: inline-flex;
+            align-items: center;
+            gap: 8px;
+            padding: 6px 14px;
+            border-radius: 9999px;
+            font-size: 12px;
+            font-weight: 600;
+            border: 1px solid var(--border);
+            background: rgba(15, 23, 42, 0.8);
+            transition: all 0.2s ease;
+        }
+
+        .status-dot {
+            width: 8px;
+            height: 8px;
+            border-radius: 50%;
+            background: var(--text-dim);
+        }
+
+        .status-pill.ready .status-dot {
+            background: var(--success);
+            box-shadow: 0 0 8px var(--success);
+        }
+
+        .status-pill.ready {
+            color: var(--success);
+            border-color: rgba(16, 185, 129, 0.4);
+            background: var(--success-bg);
+        }
+
+        .status-pill.cyan .status-dot {
+            background: var(--gemini-cyan);
+            box-shadow: 0 0 8px var(--gemini-cyan);
+        }
+
+        .status-pill.cyan {
+            color: var(--gemini-cyan);
+            border-color: rgba(6, 182, 212, 0.4);
+            background: rgba(6, 182, 212, 0.12);
+        }
+
+        .status-pill.warning .status-dot {
+            background: var(--warning);
+            box-shadow: 0 0 8px var(--warning);
+        }
+
+        .status-pill.warning {
+            color: var(--warning);
+            border-color: rgba(245, 158, 11, 0.4);
+            background: var(--warning-bg);
+        }
+
+        /* 3-Column Grid Layout */
+        .main-grid {
+            display: grid;
+            grid-template-columns: 1fr 1fr 1.15fr;
+            gap: 20px;
+        }
+
+        @media (max-width: 1200px) {
+            .main-grid {
+                grid-template-columns: 1fr 1fr;
+            }
+
+            .column-llm {
+                grid-column: span 2;
+            }
+        }
+
+        @media (max-width: 768px) {
+            .main-grid {
+                grid-template-columns: 1fr;
+            }
+
+            .column-llm {
+                grid-column: span 1;
+            }
+        }
+
+        /* Cards */
+        .card {
+            background: var(--bg-card);
+            backdrop-filter: blur(16px);
+            border: 1px solid var(--border);
+            border-radius: var(--radius-lg);
+            padding: 20px;
+            box-shadow: 0 8px 30px rgba(0, 0, 0, 0.3);
+            display: flex;
+            flex-direction: column;
+            gap: 16px;
+        }
+
+        .card-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            border-bottom: 1px solid var(--border);
+            padding-bottom: 12px;
+        }
+
+        .card-title {
+            font-size: 14px;
+            font-weight: 700;
+            text-transform: uppercase;
+            letter-spacing: 0.05em;
+            color: var(--text-muted);
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        /* Tabs */
+        .tabs {
+            display: flex;
+            gap: 8px;
+            background: rgba(15, 23, 42, 0.6);
+            padding: 4px;
+            border-radius: var(--radius-md);
+            border: 1px solid var(--border);
+        }
+
+        .tab-btn {
+            flex: 1;
+            padding: 9px 12px;
+            background: transparent;
+            border: none;
+            color: var(--text-muted);
+            font-size: 12px;
+            font-weight: 600;
+            border-radius: var(--radius-sm);
+            cursor: pointer;
+            transition: all 0.2s ease;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 6px;
+        }
+
+        .tab-btn.active {
+            background: var(--primary);
+            color: white;
+            box-shadow: 0 2px 10px var(--primary-glow);
+        }
+
+        /* Tab Content */
+        .tab-content {
+            display: none;
+            flex-direction: column;
+            gap: 14px;
+        }
+
+        .tab-content.active {
+            display: flex;
+        }
+
+        /* Recorder Box */
+        .recorder-box {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            gap: 14px;
+            padding: 20px;
+            background: rgba(15, 23, 42, 0.5);
+            border: 1px dashed var(--border);
+            border-radius: var(--radius-md);
+            position: relative;
+        }
+
+        .recording-timer {
+            font-family: 'JetBrains Mono', monospace;
+            font-size: 28px;
+            font-weight: 700;
+            letter-spacing: -0.02em;
+            color: var(--text-main);
+        }
+
+        canvas#waveCanvas {
+            width: 100%;
+            height: 50px;
+            background: rgba(0, 0, 0, 0.25);
+            border-radius: var(--radius-sm);
+        }
+
+        .record-actions {
+            display: flex;
+            gap: 12px;
+            align-items: center;
+        }
+
+        .btn-record {
+            width: 52px;
+            height: 52px;
+            border-radius: 50%;
+            background: var(--danger);
+            border: 4px solid rgba(239, 68, 68, 0.3);
+            color: white;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            transition: all 0.25s cubic-bezier(0.4, 0, 0.2, 1);
+            box-shadow: 0 4px 20px rgba(239, 68, 68, 0.4);
+        }
+
+        .btn-record:hover {
+            transform: scale(1.08);
+            box-shadow: 0 6px 25px rgba(239, 68, 68, 0.6);
+        }
+
+        .btn-record.recording {
+            animation: pulse-ring 1.5s infinite;
+            border-radius: 12px;
+        }
+
+        @keyframes pulse-ring {
+            0% {
+                box-shadow: 0 0 0 0 rgba(239, 68, 68, 0.7);
+            }
+
+            70% {
+                box-shadow: 0 0 0 16px rgba(239, 68, 68, 0);
+            }
+
+            100% {
+                box-shadow: 0 0 0 0 rgba(239, 68, 68, 0);
+            }
+        }
+
+        /* File Upload Dropzone */
+        .dropzone {
+            border: 2px dashed var(--border);
+            border-radius: var(--radius-md);
+            padding: 30px 16px;
+            text-align: center;
+            cursor: pointer;
+            transition: all 0.2s ease;
+            background: rgba(15, 23, 42, 0.4);
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .dropzone:hover,
+        .dropzone.dragover {
+            border-color: var(--primary);
+            background: rgba(99, 102, 241, 0.08);
+        }
+
+        .dropzone-icon {
+            font-size: 32px;
+            color: var(--primary-light);
+        }
+
+        .dropzone input[type="file"] {
+            display: none;
+        }
+
+        /* Audio Preview */
+        .audio-preview {
+            width: 100%;
+            display: none;
+            flex-direction: column;
+            gap: 6px;
+            padding: 10px;
+            background: rgba(15, 23, 42, 0.8);
+            border-radius: var(--radius-md);
+            border: 1px solid var(--border);
+        }
+
+        .audio-preview.show {
+            display: flex;
+        }
+
+        .audio-preview audio {
+            width: 100%;
+            height: 36px;
+            border-radius: 6px;
+        }
+
+        .audio-meta {
+            font-size: 11px;
+            color: var(--text-muted);
+            display: flex;
+            justify-content: space-between;
+        }
+
+        /* Buttons */
+        .btn {
+            padding: 11px 18px;
+            border-radius: var(--radius-md);
+            font-size: 13px;
+            font-weight: 600;
+            border: none;
+            cursor: pointer;
+            transition: all 0.2s ease;
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            gap: 8px;
+            color: white;
+        }
+
+        .btn-primary {
+            background: linear-gradient(135deg, var(--primary), var(--secondary));
+            box-shadow: 0 4px 15px var(--primary-glow);
+        }
+
+        .btn-primary:hover:not(:disabled) {
+            transform: translateY(-1px);
+            box-shadow: 0 6px 20px var(--primary-glow);
+        }
+
+        .btn-primary:disabled {
+            opacity: 0.5;
+            cursor: not-allowed;
+        }
+
+        .btn-gemini {
+            background: linear-gradient(135deg, #0284c7, var(--gemini-cyan));
+            box-shadow: 0 4px 15px var(--gemini-glow);
+        }
+
+        .btn-secondary {
+            background: rgba(51, 65, 85, 0.6);
+            border: 1px solid var(--border);
+        }
+
+        .btn-secondary:hover {
+            background: rgba(71, 85, 105, 0.8);
+        }
+
+        .btn-sm {
+            padding: 6px 12px;
+            font-size: 12px;
+            border-radius: var(--radius-sm);
+        }
+
+        /* Form Controls */
+        .form-group {
+            display: flex;
+            flex-direction: column;
+            gap: 5px;
+        }
+
+        .form-group label {
+            font-size: 11px;
+            font-weight: 600;
+            color: var(--text-muted);
+        }
+
+        .input,
+        select,
+        textarea {
+            background: rgba(15, 23, 42, 0.8);
+            border: 1px solid var(--border);
+            border-radius: var(--radius-sm);
+            padding: 9px 12px;
+            color: var(--text-main);
+            font-family: inherit;
+            font-size: 13px;
+            transition: all 0.2s ease;
+            outline: none;
+        }
+
+        .input:focus,
+        select:focus,
+        textarea:focus {
+            border-color: var(--primary);
+            box-shadow: 0 0 0 3px var(--primary-glow);
+        }
+
+        textarea {
+            resize: vertical;
+            min-height: 55px;
+        }
+
+        .input-row {
+            display: flex;
+            gap: 10px;
+        }
+
+        .input-row>* {
+            flex: 1;
+        }
+
+        .checkbox-group {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            padding: 6px 0;
+            cursor: pointer;
+            user-select: none;
+        }
+
+        .checkbox-group input[type="checkbox"] {
+            accent-color: var(--primary);
+            width: 16px;
+            height: 16px;
+            cursor: pointer;
+        }
+
+        /* Settings Accordion */
+        details.settings-box {
+            background: rgba(15, 23, 42, 0.4);
+            border: 1px solid var(--border);
+            border-radius: var(--radius-md);
+            padding: 10px 14px;
+        }
+
+        details.settings-box summary {
+            font-size: 12px;
+            font-weight: 600;
+            color: var(--text-muted);
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            user-select: none;
+        }
+
+        details.settings-box[open] summary {
+            margin-bottom: 12px;
+            color: var(--primary-light);
+        }
+
+        .settings-content {
+            display: flex;
+            flex-direction: column;
+            gap: 12px;
+        }
+
+        /* Cards & Content */
+        .content-card {
+            background: rgba(15, 23, 42, 0.8);
+            border: 1px solid var(--border);
+            border-radius: var(--radius-md);
+            padding: 16px;
+            min-height: 150px;
+            font-size: 14px;
+            line-height: 1.6;
+            color: var(--text-main);
+            white-space: pre-wrap;
+            position: relative;
+            display: flex;
+            flex-direction: column;
+            justify-content: space-between;
+        }
+
+        .content-empty {
+            color: var(--text-dim);
+            font-style: italic;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            height: 100%;
+            text-align: center;
+            padding: 24px 12px;
+        }
+
+        .llm-card {
+            border-color: rgba(6, 182, 212, 0.3);
+            background: rgba(15, 23, 42, 0.85);
+        }
+
+        .meta-badges {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 6px;
+            margin-top: 10px;
+        }
+
+        .badge {
+            display: inline-flex;
+            align-items: center;
+            gap: 5px;
+            padding: 3px 8px;
+            background: rgba(51, 65, 85, 0.5);
+            border: 1px solid var(--border);
+            border-radius: 6px;
+            font-size: 11px;
+            font-weight: 500;
+            color: var(--text-muted);
+            font-family: 'JetBrains Mono', monospace;
+        }
+
+        .badge.highlight {
+            background: rgba(99, 102, 241, 0.15);
+            border-color: rgba(99, 102, 241, 0.4);
+            color: var(--primary-light);
+            font-weight: 600;
+        }
+
+        .badge.cyan {
+            background: rgba(6, 182, 212, 0.15);
+            border-color: rgba(6, 182, 212, 0.4);
+            color: var(--gemini-cyan);
+            font-weight: 600;
+        }
+
+        .badge.success {
+            background: var(--success-bg);
+            border-color: rgba(16, 185, 129, 0.3);
+            color: var(--success);
+        }
+
+        /* History */
+        .history-list {
+            display: flex;
+            flex-direction: column;
+            gap: 6px;
+            max-height: 170px;
+            overflow-y: auto;
+            padding-right: 4px;
+        }
+
+        .history-item {
+            background: rgba(15, 23, 42, 0.5);
+            border: 1px solid var(--border);
+            border-radius: var(--radius-sm);
+            padding: 8px 10px;
+            font-size: 11px;
+            cursor: pointer;
+            transition: all 0.2s ease;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        .history-item:hover {
+            border-color: var(--primary);
+            background: rgba(30, 41, 59, 0.6);
+        }
+
+        .history-text {
+            color: var(--text-main);
+            overflow: hidden;
+            text-overflow: ellipsis;
+            white-space: nowrap;
+            max-width: 200px;
+        }
+
+        .history-time {
+            font-size: 10px;
+            color: var(--text-dim);
+            font-family: 'JetBrains Mono', monospace;
+        }
+
+        /* Chat input in LLM card */
+        .chat-input-box {
+            display: flex;
+            gap: 8px;
+            margin-top: 10px;
+            border-top: 1px solid var(--border);
+            padding-top: 12px;
+        }
+
+        /* Voice Toolbar & Equalizer Animation */
+        .voice-toolbar {
+            display: flex;
+            flex-wrap: wrap;
+            align-items: center;
+            justify-content: space-between;
+            gap: 8px;
+            background: rgba(15, 23, 42, 0.6);
+            border: 1px solid rgba(6, 182, 212, 0.2);
+            padding: 8px 12px;
+            border-radius: var(--radius-md);
+            margin-bottom: 4px;
+        }
+
+        .voice-controls-group {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            font-size: 12px;
+        }
+
+        .speech-indicator {
+            display: none;
+            align-items: center;
+            gap: 6px;
+            font-size: 12px;
+            color: var(--gemini-cyan);
+            font-weight: 600;
+        }
+
+        .speech-indicator.active {
+            display: inline-flex;
+        }
+
+        .speech-bars {
+            display: flex;
+            align-items: flex-end;
+            gap: 2px;
+            height: 14px;
+        }
+
+        .speech-bar {
+            width: 3px;
+            background: var(--gemini-cyan);
+            border-radius: 1px;
+            animation: sound-bars 0.8s ease-in-out infinite alternate;
+        }
+
+        .speech-bar:nth-child(1) {
+            height: 5px;
+            animation-delay: 0.1s;
+        }
+
+        .speech-bar:nth-child(2) {
+            height: 14px;
+            animation-delay: 0.3s;
+        }
+
+        .speech-bar:nth-child(3) {
+            height: 9px;
+            animation-delay: 0.2s;
+        }
+
+        .speech-bar:nth-child(4) {
+            height: 12px;
+            animation-delay: 0.4s;
+        }
+
+        @keyframes sound-bars {
+            0% {
+                height: 3px;
+            }
+
+            100% {
+                height: 14px;
+            }
+        }
+
+        /* Spinner */
+        .spinner {
+            display: inline-block;
+            width: 14px;
+            height: 14px;
+            border: 2px solid rgba(255, 255, 255, 0.3);
+            border-radius: 50%;
+            border-top-color: white;
+            animation: spin 0.8s linear infinite;
+        }
+
+        @keyframes spin {
+            to {
+                transform: rotate(360deg);
+            }
+        }
+
+        /* Toast */
+        .toast {
+            position: fixed;
+            bottom: 24px;
+            right: 24px;
+            padding: 12px 20px;
+            border-radius: var(--radius-md);
+            font-size: 13px;
+            font-weight: 600;
+            background: var(--bg-surface);
+            border: 1px solid var(--border);
+            box-shadow: 0 10px 30px rgba(0, 0, 0, 0.5);
+            display: none;
+            align-items: center;
+            gap: 10px;
+            z-index: 9999;
+            transform: translateY(20px);
+            opacity: 0;
+            transition: all 0.25s ease;
+        }
+
+        .toast.show {
+            display: flex;
+            transform: translateY(0);
+            opacity: 1;
+        }
+
+        .toast.success {
+            border-color: var(--success);
+            color: var(--success);
+        }
+
+        .toast.error {
+            border-color: var(--danger);
+            color: var(--danger);
+        }
+
+        .toast.info {
+            border-color: var(--primary);
+            color: var(--primary-light);
+        }
+    </style>
+</head>
+
+<body>
+
+    <div class="container">
+        <!-- Header -->
+        <header>
+            <div class="logo-wrap">
+                <div class="logo-badge">🤖</div>
+                <div class="logo-text">
+                    <h1>TestSTT & AI Interviewer</h1>
+                    <p>Thử nghiệm Whisper STT $\rightarrow$ Phản hồi Giám khảo AI (Gemini / Groq Llama) - SWD392</p>
+                </div>
+            </div>
+            <div class="badges-bar">
+                <div id="healthBadge" class="status-pill">
+                    <span class="status-dot"></span>
+                    <span id="healthText">Đang kiểm tra Groq...</span>
+                </div>
+                <div id="geminiBadge" class="status-pill cyan">
+                    <span class="status-dot"></span>
+                    <span id="geminiText">Gemini LLM</span>
+                </div>
+            </div>
+        </header>
+
+        <!-- 3-Column Grid -->
+        <div class="main-grid">
+
+            <!-- Column 1: Input & Settings -->
+            <div class="card">
+                <div class="card-header">
+                    <span class="card-title">1. Đầu vào giọng nói</span>
+                    <span id="inputStatus" class="badge">Sẵn sàng</span>
+                </div>
+
+                <!-- Tabs: Mic vs Upload -->
+                <div class="tabs">
+                    <button id="tabMicBtn" class="tab-btn active" onclick="switchTab('mic')">
+                        🎤 Thu âm Mic
+                    </button>
+                    <button id="tabUploadBtn" class="tab-btn" onclick="switchTab('upload')">
+                        📁 Tải tệp lên
+                    </button>
+                </div>
+
+                <!-- Tab 1: Mic Recorder -->
+                <div id="tabMic" class="tab-content active">
+                    <div class="recorder-box">
+                        <div id="recTimer" class="recording-timer">00:00</div>
+                        <canvas id="waveCanvas"></canvas>
+                        <div class="record-actions">
+                            <button id="btnToggleRecord" class="btn-record" onclick="toggleRecording()"
+                                title="Bắt đầu / Dừng ghi âm">
+                                <span id="recIcon">⏺</span>
+                            </button>
+                        </div>
+                        <span id="recHint" style="font-size: 11px; color: var(--text-muted); text-align: center;">
+                            Bấm nút đỏ để nói (chuẩn WebM y hệt frontend React)
+                        </span>
+                    </div>
+                </div>
+
+                <!-- Tab 2: File Upload -->
+                <div id="tabUpload" class="tab-content">
+                    <div class="dropzone" id="dropzone" onclick="document.getElementById('fileInput').click()">
+                        <div class="dropzone-icon">☁️</div>
+                        <div style="font-size: 13px; font-weight: 600">Kéo thả tệp hoặc bấm để chọn</div>
+                        <div style="font-size: 11px; color: var(--text-dim)">.webm, .mp3, .wav, .m4a, .ogg (≤ 10MB)
+                        </div>
+                        <input type="file" id="fileInput" accept="audio/*,video/webm"
+                            onchange="handleFileSelect(event)">
+                    </div>
+                </div>
+
+                <!-- Audio Preview Player -->
+                <div id="audioPreview" class="audio-preview">
+                    <div class="audio-meta">
+                        <span id="previewFileName">audio_recording.webm</span>
+                        <span id="previewFileSize">0 KB</span>
+                    </div>
+                    <audio id="player" controls></audio>
+                </div>
+
+                <!-- LLM Integration Switch -->
+                <div
+                    style="background: rgba(6, 182, 212, 0.08); border: 1px solid rgba(6, 182, 212, 0.25); border-radius: var(--radius-md); padding: 10px 14px;">
+                    <label class="checkbox-group">
+                        <input type="checkbox" id="enableLlmCheckbox" checked>
+                        <span style="font-size: 13px; font-weight: 700; color: var(--gemini-cyan)">
+                            ⚡ Kích hoạt Giám khảo LLM phản hồi sau khi nói
+                        </span>
+                    </label>
+
+                    <div class="input-row" style="margin-top: 8px;">
+                        <div class="form-group">
+                            <label for="llmProviderSelect">Provider LLM:</label>
+                            <select id="llmProviderSelect">
+                                <option value="gemini" selected>Google Gemini (gemini-3.5-flash-lite - Đã gắn key)
+                                </option>
+                                <option value="groq">Groq AI (openai/gpt-oss-120b - Dùng Groq key)</option>
+                            </select>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Settings Accordion -->
+                <details class="settings-box" id="settingsBox">
+                    <summary>⚙️ Cấu hình API Key & Tham số chi tiết</summary>
+                    <div class="settings-content">
+                        <div class="form-group">
+                            <label for="apiKeyInput">GROQ_API_KEY (Whisper & Llama):</label>
+                            <div class="input-row">
+                                <input type="password" id="apiKeyInput" class="input"
+                                    placeholder="gsk_xxxxxxxxxxxxxxxx">
+                                <button class="btn btn-secondary btn-sm" onclick="saveApiKey()">Lưu</button>
+                            </div>
+                        </div>
+
+                        <div class="form-group">
+                            <label for="geminiKeyInput">GEMINI_API_KEY (Tùy chọn nếu dùng Gemini):</label>
+                            <input type="password" id="geminiKeyInput" class="input" placeholder="AIzaSy...">
+                        </div>
+
+                        <div class="input-row">
+                            <div class="form-group">
+                                <label for="modelSelect">Whisper STT Model:</label>
+                                <select id="modelSelect">
+                                    <option value="whisper-large-v3" selected>whisper-large-v3</option>
+                                    <option value="whisper-large-v3-turbo">whisper-large-v3-turbo</option>
+                                </select>
+                            </div>
+                            <div class="form-group">
+                                <label for="endpointSelect">Endpoint STT:</label>
+                                <select id="endpointSelect">
+                                    <option value="upload-and-transcribe" selected>Lưu đĩa + STT</option>
+                                    <option value="transcribe">STT trực tiếp</option>
+                                </select>
+                            </div>
+                        </div>
+
+                        <div class="form-group">
+                            <label for="promptInput">Glossary IT (Mồi từ vựng STT):</label>
+                            <textarea id="promptInput"
+                                rows="2">Spring Boot, PostgreSQL, Microservices, REST API, Transaction, ACID, Clean Architecture, Repository, Unit Test, JPA, Docker</textarea>
+                        </div>
+
+                        <div class="form-group">
+                            <label for="systemPromptInput">System Prompt của Giám khảo AI (LLM):</label>
+                            <textarea id="systemPromptInput"
+                                rows="3">Bạn là một giảng viên/giám khảo phỏng vấn kỹ thuật IT (SWD392). Hãy nhận xét ngắn gọn về câu trả lời của ứng viên (đúng/sai/thiếu sót gì) và đặt thêm 1 câu hỏi follow-up đào sâu kỹ thuật tiếp theo.</textarea>
+                        </div>
+                    </div>
+                </details>
+
+                <!-- Submit Button -->
+                <button id="btnTranscribe" class="btn btn-primary" onclick="submitSTT()" disabled>
+                    Gửi câu trả lời
+                </button>
+            </div>
+
+            <!-- Column 2: STT Transcript -->
+            <div class="card">
+                <div class="card-header">
+                    <span class="card-title">2. Văn bản nhận diện (STT)</span>
+                    <button class="btn btn-secondary btn-sm" onclick="copyTranscript()" id="btnCopyStt"
+                        style="display:none">
+                        📋 Sao chép
+                    </button>
+                </div>
+
+                <div style="display: flex; flex-direction: column; gap: 12px; flex: 1;">
+                    <div class="content-card" id="transcriptCard">
+                        <div id="transcriptText" class="content-empty">
+                            Chưa có dữ liệu âm thanh.<br>Hãy thu âm hoặc chọn file rồi bấm "Chuyển thành văn bản".
+                        </div>
+                        <div class="meta-badges" id="sttBadges" style="display: none">
+                            <span id="badgeLatency" class="badge highlight">⚡ 0ms</span>
+                            <span id="badgeSize" class="badge">📦 0 KB</span>
+                            <span id="badgeSha" class="badge">🔑 SHA-256</span>
+                            <span id="badgeModel" class="badge">🤖 whisper-large-v3</span>
+                        </div>
+                    </div>
+
+                    <!-- Stored Audio Stream Player -->
+                    <div id="streamSection" style="display:none; flex-direction:column; gap:6px;">
+                        <label style="font-size:11px; font-weight:600; color:var(--text-muted)">
+                            🔊 Nghe lại audio đã lưu từ server:
+                        </label>
+                        <audio id="streamPlayer" controls style="width:100%; height:34px"></audio>
+                    </div>
+
+                    <!-- History -->
+                    <div style="margin-top: auto; display: flex; flex-direction: column; gap: 6px;">
+                        <div
+                            style="font-size: 11px; font-weight: 600; color: var(--text-muted); text-transform: uppercase; letter-spacing: 0.05em">
+                            🕒 Lịch sử thử nghiệm
+                        </div>
+                        <div class="history-list" id="historyList">
+                            <div style="font-size: 11px; color: var(--text-dim); text-align: center; padding: 10px;">
+                                Chưa có lượt thử nghiệm nào
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Column 3: LLM Response (AI Interviewer) -->
+            <div class="card column-llm" style="border-color: rgba(6, 182, 212, 0.3);">
+                <div class="card-header">
+                    <span class="card-title" style="color: var(--gemini-cyan)">
+                        3. Phản hồi Giám khảo AI (LLM & TTS)
+                    </span>
+                    <div style="display:flex; gap:6px;">
+                        <button class="btn btn-secondary btn-sm" onclick="togglePlaySpeech()" id="btnPlaySpeech"
+                            style="display:none; color: var(--gemini-cyan); border-color: rgba(6,182,212,0.4)">
+                            🔊 Nghe AI nói
+                        </button>
+                        <button class="btn btn-secondary btn-sm" onclick="copyLlmResponse()" id="btnCopyLlm"
+                            style="display:none">
+                            📋 Sao chép
+                        </button>
+                    </div>
+                </div>
+
+                <div style="display: flex; flex-direction: column; gap: 10px; flex: 1;">
+                    <!-- Voice Toolbar -->
+                    <div class="voice-toolbar">
+                        <div class="voice-controls-group">
+                            <label
+                                style="display:flex; align-items:center; gap:5px; cursor:pointer; font-weight:600; color:var(--text-main)">
+                                <input type="checkbox" id="autoPlaySpeech" checked> Tự động phát âm thanh (Auto-speak
+                                🔊)
+                            </label>
+                        </div>
+                        <div class="voice-controls-group">
+                            <div class="speech-indicator" id="speechIndicator">
+                                <div class="speech-bars">
+                                    <span class="speech-bar"></span>
+                                    <span class="speech-bar"></span>
+                                    <span class="speech-bar"></span>
+                                    <span class="speech-bar"></span>
+                                </div>
+                                <span>Giám khảo đang nói...</span>
+                            </div>
+                            <select id="ttsModeSelect"
+                                style="padding:4px 8px; font-size:11px; border-radius:4px; background:var(--bg-main); border:1px solid var(--border); color:var(--text-main)">
+                                <option value="edge-hoaimy" selected>Edge: Hoài My (Nữ) 🌟</option>
+                                <option value="edge-namminh">Edge: Nam Minh (Nam) 👔</option>
+                                <option value="browser">Trình duyệt (0ms)</option>
+                                <option value="google">Google TTS MP3</option>
+                            </select>
+                            <select id="speechRateSelect"
+                                style="padding:4px 8px; font-size:11px; border-radius:4px; background:var(--bg-main); border:1px solid var(--border); color:var(--text-main)">
+                                <option value="0.9">0.9x</option>
+                                <option value="1.0" selected>1.0x</option>
+                                <option value="1.15">1.15x</option>
+                            </select>
+                            <button class="btn btn-secondary btn-sm" onclick="testVoiceSample()"
+                                style="padding:3px 8px; font-size:11px; color:var(--gemini-cyan); border-color:rgba(6,182,212,0.4)"
+                                title="Nghe thử giọng mẫu">
+                                🎧 Thử giọng
+                            </button>
+                        </div>
+                    </div>
+
+                    <div class="content-card llm-card" id="llmCard">
+                        <div id="llmText" class="content-empty" style="color: rgba(6, 182, 212, 0.7)">
+                            Lời nhận xét và câu hỏi follow-up từ Giám khảo AI sẽ xuất hiện tại đây sau khi bạn nói xong.
+                        </div>
+                        <div class="meta-badges" id="llmBadges" style="display: none">
+                            <span id="badgeLlmLatency" class="badge cyan">⚡ 0ms</span>
+                            <span id="badgeLlmProvider" class="badge">🤖 Groq Llama 3.3</span>
+                            <span id="badgeTtsLatency" class="badge" style="display:none">🔊 TTS: 0ms</span>
+                        </div>
+                    </div>
+
+                    <!-- Hidden audio element for server-side TTS playback -->
+                    <audio id="ttsAudioPlayer" style="display:none"></audio>
+
+                    <!-- Manual Chat Box with LLM -->
+                    <div class="chat-input-box">
+                        <input type="text" id="manualChatInput" class="input" style="flex:1"
+                            placeholder="Hoặc gõ câu trả lời để hỏi trực tiếp Giám khảo AI..."
+                            onkeydown="if(event.key==='Enter') sendManualChat()">
+                        <button class="btn btn-gemini btn-sm" onclick="sendManualChat()" id="btnSendChat">
+                            Gửi AI 💬
+                        </button>
+                    </div>
+                </div>
+            </div>
+
+        </div>
+    </div>
+
+    <!-- Toast -->
+    <div id="toast" class="toast"></div>
+
+    <script>
+        // State
+        let activeTab = 'mic';
+        let currentBlob = null;
+        let currentFileName = 'recording.webm';
+        let mediaRecorder = null;
+        let audioChunks = [];
+        let recordStartTime = null;
+        let recordInterval = null;
+        let audioContext = null;
+        let analyserNode = null;
+        let animFrame = null;
+        let historyRecords = [];
+        let currentAiResponseText = '';
+        let currentTtsAudioUrl = null;
+        let isSpeaking = false;
+
+        // Init
+        window.addEventListener('DOMContentLoaded', () => {
+            checkHealth();
+            setupDragAndDrop();
+            initSpeechSynthesis();
+        });
+
+        function initSpeechSynthesis() {
+            if ('speechSynthesis' in window) {
+                window.speechSynthesis.onvoiceschanged = () => {
+                    window.speechSynthesis.getVoices();
+                };
+                window.speechSynthesis.getVoices();
+            }
+        }
+
+        // Check Health
+        async function checkHealth() {
+            try {
+                const res = await fetch('/api/test/stt/health');
+                const data = await res.json();
+                const badge = document.getElementById('healthBadge');
+                const text = document.getElementById('healthText');
+                const geminiBadge = document.getElementById('geminiBadge');
+                const geminiText = document.getElementById('geminiText');
+
+                if (data.apiKeyConfigured) {
+                    badge.className = 'status-pill ready';
+                    text.textContent = 'Groq Sẵn sàng (' + data.apiKeyMasked + ')';
+                } else {
+                    badge.className = 'status-pill warning';
+                    text.textContent = 'Chưa có GROQ_API_KEY';
+                    document.getElementById('settingsBox').open = true;
+                }
+
+                if (data.geminiConfigured) {
+                    geminiBadge.className = 'status-pill ready';
+                    geminiText.textContent = 'Gemini Key Sẵn sàng';
+                } else {
+                    geminiBadge.className = 'status-pill cyan';
+                    geminiText.textContent = 'Groq Llama Sẵn sàng (Dùng key Groq)';
+                }
+            } catch (e) {
+                document.getElementById('healthBadge').className = 'status-pill warning';
+                document.getElementById('healthText').textContent = 'Server không phản hồi';
+            }
+        }
+
+        // Save API Key dynamically
+        async function saveApiKey() {
+            const key = document.getElementById('apiKeyInput').value.trim();
+            if (!key) {
+                showToast('Vui lòng nhập API key', 'error');
+                return;
+            }
+
+            try {
+                const res = await fetch('/api/test/stt/config', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        apiKey: key,
+                        sttModel: document.getElementById('modelSelect').value
+                    })
+                });
+                const data = await res.json();
+                if (data.success) {
+                    showToast('Đã lưu API Key thành công!', 'success');
+                    checkHealth();
+                    document.getElementById('apiKeyInput').value = '';
+                } else {
+                    showToast(data.message || 'Lỗi khi lưu key', 'error');
+                }
+            } catch (e) {
+                showToast('Không thể kết nối đến server: ' + e.message, 'error');
+            }
+        }
+
+        // Switch Tabs
+        function switchTab(tab) {
+            activeTab = tab;
+            document.getElementById('tabMicBtn').classList.toggle('active', tab === 'mic');
+            document.getElementById('tabUploadBtn').classList.toggle('active', tab === 'upload');
+            document.getElementById('tabMic').classList.toggle('active', tab === 'mic');
+            document.getElementById('tabUpload').classList.toggle('active', tab === 'upload');
+        }
+
+        // Microphone Recording Logic
+        async function toggleRecording() {
+            if (mediaRecorder && mediaRecorder.state === 'recording') {
+                stopRecording();
+            } else {
+                startRecording();
+            }
+        }
+
+        async function startRecording() {
+            try {
+                const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+
+                // Audio Visualizer
+                audioContext = new (window.AudioContext || window.webkitAudioContext)();
+                const source = audioContext.createMediaStreamSource(stream);
+                analyserNode = audioContext.createAnalyser();
+                analyserNode.fftSize = 64;
+                source.connect(analyserNode);
+                drawWaveform();
+
+                const mimeType = MediaRecorder.isTypeSupported('audio/webm;codecs=opus')
+                    ? 'audio/webm;codecs=opus'
+                    : 'audio/webm';
+
+                mediaRecorder = new MediaRecorder(stream, { mimeType });
+                audioChunks = [];
+
+                mediaRecorder.ondataavailable = (e) => {
+                    if (e.data && e.data.size > 0) audioChunks.push(e.data);
+                };
+
+                mediaRecorder.onstop = () => {
+                    currentBlob = new Blob(audioChunks, { type: 'audio/webm' });
+                    currentFileName = 'mic_recording_' + Date.now() + '.webm';
+                    showAudioPreview(currentBlob, currentFileName);
+                    stream.getTracks().forEach(t => t.stop());
+                    if (audioContext) audioContext.close();
+                    cancelAnimationFrame(animFrame);
+                };
+
+                mediaRecorder.start(250);
+                recordStartTime = Date.now();
+                updateTimer();
+                recordInterval = setInterval(updateTimer, 500);
+
+                document.getElementById('btnToggleRecord').classList.add('recording');
+                document.getElementById('recIcon').textContent = '⏹';
+                document.getElementById('recHint').textContent = 'Đang thu âm... Bấm nút vuông để hoàn tất bài nói.';
+                document.getElementById('btnTranscribe').disabled = true;
+
+            } catch (e) {
+                showToast('Không thể truy cập Microphone: ' + e.message, 'error');
+            }
+        }
+
+        function stopRecording() {
+            if (mediaRecorder && mediaRecorder.state !== 'inactive') {
+                mediaRecorder.stop();
+            }
+            clearInterval(recordInterval);
+            document.getElementById('btnToggleRecord').classList.remove('recording');
+            document.getElementById('recIcon').textContent = '⏺';
+            document.getElementById('recHint').textContent = 'Thu âm hoàn tất! Hãy nghe lại và bấm gửi sang STT & LLM.';
+        }
+
+        function updateTimer() {
+            const elapsedSec = Math.floor((Date.now() - recordStartTime) / 1000);
+            const mins = String(Math.floor(elapsedSec / 60)).padStart(2, '0');
+            const secs = String(elapsedSec % 60).padStart(2, '0');
+            document.getElementById('recTimer').textContent = `${mins}:${secs}`;
+        }
+
+        function drawWaveform() {
+            const canvas = document.getElementById('waveCanvas');
+            const ctx = canvas.getContext('2d');
+            const bufferLength = analyserNode.frequencyBinCount;
+            const dataArray = new Uint8Array(bufferLength);
+
+            function draw() {
+                animFrame = requestAnimationFrame(draw);
+                analyserNode.getByteFrequencyData(dataArray);
+
+                ctx.fillStyle = 'rgba(15, 23, 42, 0.4)';
+                ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+                const barWidth = (canvas.width / bufferLength) * 2;
+                let x = 0;
+
+                for (let i = 0; i < bufferLength; i++) {
+                    const barHeight = (dataArray[i] / 255) * canvas.height;
+                    ctx.fillStyle = '#6366f1';
+                    ctx.fillRect(x, canvas.height - barHeight, barWidth - 1, barHeight);
+                    x += barWidth;
+                }
+            }
+            draw();
+        }
+
+        // Drag & Drop
+        function setupDragAndDrop() {
+            const dropzone = document.getElementById('dropzone');
+            ['dragenter', 'dragover'].forEach(name => {
+                dropzone.addEventListener(name, (e) => {
+                    e.preventDefault();
+                    dropzone.classList.add('dragover');
+                });
+            });
+            ['dragleave', 'drop'].forEach(name => {
+                dropzone.addEventListener(name, (e) => {
+                    e.preventDefault();
+                    dropzone.classList.remove('dragover');
+                });
+            });
+            dropzone.addEventListener('drop', (e) => {
+                const files = e.dataTransfer.files;
+                if (files && files.length > 0) {
+                    loadFile(files[0]);
+                }
+            });
+        }
+
+        function handleFileSelect(e) {
+            if (e.target.files && e.target.files.length > 0) {
+                loadFile(e.target.files[0]);
+            }
+        }
+
+        function loadFile(file) {
+            currentBlob = file;
+            currentFileName = file.name;
+            showAudioPreview(file, file.name);
+        }
+
+        function showAudioPreview(blob, filename) {
+            const preview = document.getElementById('audioPreview');
+            const player = document.getElementById('player');
+            const url = URL.createObjectURL(blob);
+            player.src = url;
+
+            document.getElementById('previewFileName').textContent = filename;
+            document.getElementById('previewFileSize').textContent = formatBytes(blob.size);
+            preview.classList.add('show');
+            document.getElementById('btnTranscribe').disabled = false;
+            document.getElementById('inputStatus').textContent = 'Đã có file: ' + filename;
+        }
+
+        // Submit STT & LLM
+        async function submitSTT() {
+            if (!currentBlob) {
+                showToast('Chưa có âm thanh để xử lý', 'error');
+                return;
+            }
+
+            const endpoint = document.getElementById('endpointSelect').value;
+            const url = '/api/test/stt/' + endpoint;
+            const model = document.getElementById('modelSelect').value;
+            const prompt = document.getElementById('promptInput').value.trim();
+            const enableLlm = document.getElementById('enableLlmCheckbox').checked;
+            const llmProvider = document.getElementById('llmProviderSelect').value;
+            const llmSystemPrompt = document.getElementById('systemPromptInput').value.trim();
+            const geminiKey = document.getElementById('geminiKeyInput').value.trim();
+
+            const formData = new FormData();
+            formData.append('audio', currentBlob, currentFileName);
+            if (model) formData.append('model', model);
+            if (prompt) formData.append('prompt', prompt);
+            formData.append('enableLlm', enableLlm);
+            formData.append('enableTts', true);
+            if (llmProvider) formData.append('llmProvider', llmProvider);
+            if (llmSystemPrompt) formData.append('llmSystemPrompt', llmSystemPrompt);
+            if (geminiKey) formData.append('geminiApiKey', geminiKey);
+
+            const btn = document.getElementById('btnTranscribe');
+            btn.disabled = true;
+            btn.innerHTML = '<span class="spinner"></span> Đang nhận dạng STT & gọi LLM...';
+
+            const transcriptText = document.getElementById('transcriptText');
+            transcriptText.className = 'content-empty';
+            transcriptText.innerHTML = '⏳ 1/2: Đang nhận dạng giọng nói bằng Groq Whisper...';
+
+            const llmText = document.getElementById('llmText');
+            if (enableLlm) {
+                llmText.className = 'content-empty';
+                llmText.innerHTML = '⏳ 2/2: Đang chờ Giám khảo AI suy nghĩ phản hồi...';
+            }
+
+            try {
+                const startReq = Date.now();
+                const res = await fetch(url, {
+                    method: 'POST',
+                    body: formData
+                });
+
+                const result = await res.json();
+                const clientLatency = Date.now() - startReq;
+
+                if (res.ok && result.success && result.data) {
+                    const data = result.data;
+
+                    // 1. Hiển thị STT
+                    transcriptText.className = '';
+                    transcriptText.textContent = data.transcribedText;
+                    document.getElementById('btnCopyStt').style.display = 'inline-flex';
+
+                    document.getElementById('sttBadges').style.display = 'flex';
+                    document.getElementById('badgeLatency').textContent = `⚡ STT: ${data.processingTimeMs}ms`;
+                    document.getElementById('badgeSize').textContent = `📦 ${formatBytes(data.audioSizeBytes || currentBlob.size)}`;
+                    document.getElementById('badgeModel').textContent = `🤖 ${data.modelUsed || model}`;
+
+                    if (data.sha256) {
+                        const shortSha = data.sha256.substring(0, 10) + '...';
+                        document.getElementById('badgeSha').textContent = `🔑 SHA-256: ${shortSha}`;
+                        document.getElementById('badgeSha').title = data.sha256;
+                        document.getElementById('badgeSha').style.display = 'inline-flex';
+                    }
+
+                    if (data.audioUrl) {
+                        const streamSec = document.getElementById('streamSection');
+                        const streamPlayer = document.getElementById('streamPlayer');
+                        streamPlayer.src = data.audioUrl;
+                        streamSec.style.display = 'flex';
+                    }
+
+                    // 2. Hiển thị LLM Response & Chuẩn bị phát giọng nói
+                    if (data.llmResponse) {
+                        llmText.className = '';
+                        llmText.textContent = data.llmResponse;
+                        currentAiResponseText = data.llmResponse;
+                        currentTtsAudioUrl = data.ttsAudioUrl || null;
+
+                        document.getElementById('btnCopyLlm').style.display = 'inline-flex';
+                        document.getElementById('btnPlaySpeech').style.display = 'inline-flex';
+
+                        document.getElementById('llmBadges').style.display = 'flex';
+                        document.getElementById('badgeLlmLatency').textContent = `⚡ LLM: ${data.llmProcessingTimeMs}ms`;
+                        document.getElementById('badgeLlmProvider').textContent = `🤖 ${data.llmProvider} (${data.llmModelUsed})`;
+
+                        if (data.ttsDurationMs) {
+                            const badgeTts = document.getElementById('badgeTtsLatency');
+                            badgeTts.style.display = 'inline-flex';
+                            badgeTts.textContent = `🔊 TTS: ${data.ttsDurationMs}ms`;
+                        }
+
+                        // Tự động phát âm thanh giọng nói của Giám khảo AI
+                        if (document.getElementById('autoPlaySpeech').checked) {
+                            speakAiResponse(data.llmResponse, data.ttsAudioUrl);
+                        }
+                    } else if (!enableLlm) {
+                        llmText.className = 'content-empty';
+                        llmText.textContent = 'Tính năng LLM đang tắt cho lượt này.';
+                    }
+
+                    addHistoryRecord(data.transcribedText, data.processingTimeMs);
+                    showToast('STT & Phản hồi AI hoàn tất!', 'success');
+
+                } else {
+                    transcriptText.className = 'content-empty';
+                    const msg = result.message || 'Lỗi nhận dạng STT';
+                    transcriptText.textContent = '❌ Lỗi: ' + msg;
+                    showToast(msg, 'error');
+                }
+
+            } catch (e) {
+                transcriptText.className = 'content-empty';
+                transcriptText.textContent = '❌ Lỗi mạng: ' + e.message;
+                showToast('Không thể gửi request: ' + e.message, 'error');
+            } finally {
+                btn.disabled = false;
+                btn.innerHTML = '🚀 Chuyển thành văn bản & Đưa sang LLM';
+            }
+        }
+
+        // Manual chat directly with LLM
+        async function sendManualChat() {
+            const input = document.getElementById('manualChatInput');
+            const text = input.value.trim();
+            if (!text) return;
+
+            const btn = document.getElementById('btnSendChat');
+            btn.disabled = true;
+            btn.innerHTML = '<span class="spinner"></span>';
+
+            const llmText = document.getElementById('llmText');
+            llmText.className = 'content-empty';
+            llmText.innerHTML = '⏳ Giám khảo AI đang trả lời...';
+
+            const provider = document.getElementById('llmProviderSelect').value;
+            const systemPrompt = document.getElementById('systemPromptInput').value.trim();
+            const geminiKey = document.getElementById('geminiKeyInput').value.trim();
+
+            try {
+                const res = await fetch('/api/test/stt/llm/chat', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        message: text,
+                        provider: provider,
+                        systemPrompt: systemPrompt,
+                        apiKey: geminiKey
+                    })
+                });
+
+                const data = await res.json();
+                if (res.ok && data.success) {
+                    llmText.className = '';
+                    llmText.textContent = data.response;
+                    currentAiResponseText = data.response;
+                    currentTtsAudioUrl = data.ttsAudioUrl || null;
+
+                    document.getElementById('btnCopyLlm').style.display = 'inline-flex';
+                    document.getElementById('btnPlaySpeech').style.display = 'inline-flex';
+
+                    document.getElementById('llmBadges').style.display = 'flex';
+                    document.getElementById('badgeLlmLatency').textContent = `⚡ LLM: ${data.latencyMs}ms`;
+                    document.getElementById('badgeLlmProvider').textContent = `🤖 ${data.provider} (${data.model})`;
+
+                    input.value = '';
+                    showToast('AI đã trả lời!', 'success');
+
+                    // Tự động phát âm thanh giọng nói nếu bật Auto-speak
+                    if (document.getElementById('autoPlaySpeech').checked) {
+                        speakAiResponse(data.response, data.ttsAudioUrl);
+                    }
+                } else {
+                    llmText.className = 'content-empty';
+                    llmText.textContent = '❌ Lỗi LLM: ' + (data.message || 'Lỗi server');
+                }
+            } catch (e) {
+                llmText.className = 'content-empty';
+                llmText.textContent = '❌ Lỗi kết nối: ' + e.message;
+            } finally {
+                btn.disabled = false;
+                btn.innerHTML = 'Gửi AI 💬';
+            }
+        }
+
+        // Copy handlers
+        function copyTranscript() {
+            const text = document.getElementById('transcriptText').textContent;
+            navigator.clipboard.writeText(text).then(() => {
+                showToast('Đã sao chép văn bản STT!', 'success');
+            });
+        }
+
+        function copyLlmResponse() {
+            const text = document.getElementById('llmText').textContent;
+            navigator.clipboard.writeText(text).then(() => {
+                showToast('Đã sao chép lời phản hồi AI!', 'success');
+            });
+        }
+
+        // History
+        function addHistoryRecord(text, ms) {
+            historyRecords.unshift({ text, ms, time: new Date().toLocaleTimeString() });
+            if (historyRecords.length > 8) historyRecords.pop();
+
+            const list = document.getElementById('historyList');
+            list.innerHTML = '';
+            historyRecords.forEach(item => {
+                const div = document.createElement('div');
+                div.className = 'history-item';
+                div.innerHTML = `
+                <span class="history-text" title="${item.text}">"${item.text}"</span>
+                <span class="history-time">⚡ ${item.ms}ms • ${item.time}</span>
+            `;
+                div.onclick = () => {
+                    document.getElementById('transcriptText').className = '';
+                    document.getElementById('transcriptText').textContent = item.text;
+                    document.getElementById('btnCopyStt').style.display = 'inline-flex';
+                };
+                list.appendChild(div);
+            });
+        }
+
+        // Toast
+        function showToast(msg, type = 'info') {
+            const toast = document.getElementById('toast');
+            toast.textContent = msg;
+            toast.className = `toast show ${type}`;
+            setTimeout(() => {
+                toast.className = 'toast';
+            }, 3500);
+        }
+
+        function formatBytes(bytes) {
+            if (!bytes || bytes === 0) return '0 B';
+            const k = 1024;
+            const sizes = ['B', 'KB', 'MB', 'GB'];
+            const i = Math.floor(Math.log(bytes) / Math.log(k));
+            return parseFloat((bytes / Math.pow(k, i)).toFixed(1)) + ' ' + sizes[i];
+        }
+
+        // ──────────── Voice / TTS Handlers ────────────
+        function togglePlaySpeech() {
+            if (isSpeaking) {
+                stopSpeaking();
+            } else if (currentAiResponseText) {
+                speakAiResponse(currentAiResponseText, currentTtsAudioUrl);
+            }
+        }
+
+        function stopSpeaking() {
+            if ('speechSynthesis' in window) {
+                window.speechSynthesis.cancel();
+            }
+            const player = document.getElementById('ttsAudioPlayer');
+            if (player) {
+                player.pause();
+                player.currentTime = 0;
+            }
+            setSpeakingState(false);
+        }
+
+        function setSpeakingState(speaking) {
+            isSpeaking = speaking;
+            const btn = document.getElementById('btnPlaySpeech');
+            const indicator = document.getElementById('speechIndicator');
+            if (btn) {
+                if (speaking) {
+                    btn.innerHTML = '⏹ Dừng nói';
+                    btn.style.borderColor = 'var(--danger)';
+                    btn.style.color = 'var(--danger)';
+                } else {
+                    btn.innerHTML = '🔊 Nghe AI nói';
+                    btn.style.borderColor = 'rgba(6,182,212,0.4)';
+                    btn.style.color = 'var(--gemini-cyan)';
+                }
+            }
+            if (indicator) {
+                if (speaking) {
+                    indicator.classList.add('active');
+                } else {
+                    indicator.classList.remove('active');
+                }
+            }
+        }
+
+        function testVoiceSample() {
+            const sampleText = "Xin chào bạn, tôi là Giám khảo AI phỏng vấn kỹ thuật môn SWD392. Chúc bạn có một buổi phỏng vấn đạt kết quả cao!";
+            showToast("Đang phát giọng đọc mẫu...", "info");
+            speakAiResponse(sampleText, null);
+        }
+
+        function cleanTextForSpeech(raw) {
+            if (!raw) return '';
+            let t = raw;
+            // 1. Loại bỏ khối code ```...```
+            t = t.replace(/```[\s\S]*?```/g, ' đoạn mã kỹ thuật ');
+            // 2. Loại bỏ inline code `...`
+            t = t.replace(/`([^`]+)`/g, '$1');
+            // 3. Loại bỏ Markdown bold / italic: **text**, *text*, __text__, _text_
+            t = t.replace(/\*\*([^*]+)\*\*/g, '$1');
+            t = t.replace(/\*([^*]+)\*/g, '$1');
+            t = t.replace(/__([^_]+)__/g, '$1');
+            t = t.replace(/_([^_]+)_/g, '$1');
+            // 4. Loại bỏ tiêu đề Markdown (#, ##, ###)
+            t = t.replace(/^#{1,6}\s*/gm, '');
+            // 5. Loại bỏ gạch đầu dòng bullet (- , * , + )
+            t = t.replace(/^\s*[-*+]\s+/gm, '');
+            // 6. Loại bỏ Markdown link [text](url) -> text
+            t = t.replace(/\[([^\]]+)\]\([^)]+\)/g, '$1');
+            // 7. Chuẩn hóa escape \n và \" thành khoảng trắng/dấu ngắt câu
+            t = t.replace(/\\n/g, '. ').replace(/\\"/g, '"');
+            t = t.replace(/\n+/g, '. ');
+            // 8. Xóa các ký tự định dạng Markdown còn sót (*, #, ~, _, `)
+            t = t.replace(/[*#~_`\[\](){}]/g, '');
+            // 9. Chuẩn hóa khoảng trắng và dấu ngắt câu
+            t = t.replace(/\s+/g, ' ')
+                .replace(/\s*([.,?!])/g, '$1')
+                .replace(/\.{2,}/g, '.')
+                .trim();
+            return t;
+        }
+
+        function speakAiResponse(text, serverUrl) {
+            if (!text || text.startsWith('⚠️')) return;
+            const spokenText = cleanTextForSpeech(text);
+            if (!spokenText) return;
+            stopSpeaking();
+
+            const mode = document.getElementById('ttsModeSelect') ? document.getElementById('ttsModeSelect').value : 'edge-hoaimy';
+            const rate = parseFloat(document.getElementById('speechRateSelect') ? document.getElementById('speechRateSelect').value : '1.0') || 1.0;
+
+            // Xác định tên giọng Microsoft Edge tương ứng
+            let targetEdgeVoice = 'vi-VN-HoaiMyNeural';
+            let voiceKeyword = 'hoaimy';
+            if (mode === 'edge-namminh') {
+                targetEdgeVoice = 'vi-VN-NamMinhNeural';
+                voiceKeyword = 'namminh';
+            }
+
+            // 1. Kiểm tra xem trình duyệt có sẵn giọng Edge Neural tương ứng không (để đạt 0ms latency)
+            if ('speechSynthesis' in window && (mode === 'browser' || mode.startsWith('edge'))) {
+                const voices = window.speechSynthesis.getVoices();
+                let matchedVoice = null;
+
+                if (mode === 'edge-hoaimy') {
+                    matchedVoice = voices.find(v => v.name.toLowerCase().includes('hoaimy'));
+                } else if (mode === 'edge-namminh') {
+                    matchedVoice = voices.find(v => v.name.toLowerCase().includes('namminh'));
+                } else {
+                    matchedVoice = voices.find(v => (v.lang && v.lang.toLowerCase().includes('vi'))
+                        || (v.name && v.name.toLowerCase().includes('vietnam')));
+                }
+
+                if (matchedVoice) {
+                    logToConsole('Dùng giọng tích hợp sẵn trong trình duyệt: ' + matchedVoice.name);
+                    setSpeakingState(true);
+                    const utterance = new SpeechSynthesisUtterance(spokenText);
+                    utterance.voice = matchedVoice;
+                    utterance.lang = 'vi-VN';
+                    utterance.rate = rate;
+                    utterance.onend = () => setSpeakingState(false);
+                    utterance.onerror = (e) => {
+                        console.warn('SpeechSynthesis error:', e);
+                        setSpeakingState(false);
+                    };
+                    window.speechSynthesis.speak(utterance);
+                    return;
+                }
+            }
+
+            // 2. Nếu trình duyệt không có sẵn giọng đó (hoặc người dùng chọn Server MP3), gọi Backend
+            setSpeakingState(true);
+            const player = document.getElementById('ttsAudioPlayer');
+            let audioUrl = serverUrl;
+
+            if (!audioUrl || audioUrl.includes('tts?')) {
+                const voiceParam = mode === 'edge-namminh' ? 'vi-VN-NamMinhNeural' : 'vi-VN-HoaiMyNeural';
+                audioUrl = '/api/test/stt/tts?voice=' + encodeURIComponent(voiceParam) + '&text=' + encodeURIComponent(spokenText);
+            }
+
+            player.src = audioUrl;
+            player.playbackRate = rate;
+            player.onended = () => setSpeakingState(false);
+            player.onerror = (e) => {
+                console.warn('Server TTS audio error:', e);
+                setSpeakingState(false);
+                // Fallback sang Browser giọng bất kỳ nếu có
+                if ('speechSynthesis' in window) {
+                    const fallbackUtterance = new SpeechSynthesisUtterance(spokenText);
+                    fallbackUtterance.lang = 'vi-VN';
+                    fallbackUtterance.onend = () => setSpeakingState(false);
+                    setSpeakingState(true);
+                    window.speechSynthesis.speak(fallbackUtterance);
+                } else {
+                    showToast('Không thể phát âm thanh', 'error');
+                }
+            };
+
+            player.play().catch(e => {
+                console.warn('Auto-play blocked or audio play error:', e);
+                setSpeakingState(false);
+            });
+        }
+
+        function logToConsole(msg) {
+            console.log('[TTS]', msg);
+        }
+    </script>
+
+</body>
+
+</html>
