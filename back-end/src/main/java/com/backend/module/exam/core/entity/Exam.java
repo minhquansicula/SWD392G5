@@ -1,6 +1,5 @@
 package com.backend.module.exam.core.entity;
 
-import com.backend.module.auth.core.entity.User;
 import jakarta.persistence.*;
 import jakarta.validation.constraints.NotNull;
 import jakarta.validation.constraints.Size;
@@ -11,6 +10,8 @@ import org.hibernate.annotations.OnDelete;
 import org.hibernate.annotations.OnDeleteAction;
 
 import java.time.OffsetDateTime;
+import java.util.ArrayList;
+import java.util.List;
 import java.util.UUID;
 
 @Getter
@@ -49,10 +50,12 @@ public class Exam {
     @Column(name = "max_followup_questions")
     private Integer maxFollowupQuestions;
 
-    @ManyToOne(fetch = FetchType.LAZY)
-    @OnDelete(action = OnDeleteAction.SET_NULL)
-    @JoinColumn(name = "created_by")
-    private User createdBy;
+    // Cross-module references are IDs; user data is obtained through auth.api.
+    @Column(name = "created_by")
+    private UUID createdById;
+
+    @OneToMany(mappedBy = "exam", cascade = CascadeType.ALL, orphanRemoval = true)
+    private List<ExamSchedule> schedules = new ArrayList<>();
 
 
 }
