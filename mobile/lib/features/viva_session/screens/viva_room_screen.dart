@@ -181,10 +181,14 @@ class _VivaRoomScreenState extends State<VivaRoomScreen> {
                 Text(
                   'Phòng Thi Viva AI',
                   style: AppTextStyles.labelBold.copyWith(fontSize: 15),
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
                 ),
                 Text(
                   '${widget.exam.courseCode} • Hội đồng vấn đáp',
                   style: AppTextStyles.bodySm.copyWith(color: AppColors.textMuted),
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
                 ),
               ],
             ),

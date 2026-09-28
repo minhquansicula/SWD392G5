@@ -117,13 +117,21 @@ class _ProfileSettingsScreenState extends State<ProfileSettingsScreen> {
                   Row(
                     mainAxisAlignment: MainAxisAlignment.spaceBetween,
                     children: [
-                      Row(
-                        children: const [
-                          Icon(Icons.language_rounded, size: 20, color: AppColors.primaryLight),
-                          SizedBox(width: 10),
-                          Text('Ngôn ngữ Vấn đáp AI'),
-                        ],
+                      Expanded(
+                        child: Row(
+                          children: const [
+                            Icon(Icons.language_rounded, size: 20, color: AppColors.primaryLight),
+                            SizedBox(width: 10),
+                            Expanded(
+                              child: Text(
+                                'Ngôn ngữ Vấn đáp AI',
+                                overflow: TextOverflow.ellipsis,
+                              ),
+                            ),
+                          ],
+                        ),
                       ),
+                      const SizedBox(width: 8),
                       DropdownButton<String>(
                         value: _selectedLanguage,
                         dropdownColor: AppColors.surfaceCardHigh,
@@ -144,13 +152,21 @@ class _ProfileSettingsScreenState extends State<ProfileSettingsScreen> {
                   Row(
                     mainAxisAlignment: MainAxisAlignment.spaceBetween,
                     children: [
-                      Row(
-                        children: const [
-                          Icon(Icons.speed_rounded, size: 20, color: AppColors.tertiary),
-                          SizedBox(width: 10),
-                          Text('Định dạng âm thanh Micro'),
-                        ],
+                      Expanded(
+                        child: Row(
+                          children: const [
+                            Icon(Icons.speed_rounded, size: 20, color: AppColors.tertiary),
+                            SizedBox(width: 10),
+                            Expanded(
+                              child: Text(
+                                'Định dạng âm thanh Micro',
+                                overflow: TextOverflow.ellipsis,
+                              ),
+                            ),
+                          ],
+                        ),
                       ),
+                      const SizedBox(width: 8),
                       Text(
                         '16kHz PCM Mono',
                         style: AppTextStyles.codeOrTimer.copyWith(fontSize: 12, color: AppColors.tertiary),
@@ -166,7 +182,15 @@ class _ProfileSettingsScreenState extends State<ProfileSettingsScreen> {
             Row(
               mainAxisAlignment: MainAxisAlignment.spaceBetween,
               children: [
-                Text('Kết Nối Server (Backend & Python)', style: AppTextStyles.titleMd),
+                Expanded(
+                  child: Text(
+                    'Kết Nối Server (Backend & Python)',
+                    style: AppTextStyles.titleMd,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                  ),
+                ),
+                const SizedBox(width: 8),
                 TextButton(
                   onPressed: _saveServerConfig,
                   child: Text('Lưu cấu hình', style: AppTextStyles.labelBold.copyWith(color: AppColors.secondaryLight)),

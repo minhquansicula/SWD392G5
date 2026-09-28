@@ -104,6 +104,8 @@ class StudentHomeScreen extends StatelessWidget {
               Text(
                 '${user?.userCode ?? 'SE170245'} • Kỹ thuật Phần mềm',
                 style: AppTextStyles.bodySm.copyWith(color: AppColors.textMuted),
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
               ),
             ],
           ),
@@ -142,23 +144,30 @@ class StudentHomeScreen extends StatelessWidget {
           Row(
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
-              Row(
-                children: [
-                  Container(
-                    width: 8,
-                    height: 8,
-                    decoration: const BoxDecoration(
-                      color: AppColors.warning,
-                      shape: BoxShape.circle,
+              Expanded(
+                child: Row(
+                  children: [
+                    Container(
+                      width: 8,
+                      height: 8,
+                      decoration: const BoxDecoration(
+                        color: AppColors.warning,
+                        shape: BoxShape.circle,
+                      ),
                     ),
-                  ),
-                  const SizedBox(width: 6),
-                  Text(
-                    'Kỳ thi vấn đáp sắp diễn ra',
-                    style: AppTextStyles.labelBold.copyWith(color: AppColors.warning, fontSize: 13),
-                  ),
-                ],
+                    const SizedBox(width: 6),
+                    Expanded(
+                      child: Text(
+                        'Kỳ thi vấn đáp sắp diễn ra',
+                        style: AppTextStyles.labelBold.copyWith(color: AppColors.warning, fontSize: 13),
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                    ),
+                  ],
+                ),
               ),
+              const SizedBox(width: 8),
               StatusBadge(
                 label: exam.timeRemainingText,
                 type: BadgeType.warning,
@@ -176,9 +185,13 @@ class StudentHomeScreen extends StatelessWidget {
             children: [
               const Icon(Icons.meeting_room_outlined, size: 16, color: AppColors.textMuted),
               const SizedBox(width: 6),
-              Text(
-                'Hôm nay, 14:00 (${exam.room})',
-                style: AppTextStyles.bodySm.copyWith(color: AppColors.textSecondary),
+              Expanded(
+                child: Text(
+                  'Hôm nay, 14:00 (${exam.room})',
+                  style: AppTextStyles.bodySm.copyWith(color: AppColors.textSecondary),
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                ),
               ),
             ],
           ),
@@ -389,13 +402,22 @@ class StudentHomeScreen extends StatelessWidget {
         Row(
           mainAxisAlignment: MainAxisAlignment.spaceBetween,
           children: [
-            Row(
-              children: [
-                const Icon(Icons.verified_outlined, size: 18, color: AppColors.success),
-                const SizedBox(width: 8),
-                Text('Lịch sử điểm vấn đáp gần đây', style: AppTextStyles.titleMd),
-              ],
+            Expanded(
+              child: Row(
+                children: [
+                  const Icon(Icons.verified_outlined, size: 18, color: AppColors.success),
+                  const SizedBox(width: 8),
+                  Expanded(
+                    child: Text(
+                      'Lịch sử điểm vấn đáp gần đây',
+                      style: AppTextStyles.titleMd,
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                  ),
+                ],
+              ),
             ),
+            const SizedBox(width: 8),
             GestureDetector(
               onTap: () {
                 Navigator.of(context).push(

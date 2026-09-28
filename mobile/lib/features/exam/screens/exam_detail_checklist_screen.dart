@@ -83,11 +83,23 @@ class _ExamDetailChecklistScreenState extends State<ExamDetailChecklistScreen> {
                     children: [
                       const Icon(Icons.access_time_rounded, size: 16, color: AppColors.warning),
                       const SizedBox(width: 6),
-                      Text('Thời lượng: ${widget.exam.durationMinutes} phút', style: AppTextStyles.bodySm),
-                      const Spacer(),
+                      Flexible(
+                        child: Text(
+                          'Thời lượng: ${widget.exam.durationMinutes} phút',
+                          style: AppTextStyles.bodySm,
+                          overflow: TextOverflow.ellipsis,
+                        ),
+                      ),
+                      const SizedBox(width: 8),
                       const Icon(Icons.quiz_outlined, size: 16, color: AppColors.primaryGlow),
                       const SizedBox(width: 6),
-                      Text('${widget.exam.totalQuestions} câu hỏi chính', style: AppTextStyles.bodySm),
+                      Flexible(
+                        child: Text(
+                          '${widget.exam.totalQuestions} câu hỏi chính',
+                          style: AppTextStyles.bodySm,
+                          overflow: TextOverflow.ellipsis,
+                        ),
+                      ),
                     ],
                   ),
                 ],

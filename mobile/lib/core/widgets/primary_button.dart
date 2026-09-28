@@ -13,6 +13,7 @@ class PrimaryButton extends StatelessWidget {
   final double borderRadius;
   final bool isOutlined;
   final Color? textColor;
+  final EdgeInsetsGeometry? padding;
 
   const PrimaryButton({
     super.key,
@@ -26,10 +27,13 @@ class PrimaryButton extends StatelessWidget {
     this.borderRadius = 14,
     this.isOutlined = false,
     this.textColor,
+    this.padding,
   });
 
   @override
   Widget build(BuildContext context) {
+    final effectivePadding = padding ?? const EdgeInsets.symmetric(horizontal: 12);
+
     if (isOutlined) {
       return SizedBox(
         height: height,
@@ -40,7 +44,7 @@ class PrimaryButton extends StatelessWidget {
             shape: RoundedRectangleBorder(
               borderRadius: BorderRadius.circular(borderRadius),
             ),
-            padding: const EdgeInsets.symmetric(horizontal: 20),
+            padding: effectivePadding,
           ),
           child: _buildChild(context),
         ),
@@ -71,7 +75,7 @@ class PrimaryButton extends StatelessWidget {
           onTap: isLoading ? null : onPressed,
           borderRadius: BorderRadius.circular(borderRadius),
           child: Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 20),
+            padding: effectivePadding,
             child: Center(
               child: _buildChild(context),
             ),
@@ -100,13 +104,17 @@ class PrimaryButton extends StatelessWidget {
         mainAxisSize: MainAxisSize.min,
         mainAxisAlignment: MainAxisAlignment.center,
         children: [
-          Icon(icon, size: 20, color: effectiveTextColor),
-          const SizedBox(width: 8),
-          Text(
-            text,
-            style: AppTextStyles.labelBold.copyWith(
-              color: effectiveTextColor,
-              fontSize: 14,
+          Icon(icon, size: 18, color: effectiveTextColor),
+          const SizedBox(width: 6),
+          Flexible(
+            child: Text(
+              text,
+              style: AppTextStyles.labelBold.copyWith(
+                color: effectiveTextColor,
+                fontSize: 13,
+              ),
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
             ),
           ),
         ],
@@ -119,6 +127,8 @@ class PrimaryButton extends StatelessWidget {
         color: effectiveTextColor,
         fontSize: 14,
       ),
+      maxLines: 1,
+      overflow: TextOverflow.ellipsis,
     );
   }
 }
