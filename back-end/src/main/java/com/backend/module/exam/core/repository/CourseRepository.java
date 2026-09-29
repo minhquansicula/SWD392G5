@@ -25,4 +25,7 @@ public interface CourseRepository extends JpaRepository<Course, UUID> {
 
     @Query("SELECT c FROM Course c JOIN c.lecturers l WHERE l.id = :lecturerId")
     List<Course> findCoursesByLecturerId(@Param("lecturerId") UUID lecturerId);
+
+    @Query("select count(c) > 0 from Course c join c.lecturers l where c.id = :courseId and l.id = :lecturerId")
+    boolean isLecturerAssigned(@Param("courseId") UUID courseId, @Param("lecturerId") UUID lecturerId);
 }
