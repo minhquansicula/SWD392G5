@@ -180,4 +180,14 @@ public class CourseServiceImpl implements CourseService {
                 .map(this::toDto)
                 .collect(Collectors.toList());
     }
+
+    @Override
+    @Transactional(readOnly = true)
+    public List<CourseDto> getMyCourses() {
+        UserDto user = access.currentUser();
+        if (access.isAdmin(user)) {
+            return getAllCourses();
+        }
+        return getCoursesByLecturer(user.getId());
+    }
 }

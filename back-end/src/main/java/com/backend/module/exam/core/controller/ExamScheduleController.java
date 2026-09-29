@@ -70,6 +70,13 @@ public class ExamScheduleController {
         return ResponseEntity.ok(ApiResponse.ok("Questions assigned successfully", scheduleService.assignQuestionsToSchedule(scheduleId)));
     }
 
+    @Operation(summary = "Assign and snapshot main questions for all pending schedules of an exam in chronological order")
+    @PostMapping("/api/lecturer/exams/{examId}/assign-questions")
+    public ResponseEntity<ApiResponse<List<QuestionAssignmentResultDto>>> assignAll(@PathVariable UUID examId) {
+        return ResponseEntity.ok(ApiResponse.ok("Questions assigned to all schedules successfully",
+                scheduleService.assignAllQuestionsForExam(examId)));
+    }
+
     @Operation(summary = "View assigned question snapshots as an authorized lecturer or admin")
     @GetMapping("/api/schedules/{scheduleId}/assigned-questions")
     public ResponseEntity<ApiResponse<List<AssignedQuestionDto>>> questions(@PathVariable UUID scheduleId) {

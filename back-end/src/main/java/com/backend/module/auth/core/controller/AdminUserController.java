@@ -37,6 +37,13 @@ public class AdminUserController {
         return ResponseEntity.ok(ApiResponse.ok("Get User list successfully", users));
     }
 
+    @Operation(summary = "Get User by ID")
+    @GetMapping("/{id}")
+    public ResponseEntity<ApiResponse<UserDto>> getUserById(@PathVariable UUID id) {
+        UserDto user = adminUserService.getUserById(id);
+        return ResponseEntity.ok(ApiResponse.ok("Get User successfully", user));
+    }
+
     @Operation(summary = "Create new User")
     @PostMapping
     public ResponseEntity<ApiResponse<UserDto>> createUser(@Valid @RequestBody CreateUserRequest request) {
@@ -61,6 +68,15 @@ public class AdminUserController {
             @Valid @RequestBody UpdateUserRequest request) {
         UserDto updatedUser = adminUserService.updateUser(id, request);
         return ResponseEntity.ok(ApiResponse.ok("Update User successfully", updatedUser));
+    }
+
+    @Operation(summary = "Reset User Password")
+    @PutMapping("/{id}/password")
+    public ResponseEntity<ApiResponse<Void>> resetPassword(
+            @PathVariable UUID id,
+            @Valid @RequestBody com.backend.module.auth.api.dto.ResetPasswordRequest request) {
+        adminUserService.resetPassword(id, request.getNewPassword());
+        return ResponseEntity.ok(ApiResponse.ok("Reset password successfully", null));
     }
 
     @Operation(summary = "Delete User")

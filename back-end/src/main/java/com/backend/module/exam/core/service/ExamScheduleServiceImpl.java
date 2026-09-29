@@ -58,6 +58,10 @@ public class ExamScheduleServiceImpl implements ExamScheduleService {
             OffsetDateTime start = ExamRules.timestamp(entry.getScheduledStartTime());
             OffsetDateTime end = ExamRules.timestamp(entry.getScheduledEndTime());
             ExamRules.scheduleTime(start, end, exam);
+            if (schedules.hasOverlappingSchedule(student.getId(), start, end, null)) {
+                throw new AppException("Student @" + student.getUsername() + " already has a conflicting schedule in this time range",
+                        CONFLICT, "STUDENT_SCHEDULE_CONFLICT");
+            }
             ExamSchedule schedule = new ExamSchedule();
             schedule.setExam(exam);
             schedule.setStudentId(student.getId());
@@ -79,6 +83,10 @@ public class ExamScheduleServiceImpl implements ExamScheduleService {
         OffsetDateTime start = ExamRules.timestamp(request.getScheduledStartTime());
         OffsetDateTime end = ExamRules.timestamp(request.getScheduledEndTime());
         ExamRules.scheduleTime(start, end, schedule.getExam());
+        if (schedules.hasOverlappingSchedule(schedule.getStudentId(), start, end, schedule.getId())) {
+            throw new AppException("Student already has a conflicting schedule in this time range",
+                    CONFLICT, "STUDENT_SCHEDULE_CONFLICT");
+        }
         schedule.setScheduledStartTime(start);
         schedule.setScheduledEndTime(end);
         return dto(schedule);
@@ -127,6 +135,22 @@ public class ExamScheduleServiceImpl implements ExamScheduleService {
         ExamSchedule schedule = lockedSchedule(scheduleId);
         access.requireOwner(schedule.getExam(), user);
         return questionAssignment.assignQuestions(schedule);
+    }
+
+    @Override
+    @Transactional
+    public List<QuestionAssignmentResultDto> assignAllQuestionsForExam(UUID examId) {
+        UserDto user = access.manager();
+        Exam exam = lockedExam(examId);
+        access.requireOwner(exam, user);
+        List<ExamSchedule> examSchedules = schedules.findByExamIdOrderByScheduledStartTimeAscIdAsc(examId);
+        List<QuestionAssignmentResultDto> results = new ArrayList<>();
+        for (ExamSchedule s : examSchedules) {
+            if ("PENDING".equals(s.getStatus()) && !assignments.existsByExamScheduleId(s.getId())) {
+                results.add(questionAssignment.assignQuestions(s));
+            }
+        }
+        return results;
     }
 
     @Override

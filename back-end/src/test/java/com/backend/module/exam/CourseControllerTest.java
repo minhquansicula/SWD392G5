@@ -174,4 +174,19 @@ class CourseControllerTest {
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.success").value(true));
     }
+
+    @Test
+    void getMyCourses_Returns200Ok() throws Exception {
+        CourseDto course = CourseDto.builder()
+                .id(UUID.randomUUID())
+                .courseCode("SWD392")
+                .courseName("Software Architecture")
+                .build();
+        when(courseService.getMyCourses()).thenReturn(List.of(course));
+
+        mockMvc.perform(get("/api/lecturer/my-courses"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.success").value(true))
+                .andExpect(jsonPath("$.data[0].courseCode").value("SWD392"));
+    }
 }
