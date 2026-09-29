@@ -5,8 +5,11 @@ import com.backend.module.auth.core.entity.User;
 import com.backend.module.auth.core.enums.Role;
 import com.backend.module.auth.core.repository.UserRepository;
 import com.backend.module.exam.api.dto.CourseDto;
+import com.backend.module.exam.api.dto.CourseLecturerDto;
 import com.backend.module.exam.api.service.CourseService;
 import com.backend.module.exam.core.entity.Course;
+import com.backend.module.exam.core.entity.CourseLecturer;
+import com.backend.module.exam.core.entity.CourseLecturerId;
 import com.backend.module.exam.core.repository.CourseRepository;
 import com.backend.shared.exception.AppException;
 import lombok.RequiredArgsConstructor;
@@ -24,14 +27,16 @@ import java.util.stream.Collectors;
 public class CourseServiceImpl implements CourseService {
     private final CourseRepository courseRepository;
     private final UserRepository userRepository;
+    private final ExamAccessService access;
 
     private CourseDto toDto(Course c) {
-        List<UserDto> lecturerDtos = c.getLecturers() != null
-                ? c.getLecturers().stream()
+        List<UserDto> lecturerDtos = c.getLecturerAssignments() != null
+                ? c.getLecturerAssignments().stream().map(CourseLecturer::getLecturer)
                 .map(u -> UserDto.builder()
                         .id(u.getId())
                         .username(u.getUsername())
                         .fullName(u.getFullName())
+                        .studentCode(u.getStudentCode()).email(u.getEmail()).createdAt(u.getCreatedAt())
                         .role(u.getRole() != null ? u.getRole().name() : "LECTURER")
                         .build())
                 .collect(Collectors.toList())
@@ -43,6 +48,9 @@ public class CourseServiceImpl implements CourseService {
                 .courseName(c.getCourseName())
                 .lecturers(lecturerDtos)
                 .lecturerCount(lecturerDtos.size())
+                .lecturerAssignments(c.getLecturerAssignments().stream().map(a -> CourseLecturerDto.builder()
+                        .lecturerId(a.getId().getLecturerId()).assignedById(a.getAssignedById())
+                        .assignedAt(a.getAssignedAt()).build()).toList())
                 .build();
     }
 
@@ -63,16 +71,11 @@ public class CourseServiceImpl implements CourseService {
         }
 
         Course course = new Course();
-        course.setId(UUID.randomUUID());
         course.setCourseCode(code);
         course.setCourseName(dto.getCourseName().trim());
-        courseRepository.save(course);
+        course = courseRepository.save(course);
 
-        dto.setId(course.getId());
-        dto.setCourseCode(code);
-        dto.setLecturers(List.of());
-        dto.setLecturerCount(0);
-        return dto;
+        return toDto(course);
     }
 
     @Override
@@ -113,11 +116,12 @@ public class CourseServiceImpl implements CourseService {
         Course course = courseRepository.findByIdWithLecturers(courseId)
                 .orElseThrow(() -> new AppException("Course not found", HttpStatus.NOT_FOUND, "COURSE_NOT_FOUND"));
 
-        return course.getLecturers().stream()
+        return course.getLecturerAssignments().stream().map(CourseLecturer::getLecturer)
                 .map(u -> UserDto.builder()
                         .id(u.getId())
                         .username(u.getUsername())
                         .fullName(u.getFullName())
+                        .studentCode(u.getStudentCode()).email(u.getEmail()).createdAt(u.getCreatedAt())
                         .role(u.getRole() != null ? u.getRole().name() : "LECTURER")
                         .build())
                 .collect(Collectors.toList());
@@ -126,14 +130,18 @@ public class CourseServiceImpl implements CourseService {
     @Override
     @Transactional
     public CourseDto assignLecturers(UUID courseId, List<UUID> lecturerIds) {
-        Course course = courseRepository.findByIdWithLecturers(courseId)
+        Course course = courseRepository.findByIdForUpdate(courseId)
                 .orElseThrow(() -> new AppException("Course not found", HttpStatus.NOT_FOUND, "COURSE_NOT_FOUND"));
 
         if (lecturerIds == null || lecturerIds.isEmpty()) {
             return toDto(course);
         }
 
+        UUID assignedBy = access.currentUser().getId();
         for (UUID lecturerId : lecturerIds) {
+            if (lecturerId == null) {
+                throw new AppException("Lecturer ID is required", HttpStatus.BAD_REQUEST, "VALIDATION_FAILED");
+            }
             User user = userRepository.findById(lecturerId)
                     .orElseThrow(() -> new AppException("User not found with id: " + lecturerId, HttpStatus.NOT_FOUND, "USER_NOT_FOUND"));
 
@@ -142,20 +150,26 @@ public class CourseServiceImpl implements CourseService {
                         HttpStatus.BAD_REQUEST, "INVALID_ROLE");
             }
 
-            course.getLecturers().add(user);
+            if (course.getLecturerAssignments().stream().noneMatch(a -> a.getId().getLecturerId().equals(lecturerId))) {
+                CourseLecturer assignment = new CourseLecturer();
+                assignment.setId(new CourseLecturerId(courseId, lecturerId));
+                assignment.setCourse(course);
+                assignment.setLecturer(user);
+                assignment.setAssignedById(assignedBy);
+                course.getLecturerAssignments().add(assignment);
+            }
         }
 
-        courseRepository.save(course);
-        return toDto(course);
+        return toDto(courseRepository.saveAndFlush(course));
     }
 
     @Override
     @Transactional
     public void removeLecturerFromCourse(UUID courseId, UUID lecturerId) {
-        Course course = courseRepository.findByIdWithLecturers(courseId)
+        Course course = courseRepository.findByIdForUpdate(courseId)
                 .orElseThrow(() -> new AppException("Course not found", HttpStatus.NOT_FOUND, "COURSE_NOT_FOUND"));
 
-        course.getLecturers().removeIf(u -> u.getId().equals(lecturerId));
+        course.getLecturerAssignments().removeIf(a -> a.getId().getLecturerId().equals(lecturerId));
         courseRepository.save(course);
     }
 
@@ -165,5 +179,15 @@ public class CourseServiceImpl implements CourseService {
         return courseRepository.findCoursesByLecturerId(lecturerId).stream()
                 .map(this::toDto)
                 .collect(Collectors.toList());
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public List<CourseDto> getMyCourses() {
+        UserDto user = access.currentUser();
+        if (access.isAdmin(user)) {
+            return getAllCourses();
+        }
+        return getCoursesByLecturer(user.getId());
     }
 }

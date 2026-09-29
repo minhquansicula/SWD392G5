@@ -1,6 +1,5 @@
 package com.backend.module.exam.core.entity;
 
-import com.backend.module.auth.core.entity.User;
 import jakarta.persistence.*;
 import jakarta.validation.constraints.NotNull;
 import jakarta.validation.constraints.Size;
@@ -11,6 +10,8 @@ import org.hibernate.annotations.OnDelete;
 import org.hibernate.annotations.OnDeleteAction;
 
 import java.time.OffsetDateTime;
+import java.util.ArrayList;
+import java.util.List;
 import java.util.UUID;
 
 @Getter
@@ -19,6 +20,7 @@ import java.util.UUID;
 @Table(name = "exams")
 public class Exam {
     @Id
+    @GeneratedValue(strategy = GenerationType.UUID)
     @ColumnDefault("gen_random_uuid()")
     @Column(name = "id", nullable = false)
     private UUID id;
@@ -43,16 +45,30 @@ public class Exam {
 
     @ColumnDefault("0")
     @Column(name = "max_main_questions")
-    private Integer maxMainQuestions;
+    private Integer maxMainQuestions = 0;
 
     @ColumnDefault("0")
     @Column(name = "max_followup_questions")
-    private Integer maxFollowupQuestions;
+    private Integer maxFollowupQuestions = 0;
 
-    @ManyToOne(fetch = FetchType.LAZY)
-    @OnDelete(action = OnDeleteAction.SET_NULL)
-    @JoinColumn(name = "created_by")
-    private User createdBy;
+    @ColumnDefault("2")
+    @Column(name = "max_followups_per_main")
+    private Integer maxFollowupsPerMain = 2;
+
+    @ColumnDefault("120")
+    @Column(name = "main_answer_time_limit_seconds")
+    private Integer mainAnswerTimeLimitSeconds = 120;
+
+    @ColumnDefault("60")
+    @Column(name = "followup_answer_time_limit_seconds")
+    private Integer followupAnswerTimeLimitSeconds = 60;
+
+    // Cross-module references are IDs; user data is obtained through auth.api.
+    @Column(name = "created_by")
+    private UUID createdById;
+
+    @OneToMany(mappedBy = "exam", cascade = CascadeType.ALL, orphanRemoval = true)
+    private List<ExamSchedule> schedules = new ArrayList<>();
 
 
 }

@@ -29,6 +29,14 @@ public class CourseController {
         return ResponseEntity.ok(ApiResponse.ok("Get Courses list successfully", courses));
     }
 
+    @Operation(summary = "Get My Courses", description = "Get courses assigned to the current lecturer (or all courses if admin)")
+    @GetMapping("/api/lecturer/my-courses")
+    @PreAuthorize("hasAnyRole('LECTURER', 'ADMIN')")
+    public ResponseEntity<ApiResponse<List<CourseDto>>> getMyCourses() {
+        List<CourseDto> courses = courseService.getMyCourses();
+        return ResponseEntity.ok(ApiResponse.ok("Get my courses successfully", courses));
+    }
+
     @Operation(summary = "Create new Course", description = "Only ADMIN can create new Course")
     @PostMapping("/api/admin/courses")
     @PreAuthorize("hasRole('ADMIN')")

@@ -9,6 +9,7 @@ import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
+import org.springdoc.core.annotations.ParameterObject;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.http.HttpStatus;
@@ -31,9 +32,16 @@ public class AdminUserController {
     @GetMapping
     public ResponseEntity<ApiResponse<Page<UserDto>>> getUsers(
             @RequestParam(required = false) String role,
-            Pageable pageable) {
+            @ParameterObject Pageable pageable) {
         Page<UserDto> users = adminUserService.getUsers(role, pageable);
         return ResponseEntity.ok(ApiResponse.ok("Get User list successfully", users));
+    }
+
+    @Operation(summary = "Get User by ID")
+    @GetMapping("/{id}")
+    public ResponseEntity<ApiResponse<UserDto>> getUserById(@PathVariable UUID id) {
+        UserDto user = adminUserService.getUserById(id);
+        return ResponseEntity.ok(ApiResponse.ok("Get User successfully", user));
     }
 
     @Operation(summary = "Create new User")
@@ -46,7 +54,8 @@ public class AdminUserController {
 
     @Operation(summary = "Batch create Users", description = "Create multiple users in one transaction, e.g. from Excel")
     @PostMapping("/batch")
-    public ResponseEntity<ApiResponse<java.util.List<UserDto>>> batchCreateUsers(@RequestBody java.util.List<CreateUserRequest> requests) {
+    public ResponseEntity<ApiResponse<java.util.List<UserDto>>> batchCreateUsers(
+            @RequestBody java.util.List<CreateUserRequest> requests) {
         java.util.List<UserDto> createdUsers = adminUserService.batchCreateUsers(requests);
         return ResponseEntity.status(HttpStatus.CREATED)
                 .body(ApiResponse.ok("Batch created Users successfully", createdUsers));
@@ -59,6 +68,15 @@ public class AdminUserController {
             @Valid @RequestBody UpdateUserRequest request) {
         UserDto updatedUser = adminUserService.updateUser(id, request);
         return ResponseEntity.ok(ApiResponse.ok("Update User successfully", updatedUser));
+    }
+
+    @Operation(summary = "Reset User Password")
+    @PutMapping("/{id}/password")
+    public ResponseEntity<ApiResponse<Void>> resetPassword(
+            @PathVariable UUID id,
+            @Valid @RequestBody com.backend.module.auth.api.dto.ResetPasswordRequest request) {
+        adminUserService.resetPassword(id, request.getNewPassword());
+        return ResponseEntity.ok(ApiResponse.ok("Reset password successfully", null));
     }
 
     @Operation(summary = "Delete User")
