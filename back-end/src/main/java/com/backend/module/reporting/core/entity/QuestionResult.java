@@ -1,4 +1,4 @@
-package com.backend.module.reporting.entity;
+package com.backend.module.reporting.core.entity;
 
 import jakarta.persistence.*;
 import lombok.Getter;
