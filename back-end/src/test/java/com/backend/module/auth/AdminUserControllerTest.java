@@ -101,4 +101,30 @@ class AdminUserControllerTest {
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.success").value(true));
     }
+
+    @Test
+    void getUserById_Returns200() throws Exception {
+        UUID id = UUID.randomUUID();
+        UserDto userDto = UserDto.builder().id(id).username("user1").fullName("User One").role("STUDENT").build();
+        when(adminUserService.getUserById(id)).thenReturn(userDto);
+
+        mockMvc.perform(get("/api/admin/users/" + id))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.success").value(true))
+                .andExpect(jsonPath("$.data.username").value("user1"));
+    }
+
+    @Test
+    void resetPassword_Returns200() throws Exception {
+        UUID id = UUID.randomUUID();
+        com.backend.module.auth.api.dto.ResetPasswordRequest request =
+                com.backend.module.auth.api.dto.ResetPasswordRequest.builder().newPassword("newPass123").build();
+        doNothing().when(adminUserService).resetPassword(id, "newPass123");
+
+        mockMvc.perform(put("/api/admin/users/" + id + "/password")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(request)))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.success").value(true));
+    }
 }

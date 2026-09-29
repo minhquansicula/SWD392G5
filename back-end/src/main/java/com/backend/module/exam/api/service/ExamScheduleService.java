@@ -13,6 +13,7 @@ public interface ExamScheduleService {
     List<ExamScheduleDto> getMySchedules();
     ExamScheduleDto getScheduleById(UUID scheduleId);
     QuestionAssignmentResultDto assignQuestionsToSchedule(UUID scheduleId);
+    List<QuestionAssignmentResultDto> assignAllQuestionsForExam(UUID examId);
     List<AssignedQuestionDto> getAssignedQuestions(UUID scheduleId);
     ExamScheduleDto startSchedule(UUID scheduleId);
 }

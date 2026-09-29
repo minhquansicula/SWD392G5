@@ -43,6 +43,13 @@ public class AdminUserServiceImpl implements AdminUserService {
     }
 
     @Override
+    @Transactional(readOnly = true)
+    public UserDto getUserById(UUID id) {
+        User user = userRepository.findById(id).orElseThrow(() -> new UserNotFoundException(id.toString()));
+        return UserDtoMapper.toDto(user);
+    }
+
+    @Override
     @Transactional
     public UserDto createUser(CreateUserRequest request) {
         validate(request);
@@ -85,6 +92,17 @@ public class AdminUserServiceImpl implements AdminUserService {
         }
         if (request.getEmail() != null) user.setEmail(optionalText(request.getEmail()));
         return UserDtoMapper.toDto(userRepository.saveAndFlush(user));
+    }
+
+    @Override
+    @Transactional
+    public void resetPassword(UUID userId, String newPassword) {
+        if (newPassword == null || newPassword.trim().length() < 6) {
+            throw new AppException("Password must be at least 6 characters", BAD_REQUEST, "VALIDATION_FAILED");
+        }
+        User user = userRepository.findById(userId).orElseThrow(() -> new UserNotFoundException(userId.toString()));
+        user.setPasswordHash(passwordEncoder.encode(newPassword.trim()));
+        userRepository.saveAndFlush(user);
     }
 
     @Override

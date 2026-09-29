@@ -15,4 +15,5 @@ public interface CourseService {
     CourseDto assignLecturers(UUID courseId, List<UUID> lecturerIds);
     void removeLecturerFromCourse(UUID courseId, UUID lecturerId);
     List<CourseDto> getCoursesByLecturer(UUID lecturerId);
+    List<CourseDto> getMyCourses();
 }
