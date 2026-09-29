@@ -59,7 +59,6 @@ public class ExamScheduleServiceImpl implements ExamScheduleService {
             OffsetDateTime end = ExamRules.timestamp(entry.getScheduledEndTime());
             ExamRules.scheduleTime(start, end, exam);
             ExamSchedule schedule = new ExamSchedule();
-            schedule.setId(UUID.randomUUID());
             schedule.setExam(exam);
             schedule.setStudentId(student.getId());
             schedule.setScheduledStartTime(start);
@@ -161,6 +160,7 @@ public class ExamScheduleServiceImpl implements ExamScheduleService {
         }
         // Assignment and transition commit together; failures leave the schedule PENDING.
         schedule.setStatus("IN_PROGRESS");
+        schedule.setActualStartTime(ExamRules.timestamp(now));
         return dto(schedule);
     }
 

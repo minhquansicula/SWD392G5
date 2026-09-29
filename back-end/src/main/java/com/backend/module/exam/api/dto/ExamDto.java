@@ -17,6 +17,9 @@ public class ExamDto {
     private OffsetDateTime endDate;
     private Integer maxMainQuestions;
     private Integer maxFollowupQuestions;
+    private Integer maxFollowupsPerMain;
+    private Integer mainAnswerTimeLimitSeconds;
+    private Integer followupAnswerTimeLimitSeconds;
     private UserDto createdBy;
     private Integer totalStudents;
     private Integer completedStudents;

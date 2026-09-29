@@ -52,7 +52,8 @@ class ExamMigrationTest {
 
     private Flyway flyway(PostgresTestDatabase db) {
         return Flyway.configure().dataSource(db.url(), db.username(), db.password())
-                .defaultSchema(db.schema()).baselineOnMigrate(true).locations("classpath:db/migration").load();
+                .defaultSchema(db.schema()).baselineOnMigrate(true).baselineVersion("1").target("3")
+                .locations("classpath:db/migration").load();
     }
 
     private void legacySchema(Connection c) throws Exception {

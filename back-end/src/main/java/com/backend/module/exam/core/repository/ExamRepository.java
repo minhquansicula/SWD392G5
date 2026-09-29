@@ -28,8 +28,8 @@ public interface ExamRepository extends JpaRepository<Exam, UUID> {
     @EntityGraph(attributePaths = "course")
     @Query("""
             select e from Exam e where e.createdById = :lecturerId
-            or exists (select c.id from Course c join c.lecturers l
-                       where c.id = e.course.id and l.id = :lecturerId)
+            or exists (select cl.id from CourseLecturer cl
+                       where cl.id.courseId = e.course.id and cl.id.lecturerId = :lecturerId)
             """)
     Page<Exam> findByLecturerAccess(@Param("lecturerId") UUID lecturerId, Pageable pageable);
 }

@@ -21,4 +21,11 @@ public class CreateExamRequest {
     private Integer maxMainQuestions;
     @NotNull @Min(0) @Max(20)
     private Integer maxFollowupQuestions;
+
+    @Min(0)
+    private Integer maxFollowupsPerMain;
+    @Min(1)
+    private Integer mainAnswerTimeLimitSeconds;
+    @Min(1)
+    private Integer followupAnswerTimeLimitSeconds;
 }

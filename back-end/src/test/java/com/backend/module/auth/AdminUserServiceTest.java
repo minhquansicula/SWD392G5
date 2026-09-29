@@ -38,6 +38,9 @@ class AdminUserServiceTest {
     @Mock
     private PasswordEncoder passwordEncoder;
 
+    @Mock
+    private jakarta.validation.Validator validator;
+
     @InjectMocks
     private AdminUserServiceImpl adminUserService;
 
@@ -90,7 +93,7 @@ class AdminUserServiceTest {
 
         when(userRepository.existsByUsername("SE170002")).thenReturn(false);
         when(passwordEncoder.encode("password123")).thenReturn("encoded_new_pwd");
-        when(userRepository.save(any(User.class))).thenAnswer(invocation -> {
+        when(userRepository.saveAndFlush(any(User.class))).thenAnswer(invocation -> {
             User u = invocation.getArgument(0);
             u.setId(UUID.randomUUID());
             return u;
@@ -123,7 +126,7 @@ class AdminUserServiceTest {
         request.setRole("LECTURER");
 
         when(userRepository.findById(sampleUserId)).thenReturn(Optional.of(sampleUser));
-        when(userRepository.save(any(User.class))).thenReturn(sampleUser);
+        when(userRepository.saveAndFlush(any(User.class))).thenReturn(sampleUser);
 
         UserDto result = adminUserService.updateUser(sampleUserId, request);
 

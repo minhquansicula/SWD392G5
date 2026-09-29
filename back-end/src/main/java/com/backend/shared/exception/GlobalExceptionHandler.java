@@ -2,6 +2,7 @@ package com.backend.shared.exception;
 
 import com.backend.shared.response.ErrorResponse;
 import jakarta.servlet.http.HttpServletRequest;
+import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.http.converter.HttpMessageNotReadableException;
@@ -79,6 +80,14 @@ public class GlobalExceptionHandler {
         return ResponseEntity.badRequest().body(ErrorResponse.builder()
                 .timestamp(LocalDateTime.now()).status(400).error("VALIDATION_FAILED")
                 .message("Invalid request body or parameter format")
+                .path(request.getRequestURI()).build());
+    }
+
+    @ExceptionHandler(DataIntegrityViolationException.class)
+    public ResponseEntity<ErrorResponse> handleDataConflict(DataIntegrityViolationException ex, HttpServletRequest request) {
+        return ResponseEntity.status(HttpStatus.CONFLICT).body(ErrorResponse.builder()
+                .timestamp(LocalDateTime.now()).status(409).error("DATA_INTEGRITY_CONFLICT")
+                .message("Data conflicts with an existing record or database constraint")
                 .path(request.getRequestURI()).build());
     }
 

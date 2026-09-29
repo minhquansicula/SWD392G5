@@ -36,6 +36,14 @@ final class ExamRules {
         }
     }
 
+    static void interviewLimits(Integer perMain, Integer mainSeconds, Integer followupSeconds) {
+        if ((perMain != null && perMain < 0) || (mainSeconds != null && mainSeconds < 1)
+                || (followupSeconds != null && followupSeconds < 1)) {
+            throw new AppException("Follow-ups per main must be non-negative; answer time limits must be positive",
+                    BAD_REQUEST, "VALIDATION_FAILED");
+        }
+    }
+
     static void scheduleTime(OffsetDateTime start, OffsetDateTime end, Exam exam) {
         if (start == null || end == null || !end.isAfter(start)) {
             throw new AppException("Scheduled end time must be after start time", BAD_REQUEST, "INVALID_SCHEDULE_TIME");
