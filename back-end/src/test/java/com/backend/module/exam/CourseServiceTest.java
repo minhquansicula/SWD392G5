@@ -6,6 +6,9 @@ import com.backend.module.auth.core.enums.Role;
 import com.backend.module.auth.core.repository.UserRepository;
 import com.backend.module.exam.api.dto.CourseDto;
 import com.backend.module.exam.core.entity.Course;
+import com.backend.module.exam.core.entity.CourseLecturer;
+import com.backend.module.exam.core.entity.CourseLecturerId;
+import com.backend.module.exam.core.service.ExamAccessService;
 import com.backend.module.exam.core.repository.CourseRepository;
 import com.backend.module.exam.core.service.CourseServiceImpl;
 import com.backend.shared.exception.AppException;
@@ -31,6 +34,9 @@ class CourseServiceTest {
     @Mock
     private UserRepository userRepository;
 
+    @Mock
+    private ExamAccessService access;
+
     @InjectMocks
     private CourseServiceImpl courseService;
 
@@ -43,7 +49,7 @@ class CourseServiceTest {
         sampleCourse.setId(UUID.randomUUID());
         sampleCourse.setCourseCode("SWD392");
         sampleCourse.setCourseName("Software Architecture and Design");
-        sampleCourse.setLecturers(new HashSet<>());
+        sampleCourse.setLecturerAssignments(new HashSet<>());
 
         sampleLecturer = User.builder()
                 .id(UUID.randomUUID())
@@ -74,7 +80,11 @@ class CourseServiceTest {
                 .build();
 
         when(courseRepository.existsByCourseCode("PRN231")).thenReturn(false);
-        when(courseRepository.save(any(Course.class))).thenAnswer(invocation -> invocation.getArgument(0));
+        when(courseRepository.save(any(Course.class))).thenAnswer(invocation -> {
+            Course course = invocation.getArgument(0);
+            course.setId(UUID.randomUUID());
+            return course;
+        });
 
         CourseDto created = courseService.createCourse(dto);
 
@@ -129,9 +139,10 @@ class CourseServiceTest {
         UUID courseId = sampleCourse.getId();
         UUID lecturerId = sampleLecturer.getId();
 
-        when(courseRepository.findByIdWithLecturers(courseId)).thenReturn(Optional.of(sampleCourse));
+        when(courseRepository.findByIdForUpdate(courseId)).thenReturn(Optional.of(sampleCourse));
         when(userRepository.findById(lecturerId)).thenReturn(Optional.of(sampleLecturer));
-        when(courseRepository.save(any(Course.class))).thenAnswer(invocation -> invocation.getArgument(0));
+        when(access.currentUser()).thenReturn(UserDto.builder().id(UUID.randomUUID()).role("ADMIN").build());
+        when(courseRepository.saveAndFlush(any(Course.class))).thenAnswer(invocation -> invocation.getArgument(0));
 
         CourseDto updated = courseService.assignLecturers(courseId, List.of(lecturerId));
 
@@ -151,7 +162,8 @@ class CourseServiceTest {
                 .passwordHash("hashed")
                 .build();
 
-        when(courseRepository.findByIdWithLecturers(courseId)).thenReturn(Optional.of(sampleCourse));
+        when(courseRepository.findByIdForUpdate(courseId)).thenReturn(Optional.of(sampleCourse));
+        when(access.currentUser()).thenReturn(UserDto.builder().id(UUID.randomUUID()).role("ADMIN").build());
         when(userRepository.findById(studentUser.getId())).thenReturn(Optional.of(studentUser));
 
         assertThrows(AppException.class, () ->
@@ -160,7 +172,7 @@ class CourseServiceTest {
 
     @Test
     void getCourseLecturers_Success() {
-        sampleCourse.getLecturers().add(sampleLecturer);
+        addLecturer();
         when(courseRepository.findByIdWithLecturers(sampleCourse.getId())).thenReturn(Optional.of(sampleCourse));
 
         List<UserDto> lecturers = courseService.getCourseLecturers(sampleCourse.getId());
@@ -172,13 +184,13 @@ class CourseServiceTest {
 
     @Test
     void removeLecturerFromCourse_Success() {
-        sampleCourse.getLecturers().add(sampleLecturer);
-        when(courseRepository.findByIdWithLecturers(sampleCourse.getId())).thenReturn(Optional.of(sampleCourse));
+        addLecturer();
+        when(courseRepository.findByIdForUpdate(sampleCourse.getId())).thenReturn(Optional.of(sampleCourse));
         when(courseRepository.save(any(Course.class))).thenAnswer(invocation -> invocation.getArgument(0));
 
         courseService.removeLecturerFromCourse(sampleCourse.getId(), sampleLecturer.getId());
 
-        assertTrue(sampleCourse.getLecturers().isEmpty());
+        assertTrue(sampleCourse.getLecturerAssignments().isEmpty());
     }
 
     @Test
@@ -190,5 +202,13 @@ class CourseServiceTest {
         assertNotNull(courses);
         assertEquals(1, courses.size());
         assertEquals("SWD392", courses.get(0).getCourseCode());
+    }
+
+    private void addLecturer() {
+        CourseLecturer assignment = new CourseLecturer();
+        assignment.setId(new CourseLecturerId(sampleCourse.getId(), sampleLecturer.getId()));
+        assignment.setCourse(sampleCourse);
+        assignment.setLecturer(sampleLecturer);
+        sampleCourse.getLecturerAssignments().add(assignment);
     }
 }

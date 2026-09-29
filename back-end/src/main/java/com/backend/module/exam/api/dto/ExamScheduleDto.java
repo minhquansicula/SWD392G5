@@ -20,4 +20,9 @@ public class ExamScheduleDto {
     private String status;
     private BigDecimal finalScore;
     private Integer assignedQuestionCount;
+    private Boolean isConnected;
+    private String fullRecordingUrl;
+    private UUID gradedById;
+    private OffsetDateTime actualStartTime;
+    private OffsetDateTime actualEndTime;
 }

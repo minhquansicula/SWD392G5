@@ -53,7 +53,7 @@ class ExamModuleIntegrationTest extends PostgresSpringTest {
         student2Id = addUser("student2", "STUDENT");
         courseId = UUID.randomUUID();
         jdbc.update("INSERT INTO courses(id, course_code, course_name) VALUES (?, 'SWD392', 'Software Design')", courseId);
-        jdbc.update("INSERT INTO course_lecturers VALUES (?, ?), (?, ?)", courseId, ownerId, courseId, peer);
+        jdbc.update("INSERT INTO course_lecturers(course_id, lecturer_id) VALUES (?, ?), (?, ?)", courseId, ownerId, courseId, peer);
         for (int i = 1; i <= 8; i++) {
             jdbc.update("INSERT INTO questions(id, course_id, content, difficulty_level) VALUES (?, ?, ?, 'MEDIUM')",
                     UUID.randomUUID(), courseId, "Question " + i);

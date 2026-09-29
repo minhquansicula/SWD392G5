@@ -22,10 +22,15 @@ spring:
   flyway:
     enabled: true
     baseline-on-migrate: true
+    # Untracked databases must already match database/lastScriptDB.sql (schema version 4).
+    # Tracked V1-V3 databases are upgraded by V4; empty databases use B4.
+    baseline-version: 4
     locations: classpath:db/migration
 
   # JPA & Hibernate Configuration
   jpa:
+    hibernate:
+      ddl-auto: validate
     open-in-view: false
     show-sql: true
     properties:

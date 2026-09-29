@@ -41,11 +41,12 @@ public class ExamServiceImpl implements ExamService {
         ExamRules.title(request.getTitle());
         ExamRules.dateRange(start, end);
         ExamRules.questionLimits(request.getMaxMainQuestions(), request.getMaxFollowupQuestions());
+        ExamRules.interviewLimits(request.getMaxFollowupsPerMain(), request.getMainAnswerTimeLimitSeconds(),
+                request.getFollowupAnswerTimeLimitSeconds());
         if (!start.isAfter(OffsetDateTime.now())) {
             throw new AppException("Start date must be in the future", BAD_REQUEST, "START_DATE_IN_PAST");
         }
         Exam exam = new Exam();
-        exam.setId(UUID.randomUUID());
         exam.setCourse(course);
         exam.setCreatedById(user.getId());
         exam.setTitle(request.getTitle().trim());
@@ -53,6 +54,9 @@ public class ExamServiceImpl implements ExamService {
         exam.setEndDate(end);
         exam.setMaxMainQuestions(request.getMaxMainQuestions());
         exam.setMaxFollowupQuestions(request.getMaxFollowupQuestions());
+        if (request.getMaxFollowupsPerMain() != null) exam.setMaxFollowupsPerMain(request.getMaxFollowupsPerMain());
+        if (request.getMainAnswerTimeLimitSeconds() != null) exam.setMainAnswerTimeLimitSeconds(request.getMainAnswerTimeLimitSeconds());
+        if (request.getFollowupAnswerTimeLimitSeconds() != null) exam.setFollowupAnswerTimeLimitSeconds(request.getFollowupAnswerTimeLimitSeconds());
         return dto(exams.save(exam));
     }
 
@@ -70,8 +74,13 @@ public class ExamServiceImpl implements ExamService {
         ExamRules.title(title);
         ExamRules.dateRange(start, end);
         ExamRules.questionLimits(main, followup);
+        ExamRules.interviewLimits(request.getMaxFollowupsPerMain(), request.getMainAnswerTimeLimitSeconds(),
+                request.getFollowupAnswerTimeLimitSeconds());
         boolean limitsChanged = !Objects.equals(main, exam.getMaxMainQuestions())
-                || !Objects.equals(followup, exam.getMaxFollowupQuestions());
+                || !Objects.equals(followup, exam.getMaxFollowupQuestions())
+                || (request.getMaxFollowupsPerMain() != null && !request.getMaxFollowupsPerMain().equals(exam.getMaxFollowupsPerMain()))
+                || (request.getMainAnswerTimeLimitSeconds() != null && !request.getMainAnswerTimeLimitSeconds().equals(exam.getMainAnswerTimeLimitSeconds()))
+                || (request.getFollowupAnswerTimeLimitSeconds() != null && !request.getFollowupAnswerTimeLimitSeconds().equals(exam.getFollowupAnswerTimeLimitSeconds()));
         if (limitsChanged && (hasActiveSchedules(examId) || assignments.existsByExamScheduleExamId(examId))) {
             throw new AppException("Cannot modify question limits after questions are assigned or the exam is active",
                     BAD_REQUEST, "CANNOT_MODIFY_ACTIVE_EXAM");
@@ -89,6 +98,9 @@ public class ExamServiceImpl implements ExamService {
         exam.setEndDate(end);
         exam.setMaxMainQuestions(main);
         exam.setMaxFollowupQuestions(followup);
+        if (request.getMaxFollowupsPerMain() != null) exam.setMaxFollowupsPerMain(request.getMaxFollowupsPerMain());
+        if (request.getMainAnswerTimeLimitSeconds() != null) exam.setMainAnswerTimeLimitSeconds(request.getMainAnswerTimeLimitSeconds());
+        if (request.getFollowupAnswerTimeLimitSeconds() != null) exam.setFollowupAnswerTimeLimitSeconds(request.getFollowupAnswerTimeLimitSeconds());
         return dto(exam);
     }
 

@@ -38,6 +38,9 @@ public class ExamDtoMapper {
                     .courseCode(c == null ? null : c.getCourseCode()).courseName(c == null ? null : c.getCourseName())
                     .title(e.getTitle()).startDate(e.getStartDate()).endDate(e.getEndDate())
                     .maxMainQuestions(e.getMaxMainQuestions()).maxFollowupQuestions(e.getMaxFollowupQuestions())
+                    .maxFollowupsPerMain(e.getMaxFollowupsPerMain())
+                    .mainAnswerTimeLimitSeconds(e.getMainAnswerTimeLimitSeconds())
+                    .followupAnswerTimeLimitSeconds(e.getFollowupAnswerTimeLimitSeconds())
                     .createdBy(e.getCreatedById() == null ? null : creators.get(e.getCreatedById()))
                     .totalStudents(Math.toIntExact(counts.getOrDefault(e.getId(), List.of()).stream()
                             .mapToLong(ExamScheduleRepository.StatusCount::getTotal).sum()))
@@ -61,7 +64,9 @@ public class ExamDtoMapper {
                     .courseCode(c == null ? null : c.getCourseCode()).courseName(c == null ? null : c.getCourseName())
                     .student(s.getStudentId() == null ? null : students.get(s.getStudentId())).scheduledStartTime(s.getScheduledStartTime())
                     .scheduledEndTime(s.getScheduledEndTime()).status(s.getStatus()).finalScore(s.getFinalScore())
-                    .assignedQuestionCount(Math.toIntExact(counts.getOrDefault(s.getId(), 0L))).build();
+                    .assignedQuestionCount(Math.toIntExact(counts.getOrDefault(s.getId(), 0L)))
+                    .isConnected(s.getIsConnected()).fullRecordingUrl(s.getFullRecordingUrl()).gradedById(s.getGradedById())
+                    .actualStartTime(s.getActualStartTime()).actualEndTime(s.getActualEndTime()).build();
         }).toList();
     }
 

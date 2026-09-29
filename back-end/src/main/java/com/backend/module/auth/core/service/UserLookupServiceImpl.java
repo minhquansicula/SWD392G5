@@ -23,8 +23,7 @@ public class UserLookupServiceImpl implements UserLookupService {
     public Map<UUID, UserDto> findUsersByIds(Collection<UUID> ids) {
         if (ids.isEmpty()) return Map.of();
         return userRepository.findAllById(ids).stream()
-                .map(u -> UserDto.builder().id(u.getId()).username(u.getUsername())
-                        .fullName(u.getFullName()).role(u.getRole().name()).build())
+                .map(UserDtoMapper::toDto)
                 .collect(Collectors.toMap(UserDto::getId, Function.identity()));
     }
 }
