@@ -17,14 +17,13 @@ import {
 import { Language } from './utils/i18n';
 import { Sidebar } from './components/common/Sidebar';
 import { TopBar } from './components/common/TopBar';
-import { ExamListPage } from './components/exams/ExamListPage';
-import { CreateExamModal } from './components/exams/CreateExamModal';
-import { StudentAssignmentPage } from './components/exams/StudentAssignmentPage';
-import { ExamDetailPage } from './components/exams/ExamDetailPage';
+import { StudentScheduleList } from './components/exams/student/StudentScheduleList';
+import { LecturerExamManagement } from './components/exams/lecturer/LecturerExamManagement';
 import { LiveVivaRoom } from './components/interview/LiveVivaRoom';
 import { ResultAnalyticsView } from './components/analytics/ResultAnalyticsView';
 import { UserManagementPage } from './components/admin/UserManagementPage';
 import { CourseManagementPage } from './components/admin/CourseManagementPage';
+import { QuestionBankPage } from './components/questions/QuestionBankPage';
 import { SettingsPage } from './components/settings/SettingsPage';
 import { AuthModal } from './components/auth/AuthModal';
 import { AuthLandingPage } from './components/auth/AuthLandingPage';
@@ -200,51 +199,16 @@ export default function App() {
         {/* Main View Container */}
         <main className="flex-1 max-w-7xl w-full mx-auto px-4 sm:px-6 lg:px-8 py-6">
           {/* MODULE 1: EXAM & SCHEDULE MANAGEMENT */}
-          {activeModule === 'exams' && (
-            <>
-              {examSubView === 'list' && (
-                <ExamListPage
-                  exams={exams}
-                  onSelectExam={(exam, view) => {
-                    setSelectedExam(exam);
-                    setExamSubView(view);
-                  }}
-                  onLaunchViva={(exam) => handleLaunchViva(exam)}
-                  onOpenCreateExam={() => setIsCreateModalOpen(true)}
-                  onViewAnalytics={(examId) => {
-                    const ex = exams.find((e) => e.id === examId) || exams[0];
-                    setSelectedExam(ex);
-                    setActiveModule('analytics');
-                  }}
-                  language={language}
-                />
-              )}
+          {activeModule === 'exams' && (currentUser.role === 'LECTURER' || currentUser.role === 'ADMIN') && (
+            <LecturerExamManagement key={currentUser.id} currentUser={currentUser} language={language} />
+          )}
+          {activeModule === 'exams' && currentUser.role === 'STUDENT' && (
+            <StudentScheduleList key={currentUser.id} currentUser={currentUser} language={language} />
+          )}
 
-              {examSubView === 'detail' && (
-                <ExamDetailPage
-                  exam={selectedExam}
-                  onBack={() => setExamSubView('list')}
-                  onLaunchViva={() => handleLaunchViva(selectedExam)}
-                  onGoToAssignments={() => setExamSubView('assignment')}
-                  onGoToAnalytics={() => setActiveModule('analytics')}
-                />
-              )}
-
-              {examSubView === 'assignment' && (
-                <StudentAssignmentPage
-                  exam={selectedExam}
-                  assignments={assignments.filter((a) => a.examId === selectedExam.id)}
-                  onBack={() => setExamSubView('list')}
-                  onLaunchVivaForStudent={(candidate) =>
-                    handleLaunchViva(selectedExam, candidate)
-                  }
-                  onUpdateAssignments={(updated) => {
-                    const other = assignments.filter((a) => a.examId !== selectedExam.id);
-                    setAssignments([...other, ...updated]);
-                  }}
-                />
-              )}
-            </>
+          {/* MODULE: QUESTION BANK MANAGEMENT (LECTURER & ADMIN) */}
+          {activeModule === 'questions' && (currentUser.role === 'LECTURER' || currentUser.role === 'ADMIN') && (
+            <QuestionBankPage currentUser={currentUser} language={language} />
           )}
 
           {/* MODULE 2: LIVE AI VIVA ORAL INTERVIEW */}
@@ -337,12 +301,7 @@ export default function App() {
         </footer>
       </div>
 
-      {/* Create Exam Wizard Modal */}
-      <CreateExamModal
-        isOpen={isCreateModalOpen}
-        onClose={() => setIsCreateModalOpen(false)}
-        onCreateExam={handleCreateExam}
-      />
+      
 
       {/* Authentication Modal */}
       <AuthModal
