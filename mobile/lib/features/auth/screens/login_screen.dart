@@ -16,15 +16,9 @@ class LoginScreen extends StatefulWidget {
 
 class _LoginScreenState extends State<LoginScreen> {
   final _usernameController = TextEditingController(text: 'SE170245');
-  final _passwordController = TextEditingController(text: '••••••••');
+  final _passwordController = TextEditingController(text: '123456');
   bool _obscurePassword = true;
-  int _selectedRoleIndex = 0; // 0: Sinh viên, 1: Giảng viên, 2: Admin
-
-  final List<String> _roles = [
-    'Sinh viên (Student)',
-    'Giảng viên (Lecturer)',
-    'Admin',
-  ];
+  bool _rememberMe = true;
 
   @override
   void dispose() {
@@ -34,21 +28,6 @@ class _LoginScreenState extends State<LoginScreen> {
   }
 
   void _handleLogin() async {
-    if (_selectedRoleIndex != 0) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          backgroundColor: AppColors.surfaceCardHigh,
-          content: Text(
-            'Cổng Giảng viên & Admin hiện hỗ trợ tốt nhất trên nền tảng Web AIVES. Đang chuyển về chế độ Sinh viên...',
-            style: AppTextStyles.bodyMd.copyWith(color: AppColors.warning),
-          ),
-          duration: const Duration(seconds: 3),
-        ),
-      );
-      setState(() => _selectedRoleIndex = 0);
-      return;
-    }
-
     final auth = context.read<AuthProvider>();
     final success = await auth.login(
       username: _usernameController.text,
@@ -63,9 +42,27 @@ class _LoginScreenState extends State<LoginScreen> {
     } else if (mounted && auth.errorMessage != null) {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
-          backgroundColor: AppColors.dangerDark,
-          content: Text(auth.errorMessage!),
+          backgroundColor: AppColors.danger,
+          behavior: SnackBarBehavior.floating,
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+          content: Row(
+            children: [
+              const Icon(Icons.error_outline_rounded, color: Colors.white, size: 20),
+              const SizedBox(width: 8),
+              Expanded(child: Text(auth.errorMessage!, style: AppTextStyles.bodySm.copyWith(color: Colors.white))),
+            ],
+          ),
         ),
+      );
+    }
+  }
+
+  void _handleQuickDemoLogin() {
+    final auth = context.read<AuthProvider>();
+    auth.loginAsDemoStudent();
+    if (mounted) {
+      Navigator.of(context).pushReplacement(
+        MaterialPageRoute(builder: (_) => const MainNavigationScreen()),
       );
     }
   }
@@ -78,28 +75,40 @@ class _LoginScreenState extends State<LoginScreen> {
       backgroundColor: AppColors.background,
       body: Stack(
         children: [
-          // Ambient Neon Glowing Orbs Background
+          // Ambient Neon Glowing Orbs Background (Theme matching Web FE)
           Positioned(
-            top: -60,
+            top: -80,
             right: -60,
-            child: Container(
-              width: 240,
-              height: 240,
-              decoration: BoxDecoration(
-                shape: BoxShape.circle,
-                color: AppColors.primary.withValues(alpha: 0.18),
-              ),
-            ),
-          ),
-          Positioned(
-            top: 200,
-            left: -80,
             child: Container(
               width: 260,
               height: 260,
               decoration: BoxDecoration(
                 shape: BoxShape.circle,
-                color: AppColors.secondary.withValues(alpha: 0.15),
+                color: AppColors.primary.withValues(alpha: 0.22),
+              ),
+            ),
+          ),
+          Positioned(
+            top: 240,
+            left: -90,
+            child: Container(
+              width: 280,
+              height: 280,
+              decoration: BoxDecoration(
+                shape: BoxShape.circle,
+                color: AppColors.secondary.withValues(alpha: 0.18),
+              ),
+            ),
+          ),
+          Positioned(
+            bottom: -60,
+            right: -40,
+            child: Container(
+              width: 220,
+              height: 220,
+              decoration: BoxDecoration(
+                shape: BoxShape.circle,
+                color: AppColors.tertiary.withValues(alpha: 0.12),
               ),
             ),
           ),
@@ -115,22 +124,22 @@ class _LoginScreenState extends State<LoginScreen> {
                     // Brand Logo & Heading
                     Center(
                       child: Container(
-                        width: 72,
-                        height: 72,
+                        width: 76,
+                        height: 76,
                         decoration: BoxDecoration(
                           gradient: AppColors.primaryGradient,
                           borderRadius: BorderRadius.circular(22),
                           boxShadow: [
                             BoxShadow(
                               color: AppColors.primary.withValues(alpha: 0.45),
-                              blurRadius: 20,
-                              offset: const Offset(0, 8),
+                              blurRadius: 24,
+                              offset: const Offset(0, 10),
                             ),
                           ],
                         ),
                         child: const Icon(
                           Icons.psychology_rounded,
-                          size: 42,
+                          size: 44,
                           color: Colors.white,
                         ),
                       ),
@@ -140,66 +149,53 @@ class _LoginScreenState extends State<LoginScreen> {
                       'AIVES',
                       textAlign: TextAlign.center,
                       style: AppTextStyles.headlineXl.copyWith(
-                        letterSpacing: 1.5,
-                        foreground: Paint()
-                          ..shader = const LinearGradient(
-                            colors: [Colors.white, AppColors.primaryGlow],
-                          ).createShader(const Rect.fromLTWH(0, 0, 200, 70)),
+                        letterSpacing: 2.0,
+                        fontSize: 32,
+                        fontWeight: FontWeight.w800,
                       ),
                     ),
                     const SizedBox(height: 6),
                     Text(
-                      'AI-Powered Viva Exam System',
+                      'Hệ Thống Khảo Thí Vấn Đáp AI',
                       textAlign: TextAlign.center,
                       style: AppTextStyles.bodySm.copyWith(
-                        color: AppColors.textMuted,
+                        color: AppColors.textSecondary,
+                        fontWeight: FontWeight.w600,
                         letterSpacing: 0.5,
                       ),
                     ),
-                    const SizedBox(height: 28),
+                    const SizedBox(height: 14),
 
-                    // Role Selector Tabs
-                    Container(
-                      padding: const EdgeInsets.all(4),
-                      decoration: BoxDecoration(
-                        color: AppColors.surfaceCardLow,
-                        borderRadius: BorderRadius.circular(16),
-                        border: Border.all(color: AppColors.borderGlass),
-                      ),
-                      child: Row(
-                        children: List.generate(_roles.length, (index) {
-                          final isSelected = _selectedRoleIndex == index;
-                          return Expanded(
-                            child: GestureDetector(
-                              onTap: () => setState(() => _selectedRoleIndex = index),
-                              child: AnimatedContainer(
-                                duration: const Duration(milliseconds: 200),
-                                padding: const EdgeInsets.symmetric(vertical: 10),
-                                decoration: BoxDecoration(
-                                  color: isSelected ? AppColors.primary : Colors.transparent,
-                                  borderRadius: BorderRadius.circular(12),
-                                  boxShadow: isSelected
-                                      ? [
-                                          BoxShadow(
-                                            color: AppColors.primary.withValues(alpha: 0.4),
-                                            blurRadius: 8,
-                                            offset: const Offset(0, 2),
-                                          )
-                                        ]
-                                      : null,
-                                ),
-                                child: Text(
-                                  index == 0 ? 'Sinh viên' : index == 1 ? 'Giảng viên' : 'Admin',
-                                  textAlign: TextAlign.center,
-                                  style: AppTextStyles.labelBold.copyWith(
-                                    fontSize: 12,
-                                    color: isSelected ? Colors.white : AppColors.textMuted,
-                                  ),
-                                ),
+                    // Dedicated Student Scope Pill
+                    Center(
+                      child: Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 6),
+                        decoration: BoxDecoration(
+                          color: AppColors.primary.withValues(alpha: 0.15),
+                          borderRadius: BorderRadius.circular(20),
+                          border: Border.all(color: AppColors.primary.withValues(alpha: 0.35)),
+                        ),
+                        child: Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            Container(
+                              width: 6,
+                              height: 6,
+                              decoration: const BoxDecoration(
+                                color: AppColors.success,
+                                shape: BoxShape.circle,
                               ),
                             ),
-                          );
-                        }),
+                            const SizedBox(width: 8),
+                            Text(
+                              'Cổng Thí Sinh • Phòng Thi Di Động',
+                              style: AppTextStyles.labelBold.copyWith(
+                                color: AppColors.primaryLight,
+                                fontSize: 11,
+                              ),
+                            ),
+                          ],
+                        ),
                       ),
                     ),
                     const SizedBox(height: 24),
@@ -207,27 +203,28 @@ class _LoginScreenState extends State<LoginScreen> {
                     // Login Card
                     GlassCard(
                       padding: const EdgeInsets.all(22),
-                      borderRadius: 20,
+                      borderRadius: 22,
+                      border: Border.all(color: AppColors.borderGlass),
                       child: Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
                           Text(
-                            'Mã số sinh viên (Student ID)',
-                            style: AppTextStyles.labelBold.copyWith(fontSize: 13),
+                            'Mã số sinh viên hoặc Email FPT',
+                            style: AppTextStyles.labelBold.copyWith(fontSize: 12),
                           ),
                           const SizedBox(height: 8),
                           TextField(
                             controller: _usernameController,
                             style: AppTextStyles.bodyMd.copyWith(color: Colors.white),
                             decoration: const InputDecoration(
-                              hintText: 'Nhập SE170245...',
+                              hintText: 'Nhập SE170245 hoặc email...',
                               prefixIcon: Icon(Icons.badge_outlined, color: AppColors.primaryLight, size: 20),
                             ),
                           ),
-                          const SizedBox(height: 18),
+                          const SizedBox(height: 16),
                           Text(
                             'Mật khẩu',
-                            style: AppTextStyles.labelBold.copyWith(fontSize: 13),
+                            style: AppTextStyles.labelBold.copyWith(fontSize: 12),
                           ),
                           const SizedBox(height: 8),
                           TextField(
@@ -250,21 +247,53 @@ class _LoginScreenState extends State<LoginScreen> {
                             ),
                           ),
                           const SizedBox(height: 12),
-                          Align(
-                            alignment: Alignment.centerRight,
-                            child: TextButton(
-                              onPressed: () {},
-                              style: TextButton.styleFrom(padding: EdgeInsets.zero),
-                              child: Text(
-                                'Quên mật khẩu?',
-                                style: AppTextStyles.bodySm.copyWith(
-                                  color: AppColors.secondaryLight,
-                                  fontWeight: FontWeight.w600,
+
+                          // Remember me & Forgot Password
+                          Row(
+                            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                            children: [
+                              GestureDetector(
+                                onTap: () => setState(() => _rememberMe = !_rememberMe),
+                                child: Row(
+                                  children: [
+                                    SizedBox(
+                                      width: 20,
+                                      height: 20,
+                                      child: Checkbox(
+                                        value: _rememberMe,
+                                        activeColor: AppColors.primary,
+                                        checkColor: Colors.white,
+                                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(4)),
+                                        side: const BorderSide(color: AppColors.borderGlass, width: 1.5),
+                                        onChanged: (v) => setState(() => _rememberMe = v ?? true),
+                                      ),
+                                    ),
+                                    const SizedBox(width: 8),
+                                    Text(
+                                      'Ghi nhớ đăng nhập',
+                                      style: AppTextStyles.bodySm.copyWith(color: AppColors.textMuted),
+                                    ),
+                                  ],
                                 ),
                               ),
-                            ),
+                              TextButton(
+                                onPressed: () {
+                                  ScaffoldMessenger.of(context).showSnackBar(
+                                    const SnackBar(content: Text('Vui lòng liên hệ Phòng Khảo thí FPT để cấp lại mật khẩu.')),
+                                  );
+                                },
+                                style: TextButton.styleFrom(padding: EdgeInsets.zero),
+                                child: Text(
+                                  'Quên mật khẩu?',
+                                  style: AppTextStyles.bodySm.copyWith(
+                                    color: AppColors.secondaryLight,
+                                    fontWeight: FontWeight.w600,
+                                  ),
+                                ),
+                              ),
+                            ],
                           ),
-                          const SizedBox(height: 16),
+                          const SizedBox(height: 18),
 
                           // Login Button
                           PrimaryButton(
@@ -273,31 +302,72 @@ class _LoginScreenState extends State<LoginScreen> {
                             isLoading: auth.isLoading,
                             onPressed: _handleLogin,
                           ),
-                          const SizedBox(height: 12),
+                          const SizedBox(height: 14),
 
-                          // Biometrics / Quick Demo Login
-                          Center(
-                            child: OutlinedButton.icon(
-                              onPressed: () {
-                                _usernameController.text = 'SE170245';
-                                _handleLogin();
-                              },
-                              icon: const Icon(Icons.fingerprint_rounded, size: 22, color: AppColors.tertiary),
-                              label: Text(
-                                'Đăng nhập nhanh với FaceID / Sinh trắc học',
-                                style: AppTextStyles.bodySm.copyWith(color: AppColors.textSecondary),
-                              ),
-                              style: OutlinedButton.styleFrom(
-                                side: const BorderSide(color: AppColors.borderGlass),
-                                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-                                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+                          // Quick Demo Student Button (1-tap login for easy testing)
+                          Container(
+                            width: double.infinity,
+                            decoration: BoxDecoration(
+                              color: AppColors.surfaceCardHigh.withValues(alpha: 0.6),
+                              borderRadius: BorderRadius.circular(14),
+                              border: Border.all(color: AppColors.borderGlow),
+                            ),
+                            child: Material(
+                              color: Colors.transparent,
+                              child: InkWell(
+                                borderRadius: BorderRadius.circular(14),
+                                onTap: _handleQuickDemoLogin,
+                                child: Padding(
+                                  padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 16),
+                                  child: Row(
+                                    mainAxisAlignment: MainAxisAlignment.center,
+                                    children: [
+                                      const Icon(Icons.flash_on_rounded, size: 18, color: AppColors.warning),
+                                      const SizedBox(width: 8),
+                                      Text(
+                                        'Đăng nhập nhanh mẫu (SE170245)',
+                                        style: AppTextStyles.labelBold.copyWith(
+                                          color: Colors.white,
+                                          fontSize: 13,
+                                        ),
+                                      ),
+                                    ],
+                                  ),
+                                ),
                               ),
                             ),
                           ),
                         ],
                       ),
                     ),
-                    const SizedBox(height: 28),
+                    const SizedBox(height: 20),
+
+                    // Lecturer / Admin notice
+                    Container(
+                      padding: const EdgeInsets.all(12),
+                      decoration: BoxDecoration(
+                        color: AppColors.surfaceCardLow.withValues(alpha: 0.7),
+                        borderRadius: BorderRadius.circular(14),
+                        border: Border.all(color: AppColors.borderGlass),
+                      ),
+                      child: Row(
+                        children: [
+                          const Icon(Icons.info_outline_rounded, size: 18, color: AppColors.primaryLight),
+                          const SizedBox(width: 10),
+                          Expanded(
+                            child: Text(
+                              'Giảng viên & Admin vui lòng sử dụng Web Portal AIVES để quản lý ngân hàng câu hỏi & ca thi.',
+                              style: AppTextStyles.bodySm.copyWith(
+                                color: AppColors.textMuted,
+                                fontSize: 11,
+                                height: 1.3,
+                              ),
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                    const SizedBox(height: 24),
 
                     // University Branding Footer
                     Row(
@@ -306,7 +376,7 @@ class _LoginScreenState extends State<LoginScreen> {
                         const Icon(Icons.school_outlined, size: 16, color: AppColors.textMuted),
                         const SizedBox(width: 6),
                         Text(
-                          'FPT University • AI Viva Exam Core v1.0',
+                          'FPT University • AIVES Mobile v2.5',
                           style: AppTextStyles.bodySm.copyWith(color: AppColors.textDisabled),
                         ),
                       ],

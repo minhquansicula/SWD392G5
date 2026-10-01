@@ -63,10 +63,12 @@ class StudentHomeScreen extends StatelessWidget {
                 gradient: AppColors.primaryGradient,
                 border: Border.all(color: AppColors.borderGlow, width: 2),
               ),
-              child: const Center(
+              child: Center(
                 child: Text(
-                  'H',
-                  style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold, color: Colors.white),
+                  user != null && user.fullName.isNotEmpty
+                      ? user.fullName[0].toUpperCase()
+                      : 'S',
+                  style: const TextStyle(fontSize: 20, fontWeight: FontWeight.bold, color: Colors.white),
                 ),
               ),
             ),
@@ -92,9 +94,13 @@ class StudentHomeScreen extends StatelessWidget {
             children: [
               Row(
                 children: [
-                  Text(
-                    'Chào Hoàng',
-                    style: AppTextStyles.headlineMd.copyWith(fontSize: 17),
+                  Expanded(
+                    child: Text(
+                      'Chào ${user != null && user.fullName.isNotEmpty ? user.fullName : "bạn"}',
+                      style: AppTextStyles.headlineMd.copyWith(fontSize: 16),
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                    ),
                   ),
                   const SizedBox(width: 4),
                   const Text('👋', style: TextStyle(fontSize: 16)),
@@ -102,7 +108,7 @@ class StudentHomeScreen extends StatelessWidget {
               ),
               const SizedBox(height: 2),
               Text(
-                '${user?.userCode ?? 'SE170245'} • Kỹ thuật Phần mềm',
+                '${user?.userCode ?? 'SE170245'} • ${user?.department ?? 'Kỹ thuật Phần mềm'}',
                 style: AppTextStyles.bodySm.copyWith(color: AppColors.textMuted),
                 maxLines: 1,
                 overflow: TextOverflow.ellipsis,

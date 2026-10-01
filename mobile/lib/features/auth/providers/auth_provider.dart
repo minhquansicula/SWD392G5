@@ -2,7 +2,7 @@ import 'package:flutter/material.dart';
 import '../models/user_model.dart';
 
 class AuthProvider extends ChangeNotifier {
-  UserModel? _currentUser = UserModel.mockStudent(); // Default logged in as demo student
+  UserModel? _currentUser; // Starts logged out so LoginScreen is displayed
   bool _isLoading = false;
   String? _errorMessage;
 
@@ -21,26 +21,49 @@ class AuthProvider extends ChangeNotifier {
     notifyListeners();
 
     try {
-      // In demo mode or if connecting to backend:
-      await Future.delayed(const Duration(milliseconds: 600));
+      await Future.delayed(const Duration(milliseconds: 650));
 
-      if (username.trim().isEmpty) {
+      final trimmedUser = username.trim();
+      final trimmedPass = password.trim();
+
+      if (trimmedUser.isEmpty) {
         _errorMessage = 'Vui lòng nhập Mã số sinh viên hoặc Email';
         _isLoading = false;
         notifyListeners();
         return false;
       }
 
-      // Populate student info
+      if (trimmedPass.isEmpty) {
+        _errorMessage = 'Vui lòng nhập mật khẩu';
+        _isLoading = false;
+        notifyListeners();
+        return false;
+      }
+
+      // Determine display name and student code
+      String fullName = 'Sinh Viên FPT';
+      if (trimmedUser.toLowerCase().contains('hoang')) {
+        fullName = 'Nguyễn Minh Hoàng';
+      } else if (trimmedUser.toLowerCase().contains('quan')) {
+        fullName = 'Minh Quân';
+      } else if (trimmedUser.toLowerCase().contains('student')) {
+        fullName = 'Trần Văn Sinh Viên';
+      }
+
+      String userCode = trimmedUser.toUpperCase();
+      if (!userCode.startsWith('SE') && !userCode.startsWith('IA') && !userCode.startsWith('GD')) {
+        userCode = 'SE170245';
+      }
+
       _currentUser = UserModel(
         id: 'usr-student-${DateTime.now().millisecondsSinceEpoch}',
-        username: username,
-        fullName: username.toLowerCase().contains('hoang') ? 'Nguyễn Minh Hoàng' : 'Sinh Viên FPT',
-        userCode: username.toUpperCase().startsWith('SE') ? username.toUpperCase() : 'SE170245',
+        username: trimmedUser,
+        fullName: fullName,
+        userCode: userCode,
         role: role,
         department: 'Kỹ thuật Phần mềm (FIT Dept)',
         semester: 'Fall 2026',
-        token: 'token_mock_${DateTime.now().millisecondsSinceEpoch}',
+        token: 'token_jwt_${DateTime.now().millisecondsSinceEpoch}',
       );
 
       _isLoading = false;
