@@ -39,8 +39,24 @@ export default function App() {
   // Navigation & View state
   const [activeModule, setActiveModule] = useState<ModuleType>('exams');
   const [examSubView, setExamSubView] = useState<ExamSubView>('list');
-  const [isCreateModalOpen, setIsCreateModalOpen] = useState(false);
   const [isMobileSidebarOpen, setIsMobileSidebarOpen] = useState(false);
+  const [isSidebarCollapsed, setIsSidebarCollapsed] = useState<boolean>(() => {
+    try {
+      return localStorage.getItem('aives_sidebar_collapsed') === 'true';
+    } catch {
+      return false;
+    }
+  });
+
+  const toggleSidebarCollapse = () => {
+    setIsSidebarCollapsed((prev) => {
+      const next = !prev;
+      try {
+        localStorage.setItem('aives_sidebar_collapsed', String(next));
+      } catch {}
+      return next;
+    });
+  };
 
   // App Theme & Preferences
   const [isDarkMode, setIsDarkMode] = useState<boolean>(() => {
@@ -142,31 +158,38 @@ export default function App() {
           setActiveModule(m);
           if (m === 'exams') setExamSubView('list');
         }}
-        isDarkMode={isDarkMode}
-        setIsDarkMode={setIsDarkMode}
-        isSoundEnabled={isSoundEnabled}
-        setIsSoundEnabled={setIsSoundEnabled}
         language={language}
-        setLanguage={setLanguage}
         currentUser={currentUser}
         onOpenAuthModal={() => setIsAuthModalOpen(true)}
-        onLogout={handleLogout}
         isOpenMobile={isMobileSidebarOpen}
         onCloseMobile={() => setIsMobileSidebarOpen(false)}
+        isCollapsed={isSidebarCollapsed}
+        onToggleCollapse={toggleSidebarCollapse}
       />
 
       {/* Main Content Area */}
       <div className="flex-1 flex flex-col min-w-0">
-        {/* Slim Top Bar */}
+        {/* Modern Utility TopBar */}
         <TopBar
-          activeModule={activeModule}
           language={language}
-          onOpenMobileSidebar={() => setIsMobileSidebarOpen(true)}
+          setLanguage={setLanguage}
+          isDarkMode={isDarkMode}
+          setIsDarkMode={setIsDarkMode}
           currentUser={currentUser}
+          onLogout={handleLogout}
+          onOpenAuthModal={() => setIsAuthModalOpen(true)}
+          onNavigateToSettings={() => {
+            setActiveModule('settings');
+            setExamSubView('list');
+          }}
+          onOpenMobileSidebar={() => setIsMobileSidebarOpen(true)}
+          isSidebarCollapsed={isSidebarCollapsed}
+          onToggleSidebarCollapse={toggleSidebarCollapse}
         />
 
         {/* Main View Container */}
         <main className="flex-1 max-w-7xl w-full mx-auto px-4 sm:px-6 lg:px-8 py-6">
+          <div key={activeModule} className="animate-tab-enter">
           {/* MODULE 1: EXAM & SCHEDULE MANAGEMENT */}
           {activeModule === 'exams' && (currentUser.role === 'LECTURER' || currentUser.role === 'ADMIN') && (
             <LecturerExamManagement key={currentUser.id} currentUser={currentUser} language={language} />
@@ -238,6 +261,7 @@ export default function App() {
               currentUser={currentUser}
             />
           )}
+          </div>
         </main>
 
         {/* Footer */}

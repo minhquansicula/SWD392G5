@@ -1,131 +1,137 @@
-import React, { useState, useRef, useEffect } from 'react';
+import React from 'react';
 import {
   BrainCircuit,
   CalendarDays,
-  Radio,
-  BarChart3,
-  Moon,
-  Sun,
-  Volume2,
-  VolumeX,
-  Sparkles,
-  Languages,
-  ShieldCheck,
-  GraduationCap,
-  Users,
-  ChevronDown,
-  LogOut,
-  LogIn,
-  Check,
-  X,
-  Menu,
-  BookOpen,
-  Settings,
   FileQuestion,
+  BarChart3,
+  ShieldCheck,
+  BookOpen,
+  LogIn,
+  X,
+  PanelLeftClose,
+  PanelLeftOpen,
 } from 'lucide-react';
-import { ModuleType, UserAccount, UserRole } from '../../types';
+import { ModuleType, UserAccount } from '../../types';
 import { Language, translations } from '../../utils/i18n';
 
 interface SidebarProps {
   activeModule: ModuleType;
   setActiveModule: (module: ModuleType) => void;
-  isDarkMode: boolean;
-  setIsDarkMode: (dark: boolean) => void;
-  isSoundEnabled: boolean;
-  setIsSoundEnabled: (enabled: boolean) => void;
   language: Language;
-  setLanguage: (lang: Language) => void;
   currentUser?: UserAccount | null;
   onOpenAuthModal?: (tab?: 'login' | 'register') => void;
-  onSwitchUser?: (username: string) => void;
-  onLogout?: () => void;
   isOpenMobile?: boolean;
   onCloseMobile?: () => void;
+  isCollapsed?: boolean;
+  onToggleCollapse?: () => void;
 }
 
 export const Sidebar: React.FC<SidebarProps> = ({
   activeModule,
   setActiveModule,
-  isDarkMode,
-  setIsDarkMode,
-  isSoundEnabled,
-  setIsSoundEnabled,
   language,
-  setLanguage,
   currentUser,
   onOpenAuthModal,
-  onSwitchUser,
-  onLogout,
   isOpenMobile = false,
   onCloseMobile,
+  isCollapsed = false,
+  onToggleCollapse,
 }) => {
   const t = translations[language];
   const isVi = language === 'vi';
-
-  const [isUserMenuOpen, setIsUserMenuOpen] = useState(false);
-  const userMenuRef = useRef<HTMLDivElement>(null);
-
-  // Close user menu on click outside
-  useEffect(() => {
-    const handleClickOutside = (e: MouseEvent) => {
-      if (userMenuRef.current && !userMenuRef.current.contains(e.target as Node)) {
-        setIsUserMenuOpen(false);
-      }
-    };
-    document.addEventListener('mousedown', handleClickOutside);
-    return () => document.removeEventListener('mousedown', handleClickOutside);
-  }, []);
-
-  const getRoleLabel = (role?: UserRole) => {
-    switch (role) {
-      case 'ADMIN':
-        return isVi ? 'Quản trị viên' : 'Admin';
-      case 'LECTURER':
-        return isVi ? 'Giảng viên' : 'Faculty';
-      case 'STUDENT':
-        return isVi ? 'Sinh viên' : 'Student';
-      default:
-        return isVi ? 'Thành viên' : 'Member';
-    }
-  };
-
-  const getRoleBadgeClasses = (role?: UserRole) => {
-    switch (role) {
-      case 'ADMIN':
-        return 'text-purple-700 dark:text-purple-300 bg-purple-100 dark:bg-purple-950/70 border-purple-200 dark:border-purple-800';
-      case 'LECTURER':
-        return 'text-indigo-700 dark:text-indigo-300 bg-indigo-100 dark:bg-indigo-950/70 border-indigo-200 dark:border-indigo-800';
-      case 'STUDENT':
-      default:
-        return 'text-emerald-700 dark:text-emerald-300 bg-emerald-100 dark:bg-emerald-950/70 border-emerald-200 dark:border-emerald-800';
-    }
-  };
 
   const handleNavClick = (module: ModuleType) => {
     setActiveModule(module);
     if (onCloseMobile) onCloseMobile();
   };
 
+  const navItems = [
+    {
+      id: 'exams' as ModuleType,
+      label: t.navExams,
+      icon: CalendarDays,
+      show: true,
+    },
+    {
+      id: 'questions' as ModuleType,
+      label: t.navQuestions,
+      icon: FileQuestion,
+      show: currentUser?.role === 'LECTURER' || currentUser?.role === 'ADMIN',
+    },
+    {
+      id: 'analytics' as ModuleType,
+      label: t.navAnalytics,
+      icon: BarChart3,
+      show: true,
+    },
+  ];
+
+  const adminItems = [
+    {
+      id: 'admin' as ModuleType,
+      label: t.navAdmin,
+      icon: ShieldCheck,
+      badge: 'PRO',
+      show: currentUser?.role === 'ADMIN',
+    },
+    {
+      id: 'courses' as ModuleType,
+      label: isVi ? 'Quản lý môn học' : 'Course Management',
+      icon: BookOpen,
+      show: currentUser?.role === 'ADMIN',
+    },
+  ];
+
   const sidebarContent = (
-    <div className="flex flex-col h-full bg-white dark:bg-slate-900 border-r border-slate-200 dark:border-slate-800/80 w-64 select-none transition-colors duration-200">
+    <div
+      className={`flex flex-col h-full bg-white dark:bg-slate-900 border-r border-slate-200 dark:border-slate-800/80 select-none transition-all duration-300 ease-in-out ${
+        isCollapsed ? 'w-20' : 'w-64'
+      }`}
+    >
       {/* 1. BRAND HEADER */}
-      <div className="p-4 border-b border-slate-200 dark:border-slate-800/80 flex items-center justify-between">
-        <button
-          onClick={() => handleNavClick('exams')}
-          className="flex items-center gap-3 text-left group focus:outline-hidden cursor-pointer"
-        >
-          <div className="h-10 w-10 rounded-xl bg-gradient-to-tr from-indigo-600 to-indigo-700 flex items-center justify-center text-white shadow-sm shadow-indigo-500/25 group-hover:scale-105 transition-transform shrink-0">
-            <BrainCircuit className="h-5 w-5" />
-          </div>
-          <div className="leading-tight">
-            <span className="font-bold text-lg tracking-tight text-slate-900 dark:text-white font-display block">
-              {t.appName}
-            </span>
-            <span className="text-[11px] text-slate-500 dark:text-slate-400 font-medium line-clamp-1">
-              {t.appSub}
-            </span>
-          </div>
-        </button>
+      <div className={`h-18 px-4 border-b border-slate-200 dark:border-slate-800/80 flex items-center ${isCollapsed ? 'justify-center' : 'justify-between'}`}>
+        {!isCollapsed ? (
+          <>
+            <button
+              onClick={() => handleNavClick('exams')}
+              className="flex items-center gap-3 text-left group focus:outline-hidden cursor-pointer min-w-0"
+            >
+              <div className="h-10 w-10 rounded-xl bg-gradient-to-tr from-indigo-600 to-indigo-700 flex items-center justify-center text-white shadow-sm shadow-indigo-500/25 group-hover:scale-105 transition-transform shrink-0">
+                <BrainCircuit className="h-5 w-5" />
+              </div>
+              <div className="leading-tight overflow-hidden transition-all duration-200">
+                <span className="font-bold text-lg tracking-tight text-slate-900 dark:text-white font-display block truncate">
+                  {t.appName}
+                </span>
+                <span className="text-[11px] text-slate-500 dark:text-slate-400 font-medium line-clamp-1 truncate">
+                  {t.appSub}
+                </span>
+              </div>
+            </button>
+
+            {/* Collapse Trigger on Desktop */}
+            {onToggleCollapse && (
+              <button
+                onClick={onToggleCollapse}
+                title={isVi ? 'Thu gọn thanh bên' : 'Collapse sidebar'}
+                className="hidden md:flex p-2 rounded-xl text-slate-400 hover:text-slate-700 dark:hover:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors cursor-pointer shrink-0"
+              >
+                <PanelLeftClose className="w-4 h-4" />
+              </button>
+            )}
+          </>
+        ) : (
+          /* When collapsed: hide logo, show clean centered expand button */
+          onToggleCollapse && (
+            <button
+              onClick={onToggleCollapse}
+              title={isVi ? 'Mở rộng thanh bên' : 'Expand sidebar'}
+              className="hidden md:flex p-2.5 rounded-xl text-slate-500 hover:text-indigo-600 dark:text-slate-400 dark:hover:text-indigo-400 hover:bg-indigo-50 dark:hover:bg-indigo-950/50 transition-all cursor-pointer items-center justify-center"
+            >
+              <PanelLeftOpen className="w-5 h-5" />
+            </button>
+          )
+        )}
 
         {/* Mobile close button */}
         {onCloseMobile && (
@@ -139,211 +145,121 @@ export const Sidebar: React.FC<SidebarProps> = ({
       </div>
 
       {/* 2. NAVIGATION LINKS */}
-      <div className="flex-1 overflow-y-auto px-3 py-4 space-y-1">
-        <div className="px-3 pb-2 text-[10px] font-bold uppercase tracking-wider text-slate-400 dark:text-slate-500">
-          {isVi ? 'Phân hệ chính' : 'Main Modules'}
-        </div>
-
-        {/* Exams */}
-        <button
-          onClick={() => handleNavClick('exams')}
-          className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-xl text-xs font-semibold transition-all cursor-pointer ${
-            activeModule === 'exams'
-              ? 'bg-indigo-50 dark:bg-indigo-950/50 text-indigo-700 dark:text-indigo-300 shadow-2xs font-bold'
-              : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white hover:bg-slate-100 dark:hover:bg-slate-800/60'
-          }`}
-        >
-          <CalendarDays
-            className={`h-4 w-4 shrink-0 ${
-              activeModule === 'exams' ? 'text-indigo-600 dark:text-indigo-400' : 'text-slate-400'
-            }`}
-          />
-          <span className="truncate">{t.navExams}</span>
-        </button>
-
-        {/* Question Bank (Lecturer & Admin) */}
-        {(currentUser?.role === 'LECTURER' || currentUser?.role === 'ADMIN') && (
-          <button
-            onClick={() => handleNavClick('questions')}
-            className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-xl text-xs font-semibold transition-all cursor-pointer ${
-              activeModule === 'questions'
-                ? 'bg-indigo-50 dark:bg-indigo-950/50 text-indigo-700 dark:text-indigo-300 shadow-2xs font-bold'
-                : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white hover:bg-slate-100 dark:hover:bg-slate-800/60'
-            }`}
-          >
-            <FileQuestion
-              className={`h-4 w-4 shrink-0 ${
-                activeModule === 'questions' ? 'text-indigo-600 dark:text-indigo-400' : 'text-slate-400'
-              }`}
-            />
-            <span className="truncate">{t.navQuestions}</span>
-          </button>
-        )}
-
-        {/* Analytics */}
-        <button
-          onClick={() => handleNavClick('analytics')}
-          className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-xl text-xs font-semibold transition-all cursor-pointer ${
-            activeModule === 'analytics'
-              ? 'bg-indigo-50 dark:bg-indigo-950/50 text-indigo-700 dark:text-indigo-300 shadow-2xs font-bold'
-              : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white hover:bg-slate-100 dark:hover:bg-slate-800/60'
-          }`}
-        >
-          <BarChart3
-            className={`h-4 w-4 shrink-0 ${
-              activeModule === 'analytics' ? 'text-indigo-600 dark:text-indigo-400' : 'text-slate-400'
-            }`}
-          />
-          <span className="truncate">{t.navAnalytics}</span>
-        </button>
-
-        {/* User Management (Admin Only or Quick Admin access) */}
-        {currentUser?.role === 'ADMIN' && (
-          <div className="pt-2">
-            <div className="px-3 pb-2 text-[10px] font-bold uppercase tracking-wider text-purple-600 dark:text-purple-400">
-              {isVi ? 'Quản trị hệ thống' : 'System Admin'}
-            </div>
-            <button
-              onClick={() => handleNavClick('admin')}
-              className={`w-full flex items-center justify-between px-3 py-2.5 rounded-xl text-xs font-semibold transition-all cursor-pointer ${
-                activeModule === 'admin'
-                  ? 'bg-purple-50 dark:bg-purple-950/50 text-purple-700 dark:text-purple-300 shadow-2xs font-bold'
-                  : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white hover:bg-slate-100 dark:hover:bg-slate-800/60'
-              }`}
-            >
-              <div className="flex items-center gap-3 truncate">
-                <ShieldCheck
-                  className={`h-4 w-4 shrink-0 ${
-                    activeModule === 'admin' ? 'text-purple-600 dark:text-purple-400' : 'text-purple-500'
-                  }`}
-                />
-                <span className="truncate">{t.navAdmin}</span>
-              </div>
-              <span className="text-[10px] font-bold px-1.5 py-0.5 rounded-md bg-purple-100 dark:bg-purple-900 text-purple-700 dark:text-purple-300">
-                PRO
-              </span>
-            </button>
-
-            {/* Course Management */}
-            <button
-              onClick={() => handleNavClick('courses')}
-              className={`w-full flex items-center justify-between px-3 py-2.5 rounded-xl text-xs font-semibold transition-all cursor-pointer ${
-                activeModule === 'courses'
-                  ? 'bg-purple-50 dark:bg-purple-950/50 text-purple-700 dark:text-purple-300 shadow-2xs font-bold'
-                  : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white hover:bg-slate-100 dark:hover:bg-slate-800/60'
-              }`}
-            >
-              <div className="flex items-center gap-3 truncate">
-                <BookOpen
-                  className={`h-4 w-4 shrink-0 ${
-                    activeModule === 'courses' ? 'text-purple-600 dark:text-purple-400' : 'text-purple-500'
-                  }`}
-                />
-                <span className="truncate">{isVi ? 'Quản lý môn học' : 'Course Management'}</span>
-              </div>
-            </button>
-          </div>
-        )}
-      </div>
-
-      {/* 3. USER ACCOUNT WIDGET (Bottom of Sidebar) */}
-      <div className="p-3 border-t border-slate-200 dark:border-slate-800/80 relative" ref={userMenuRef}>
-        {currentUser ? (
-          <div>
-            <button
-              onClick={() => setIsUserMenuOpen(!isUserMenuOpen)}
-              className="w-full flex items-center gap-2.5 p-2 rounded-xl border border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-800/70 hover:border-indigo-400 dark:hover:border-indigo-500 transition-all text-left cursor-pointer"
-            >
-              <div className="w-8 h-8 rounded-lg bg-gradient-to-tr from-indigo-600 to-purple-600 text-white font-bold flex items-center justify-center text-xs shadow-2xs shrink-0">
-                {(currentUser.fullName || (currentUser as any).name || currentUser.username || 'User')
-                  .slice(0, 2)
-                  .toUpperCase()}
-              </div>
-              <div className="flex-1 min-w-0">
-                <div className="flex items-center justify-between gap-1">
-                  <p className="text-xs font-bold text-slate-900 dark:text-white truncate">
-                    {currentUser.fullName || (currentUser as any).name || currentUser.username || 'User'}
-                  </p>
-                </div>
-                <div className="flex items-center gap-1.5 mt-0.5">
-                  <span
-                    className={`text-[9px] font-bold px-1.5 py-0.2 rounded-md border leading-tight ${getRoleBadgeClasses(
-                      currentUser.role
-                    )}`}
-                  >
-                    {getRoleLabel(currentUser.role)}
-                  </span>
-                  <span className="text-[10px] text-slate-400 font-mono truncate">
-                    @{currentUser.username || 'user'}
-                  </span>
-                </div>
-              </div>
-              <ChevronDown
-                className={`w-3.5 h-3.5 text-slate-400 transition-transform duration-150 ${
-                  isUserMenuOpen ? 'rotate-180' : ''
-                }`}
-              />
-            </button>
-
-            {/* Popup Menu */}
-            {isUserMenuOpen && (
-              <div className="absolute bottom-full left-3 right-3 mb-2 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl shadow-xl py-2 z-50 animate-in fade-in zoom-in-95 duration-150">
-                <div className="px-3.5 py-2 border-b border-slate-100 dark:border-slate-800/80">
-                  <p className="text-xs font-bold text-slate-900 dark:text-white truncate">
-                    {currentUser.fullName || (currentUser as any).name || currentUser.username || 'User'}
-                  </p>
-                  <p className="text-[11px] text-slate-400 font-mono truncate mt-0.5">
-                    {currentUser.email}
-                  </p>
-                </div>
-
-                {/* Settings Action Button */}
-                <div className="pt-1 px-1">
-                  <button
-                    onClick={() => {
-                      setIsUserMenuOpen(false);
-                      handleNavClick('settings');
-                    }}
-                    className="w-full flex items-center gap-2 px-2.5 py-2 rounded-lg text-xs text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800/70 transition-colors text-left cursor-pointer font-medium"
-                  >
-                    <Settings className="w-4 h-4 text-slate-500" />
-                    <span>{isVi ? 'Cài đặt' : 'Settings'}</span>
-                  </button>
-                </div>
-
-                {/* Logout Action Button */}
-                <div className="pt-1 px-1">
-                  <button
-                    onClick={() => {
-                      setIsUserMenuOpen(false);
-                      if (onLogout) onLogout();
-                    }}
-                    className="w-full flex items-center gap-2 px-2.5 py-2 rounded-lg text-xs text-rose-600 dark:text-rose-400 hover:bg-rose-50 dark:hover:bg-rose-950/30 transition-colors text-left cursor-pointer font-medium"
-                  >
-                    <LogOut className="w-4 h-4" />
-                    <span>{isVi ? 'Đăng xuất' : 'Log Out'}</span>
-                  </button>
-                </div>
-              </div>
-            )}
+      <div className="flex-1 overflow-y-auto px-2.5 sm:px-3 py-4 space-y-1.5">
+        {/* Section 1: Main Modules */}
+        {!isCollapsed ? (
+          <div className="px-3 pb-2 text-[10px] font-bold uppercase tracking-wider text-slate-400 dark:text-slate-500">
+            {isVi ? 'Phân hệ chính' : 'Main Modules'}
           </div>
         ) : (
-          <button
-            onClick={() => onOpenAuthModal && onOpenAuthModal('login')}
-            className="w-full py-2.5 px-3 rounded-xl bg-indigo-600 hover:bg-indigo-700 active:scale-[0.99] text-white text-xs font-semibold shadow-xs flex items-center justify-center gap-2 transition-all cursor-pointer"
-          >
-            <LogIn className="w-4 h-4" />
-            <span>{isVi ? 'Đăng nhập' : 'Sign In'}</span>
-          </button>
+          <div className="w-6 h-0.5 bg-slate-200 dark:bg-slate-800 mx-auto my-2 rounded-full" />
+        )}
+
+        {navItems
+          .filter((item) => item.show)
+          .map((item) => {
+            const Icon = item.icon;
+            const isActive = activeModule === item.id;
+            return (
+              <button
+                key={item.id}
+                onClick={() => handleNavClick(item.id)}
+                title={isCollapsed ? item.label : undefined}
+                className={`w-full flex items-center transition-all cursor-pointer rounded-xl ${
+                  isCollapsed
+                    ? 'justify-center p-3'
+                    : 'gap-3 px-3 py-2.5 text-xs font-semibold'
+                } ${
+                  isActive
+                    ? 'bg-indigo-50 dark:bg-indigo-950/60 text-indigo-700 dark:text-indigo-300 font-bold shadow-2xs'
+                    : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white hover:bg-slate-100 dark:hover:bg-slate-800/60'
+                }`}
+              >
+                <Icon
+                  className={`h-4 w-4 shrink-0 transition-transform ${
+                    isActive ? 'text-indigo-600 dark:text-indigo-400 scale-110' : 'text-slate-400'
+                  }`}
+                />
+                {!isCollapsed && <span className="truncate">{item.label}</span>}
+              </button>
+            );
+          })}
+
+        {/* Section 2: System Admin */}
+        {currentUser?.role === 'ADMIN' && (
+          <div className="pt-3">
+            {!isCollapsed ? (
+              <div className="px-3 pb-2 text-[10px] font-bold uppercase tracking-wider text-purple-600 dark:text-purple-400">
+                {isVi ? 'Quản trị hệ thống' : 'System Admin'}
+              </div>
+            ) : (
+              <div className="w-6 h-0.5 bg-purple-200 dark:bg-purple-900/60 mx-auto my-2 rounded-full" />
+            )}
+
+            {adminItems
+              .filter((item) => item.show)
+              .map((item) => {
+                const Icon = item.icon;
+                const isActive = activeModule === item.id;
+                return (
+                  <button
+                    key={item.id}
+                    onClick={() => handleNavClick(item.id)}
+                    title={isCollapsed ? item.label : undefined}
+                    className={`w-full flex items-center transition-all cursor-pointer rounded-xl ${
+                      isCollapsed
+                        ? 'justify-center p-3'
+                        : 'justify-between px-3 py-2.5 text-xs font-semibold'
+                    } ${
+                      isActive
+                        ? 'bg-purple-50 dark:bg-purple-950/60 text-purple-700 dark:text-purple-300 font-bold shadow-2xs'
+                        : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white hover:bg-slate-100 dark:hover:bg-slate-800/60'
+                    }`}
+                  >
+                    <div className="flex items-center gap-3 truncate">
+                      <Icon
+                        className={`h-4 w-4 shrink-0 ${
+                          isActive
+                            ? 'text-purple-600 dark:text-purple-400'
+                            : 'text-purple-500/80'
+                        }`}
+                      />
+                      {!isCollapsed && <span className="truncate">{item.label}</span>}
+                    </div>
+                    {!isCollapsed && item.badge && (
+                      <span className="text-[10px] font-bold px-1.5 py-0.5 rounded-md bg-purple-100 dark:bg-purple-900/80 text-purple-700 dark:text-purple-300">
+                        {item.badge}
+                      </span>
+                    )}
+                  </button>
+                );
+              })}
+          </div>
         )}
       </div>
+
+      {/* 3. SIDEBAR FOOTER: Log out is removed per user request */}
+      {!currentUser && (
+        <div className="p-3 border-t border-slate-200 dark:border-slate-800/80">
+          <button
+            onClick={() => onOpenAuthModal && onOpenAuthModal('login')}
+            title={isCollapsed ? (isVi ? 'Đăng nhập' : 'Sign In') : undefined}
+            className={`w-full py-2.5 rounded-xl bg-indigo-600 hover:bg-indigo-700 active:scale-[0.99] text-white text-xs font-semibold shadow-xs flex items-center justify-center transition-all cursor-pointer ${
+              isCollapsed ? 'px-0' : 'px-3 gap-2'
+            }`}
+          >
+            <LogIn className="w-4 h-4 shrink-0" />
+            {!isCollapsed && <span>{isVi ? 'Đăng nhập' : 'Sign In'}</span>}
+          </button>
+        </div>
+      )}
     </div>
   );
 
   return (
     <>
       {/* Desktop Fixed Sidebar */}
-      <aside className="hidden md:flex flex-col shrink-0 h-screen sticky top-0 z-30">
+      <aside className="hidden md:flex flex-col shrink-0 h-screen sticky top-0 z-30 transition-all duration-300 ease-in-out">
         {sidebarContent}
       </aside>
 

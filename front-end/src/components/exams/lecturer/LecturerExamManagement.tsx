@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { BookOpen, Calendar, ChevronLeft, ChevronRight, Plus, RefreshCw, Users } from 'lucide-react';
+import { BookOpen, Calendar, ChevronLeft, ChevronRight, Plus, RefreshCw, Users, Sparkles } from 'lucide-react';
 import type { ExamPage, ExamSort } from '../../../types/examApi';
 import type { UserAccount } from '../../../types';
 import { lecturerExamService } from '../../../services/lecturerExamService';
@@ -46,25 +46,55 @@ export function LecturerExamManagement({ currentUser, language }: Props) {
   const isAdmin = currentUser.role === 'ADMIN';
 
   return <div className="space-y-6">
-    <header className="flex flex-wrap items-start justify-between gap-4">
-      <div>
-        <p className="mb-1 text-xs font-semibold uppercase tracking-wider text-indigo-600 dark:text-indigo-400">
-          {isAdmin ? t('Không gian quản trị viên', 'Admin workspace') : t('Không gian giảng viên', 'Lecturer workspace')}
-        </p>
-        <h1 className="text-2xl font-bold sm:text-3xl">
-          {t('Kỳ thi & lịch thi vấn đáp', 'Viva examinations & schedules')}
-        </h1>
-        <p className="mt-2 max-w-2xl text-sm text-slate-500 dark:text-slate-400">
-          {isAdmin
-            ? t('Quản lý tất cả kỳ thi và lịch thi trong hệ thống. Dữ liệu được tải trực tiếp từ hệ thống.', 'Manage all examinations and schedules in the system. Data is loaded directly from the system.')
-            : t('Quản lý kỳ thi của bạn và xem kỳ thi thuộc môn học được phân công. Dữ liệu được tải trực tiếp từ hệ thống.', 'Manage your examinations and view exams for assigned courses. Data is loaded directly from the system.')}
-        </p>
+    {/* Welcome Hero Banner (Matching modern EdTech reference style) */}
+    <div className="relative overflow-hidden rounded-3xl bg-gradient-to-r from-indigo-600 via-indigo-700 to-purple-700 dark:from-indigo-950 dark:via-purple-950 dark:to-slate-900 border border-indigo-500/20 text-white p-6 sm:p-8 shadow-xl shadow-indigo-600/10">
+      <div className="absolute -top-12 -right-12 w-64 h-64 bg-white/10 dark:bg-indigo-500/10 rounded-full blur-3xl pointer-events-none" />
+      <div className="absolute -bottom-8 -left-8 w-48 h-48 bg-purple-500/15 rounded-full blur-2xl pointer-events-none" />
+
+      <div className="relative z-10 flex flex-col md:flex-row md:items-center justify-between gap-6">
+        <div className="max-w-xl">
+          <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-white/15 dark:bg-white/10 backdrop-blur-md text-xs font-semibold mb-3 border border-white/20">
+            <Sparkles className="w-3.5 h-3.5 text-amber-300" />
+            <span>{isAdmin ? t('Không gian Quản trị viên', 'Admin Workspace') : t('Không gian Giảng viên', 'Faculty Workspace')}</span>
+            <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" />
+          </div>
+
+          <h1 className="text-2xl sm:text-3xl font-extrabold tracking-tight">
+            {t('Xin chào', 'Welcome back')}, {currentUser.fullName || currentUser.username}! 👋
+          </h1>
+
+          <p className="mt-2 text-sm sm:text-base text-indigo-100 dark:text-slate-300 leading-relaxed">
+            {isAdmin
+              ? t(
+                  'Hệ thống AIVES đang quản lý các kỳ thi vấn đáp AI. Bạn có toàn quyền thiết lập lịch thi, môn học và phân quyền tài khoản.',
+                  'AIVES manages AI oral examinations. You have full authority over exam schedules, courses, and user access.'
+                )
+              : t(
+                  'Theo dõi và cấu hình các kỳ thi vấn đáp do bạn phụ trách. Đề thi và rubric sẽ được chuyển tự động tới ứng dụng Mobile của sinh viên.',
+                  'Manage viva exams under your supervision. Exam blueprints and rubrics will sync automatically to the Student Mobile app.'
+                )}
+          </p>
+        </div>
+
+        <div className="flex flex-wrap items-center gap-3 shrink-0">
+          <button
+            onClick={() => setCreateOpen(true)}
+            className="inline-flex items-center gap-2 px-5 py-3 rounded-2xl bg-white hover:bg-slate-50 text-indigo-900 text-sm font-bold shadow-lg shadow-black/10 hover:shadow-xl transition-all active:scale-[0.98] cursor-pointer"
+          >
+            <Plus className="w-4 h-4 text-indigo-600" />
+            <span>{t('Tạo kỳ thi mới', 'Create New Exam')}</span>
+          </button>
+          <button
+            disabled={loading}
+            onClick={() => setReload(r => r + 1)}
+            className="inline-flex items-center gap-2 px-4 py-3 rounded-2xl bg-white/10 hover:bg-white/20 text-white text-sm font-semibold border border-white/20 backdrop-blur-md transition-all cursor-pointer"
+          >
+            <RefreshCw className={`w-4 h-4 ${loading ? 'animate-spin' : ''}`} />
+            <span>{t('Làm mới', 'Refresh')}</span>
+          </button>
+        </div>
       </div>
-      <div className="flex flex-wrap gap-2">
-        <ExamButton disabled={loading} onClick={() => setReload(r => r + 1)}><RefreshCw aria-hidden="true" className="h-4 w-4" />{t('Tải lại', 'Reload')}</ExamButton>
-        <ExamButton primary onClick={() => setCreateOpen(true)}><Plus aria-hidden="true" className="h-4 w-4" />{t('Tạo kỳ thi', 'Create exam')}</ExamButton>
-      </div>
-    </header>
+    </div>
     <div className={`${panelClass} grid gap-4 sm:grid-cols-[1fr_180px_140px]`}>
       <div className="self-center">
         <p className="text-sm text-slate-500 dark:text-slate-400">
