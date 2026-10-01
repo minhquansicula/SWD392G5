@@ -1,5 +1,5 @@
 import React from 'react';
-import { Menu, CalendarDays, Radio, BarChart3, ShieldCheck, FileQuestion } from 'lucide-react';
+import { Menu, CalendarDays, BarChart3, ShieldCheck, FileQuestion } from 'lucide-react';
 import { ModuleType, UserAccount } from '../../types';
 import { Language, translations } from '../../utils/i18n';
 
@@ -32,12 +32,6 @@ export const TopBar: React.FC<TopBarProps> = ({
           title: t.navQuestions,
           subtitle: isVi ? 'Ngân hàng câu hỏi thi vấn đáp theo từng môn học' : 'Course question bank & AI evaluation guides',
           icon: <FileQuestion className="w-4 h-4 text-indigo-500" />,
-        };
-      case 'interview':
-        return {
-          title: t.navInterview,
-          subtitle: isVi ? 'Phiên vấn đáp 1-kèm-1 trực tiếp với Giám khảo AI' : 'Live 1-on-1 AI Oral examination',
-          icon: <Radio className="w-4 h-4 text-rose-500" />,
         };
       case 'analytics':
         return {

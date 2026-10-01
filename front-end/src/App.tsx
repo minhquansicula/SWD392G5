@@ -19,7 +19,6 @@ import { Sidebar } from './components/common/Sidebar';
 import { TopBar } from './components/common/TopBar';
 import { StudentScheduleList } from './components/exams/student/StudentScheduleList';
 import { LecturerExamManagement } from './components/exams/lecturer/LecturerExamManagement';
-import { LiveVivaRoom } from './components/interview/LiveVivaRoom';
 import { ResultAnalyticsView } from './components/analytics/ResultAnalyticsView';
 import { UserManagementPage } from './components/admin/UserManagementPage';
 import { CourseManagementPage } from './components/admin/CourseManagementPage';
@@ -75,7 +74,6 @@ export default function App() {
   const [exams, setExams] = useState<Exam[]>(mockExams);
   const [assignments, setAssignments] = useState<StudentAssignment[]>(mockStudentAssignments);
   const [selectedExam, setSelectedExam] = useState<Exam>(mockExams[0]);
-  const [selectedCandidate, setSelectedCandidate] = useState<StudentAssignment>(mockStudentAssignments[0]);
 
   // Analytics Data
   const [studentReport, setStudentReport] = useState<StudentEvaluationReport>(mockStudentEvaluation);
@@ -103,35 +101,6 @@ export default function App() {
     setExamSubView('detail');
   };
 
-  // Launch Live Viva
-  const handleLaunchViva = (exam: Exam, candidate?: StudentAssignment) => {
-    setSelectedExam(exam);
-    if (candidate) {
-      setSelectedCandidate(candidate);
-    } else {
-      const cand = assignments.find((a) => a.examId === exam.id) || assignments[0];
-      setSelectedCandidate(cand);
-    }
-    setActiveModule('interview');
-  };
-
-  // Finish Viva -> updates candidate score and navigates to report
-  const handleFinishViva = (score: number = 44) => {
-    const updated = assignments.map((a) =>
-      a.id === selectedCandidate.id
-        ? { ...a, status: 'completed' as const, score }
-        : a
-    );
-    setAssignments(updated);
-
-    setStudentReport({
-      ...studentReport,
-      totalScore: score,
-      evaluatedAt: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
-    });
-
-    setActiveModule('analytics');
-  };
 
   // Logout Handler
   const handleLogout = () => {
@@ -211,20 +180,6 @@ export default function App() {
             <QuestionBankPage currentUser={currentUser} language={language} />
           )}
 
-          {/* MODULE 2: LIVE AI VIVA ORAL INTERVIEW */}
-          {activeModule === 'interview' && (
-            <LiveVivaRoom
-              exam={selectedExam}
-              candidate={selectedCandidate}
-              onFinishViva={handleFinishViva}
-              onExit={() => {
-                setActiveModule('exams');
-                setExamSubView('list');
-              }}
-              isSoundEnabled={isSoundEnabled}
-              language={language}
-            />
-          )}
 
           {/* MODULE 3: RESULT & ANALYTICS DASHBOARD */}
           {activeModule === 'analytics' && (

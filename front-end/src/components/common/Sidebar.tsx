@@ -180,29 +180,6 @@ export const Sidebar: React.FC<SidebarProps> = ({
           </button>
         )}
 
-        {/* Live Viva */}
-        <button
-          onClick={() => handleNavClick('interview')}
-          className={`w-full flex items-center justify-between px-3 py-2.5 rounded-xl text-xs font-semibold transition-all cursor-pointer ${
-            activeModule === 'interview'
-              ? 'bg-rose-50 dark:bg-rose-950/50 text-rose-700 dark:text-rose-300 shadow-2xs font-bold'
-              : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white hover:bg-slate-100 dark:hover:bg-slate-800/60'
-          }`}
-        >
-          <div className="flex items-center gap-3 truncate">
-            <Radio
-              className={`h-4 w-4 shrink-0 ${
-                activeModule === 'interview' ? 'text-rose-600 dark:text-rose-400' : 'text-slate-400'
-              }`}
-            />
-            <span className="truncate">{t.navInterview}</span>
-          </div>
-          <span className="relative flex h-2 w-2 shrink-0">
-            <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-rose-400 opacity-75"></span>
-            <span className="relative inline-flex rounded-full h-2 w-2 bg-rose-500"></span>
-          </span>
-        </button>
-
         {/* Analytics */}
         <button
           onClick={() => handleNavClick('analytics')}

@@ -2,7 +2,6 @@ import React, { useState, useRef, useEffect } from 'react';
 import {
   BrainCircuit,
   CalendarDays,
-  Radio,
   BarChart3,
   Moon,
   Sun,
@@ -131,18 +130,6 @@ export const Header: React.FC<HeaderProps> = ({
             >
               <CalendarDays className="h-4 w-4" />
               <span>{t.navExams}</span>
-            </button>
-
-            <button
-              onClick={() => setActiveModule('interview')}
-              className={`flex items-center gap-2 px-3.5 py-1.5 rounded-lg transition-all cursor-pointer ${
-                activeModule === 'interview'
-                  ? 'bg-white dark:bg-slate-800 text-rose-600 dark:text-rose-400 shadow-xs'
-                  : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white'
-              }`}
-            >
-              <Radio className="h-4 w-4 text-rose-500" />
-              <span>{t.navInterview}</span>
             </button>
 
             <button
@@ -324,17 +311,6 @@ export const Header: React.FC<HeaderProps> = ({
           >
             <CalendarDays className="h-3.5 w-3.5" />
             <span>{t.navExams}</span>
-          </button>
-          <button
-            onClick={() => setActiveModule('interview')}
-            className={`flex items-center gap-1.5 px-3 py-1 rounded-lg ${
-              activeModule === 'interview'
-                ? 'bg-rose-100 dark:bg-rose-950 text-rose-700 dark:text-rose-300'
-                : 'text-slate-600 dark:text-slate-400'
-            }`}
-          >
-            <Radio className="h-3.5 w-3.5 text-rose-500" />
-            <span>{t.navInterview}</span>
           </button>
           <button
             onClick={() => setActiveModule('analytics')}
