@@ -7,7 +7,6 @@ import {
   Moon,
   ChevronDown,
   LogOut,
-  Settings,
   X,
   Calendar,
   PanelLeftClose,
@@ -24,7 +23,6 @@ interface TopBarProps {
   currentUser?: UserAccount | null;
   onLogout?: () => void;
   onOpenAuthModal?: (tab?: 'login' | 'register') => void;
-  onNavigateToSettings?: () => void;
   onOpenMobileSidebar: () => void;
   isSidebarCollapsed?: boolean;
   onToggleSidebarCollapse?: () => void;
@@ -65,7 +63,6 @@ export const TopBar: React.FC<TopBarProps> = ({
   currentUser,
   onLogout,
   onOpenAuthModal,
-  onNavigateToSettings,
   onOpenMobileSidebar,
   isSidebarCollapsed = false,
   onToggleSidebarCollapse,
@@ -337,19 +334,6 @@ export const TopBar: React.FC<TopBarProps> = ({
                 </div>
 
                 <div className="p-1">
-                  {onNavigateToSettings && (
-                    <button
-                      onClick={() => {
-                        setIsUserMenuOpen(false);
-                        onNavigateToSettings();
-                      }}
-                      className="w-full flex items-center gap-2.5 px-3 py-2 rounded-xl text-xs font-medium text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors text-left cursor-pointer"
-                    >
-                      <Settings className="w-4 h-4 text-slate-400" />
-                      <span>{isVi ? 'Cài đặt tài khoản' : 'Account Settings'}</span>
-                    </button>
-                  )}
-
                   {onLogout && (
                     <button
                       onClick={() => {

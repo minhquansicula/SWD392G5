@@ -2,18 +2,8 @@ import React, { useState, useEffect } from 'react';
 import {
   ModuleType,
   ExamSubView,
-  Exam,
-  StudentAssignment,
-  StudentEvaluationReport,
-  ClassAnalyticsData,
   UserAccount,
 } from './types';
-import {
-  mockExams,
-  mockStudentAssignments,
-  mockStudentEvaluation,
-  mockClassAnalytics,
-} from './data/mockData';
 import { Language } from './utils/i18n';
 import { Sidebar } from './components/common/Sidebar';
 import { TopBar } from './components/common/TopBar';
@@ -23,7 +13,6 @@ import { ResultAnalyticsView } from './components/analytics/ResultAnalyticsView'
 import { UserManagementPage } from './components/admin/UserManagementPage';
 import { CourseManagementPage } from './components/admin/CourseManagementPage';
 import { QuestionBankPage } from './components/questions/QuestionBankPage';
-import { SettingsPage } from './components/settings/SettingsPage';
 import { AuthModal } from './components/auth/AuthModal';
 import { AuthLandingPage } from './components/auth/AuthLandingPage';
 import {
@@ -86,15 +75,6 @@ export default function App() {
     }
   }, [currentUser, activeModule]);
 
-  // Active Entities
-  const [exams, setExams] = useState<Exam[]>(mockExams);
-  const [assignments, setAssignments] = useState<StudentAssignment[]>(mockStudentAssignments);
-  const [selectedExam, setSelectedExam] = useState<Exam>(mockExams[0]);
-
-  // Analytics Data
-  const [studentReport, setStudentReport] = useState<StudentEvaluationReport>(mockStudentEvaluation);
-  const [classAnalytics, setClassAnalytics] = useState<ClassAnalyticsData>(mockClassAnalytics);
-
   // Apply dark mode class to root HTML element & persist
   useEffect(() => {
     try {
@@ -109,13 +89,6 @@ export default function App() {
       // Ignore if localStorage is restricted
     }
   }, [isDarkMode]);
-
-  // Handle creating a new exam
-  const handleCreateExam = (newExam: Exam) => {
-    setExams([newExam, ...exams]);
-    setSelectedExam(newExam);
-    setExamSubView('detail');
-  };
 
 
   // Logout Handler
@@ -178,10 +151,6 @@ export default function App() {
           currentUser={currentUser}
           onLogout={handleLogout}
           onOpenAuthModal={() => setIsAuthModalOpen(true)}
-          onNavigateToSettings={() => {
-            setActiveModule('settings');
-            setExamSubView('list');
-          }}
           onOpenMobileSidebar={() => setIsMobileSidebarOpen(true)}
           isSidebarCollapsed={isSidebarCollapsed}
           onToggleSidebarCollapse={toggleSidebarCollapse}
@@ -207,27 +176,8 @@ export default function App() {
           {/* MODULE 3: RESULT & ANALYTICS DASHBOARD */}
           {activeModule === 'analytics' && (
             <ResultAnalyticsView
-              report={studentReport}
-              analytics={classAnalytics}
-              assignments={assignments}
               language={language}
-              onSelectCandidate={(candId) => {
-                if (candId === 'stu-9922') {
-                  setStudentReport({
-                    ...studentReport,
-                    studentId: 'stu-9922',
-                    studentName: 'Marcus Chen',
-                    matriculationNo: 'CS2023-8849',
-                    totalScore: 38,
-                    percentage: 76,
-                    gradeLetter: 'B+',
-                    cohortPercentile: 72.4,
-                    durationSpentMinutes: 15.0,
-                  });
-                } else {
-                  setStudentReport(mockStudentEvaluation);
-                }
-              }}
+              currentUser={currentUser}
             />
           )}
 
@@ -246,19 +196,6 @@ export default function App() {
             <CourseManagementPage
               language={language}
               onNavigateToUsers={() => setActiveModule('admin')}
-            />
-          )}
-
-          {/* MODULE 6: SYSTEM SETTINGS */}
-          {activeModule === 'settings' && (
-            <SettingsPage
-              isDarkMode={isDarkMode}
-              setIsDarkMode={setIsDarkMode}
-              isSoundEnabled={isSoundEnabled}
-              setIsSoundEnabled={setIsSoundEnabled}
-              language={language}
-              setLanguage={setLanguage}
-              currentUser={currentUser}
             />
           )}
           </div>
