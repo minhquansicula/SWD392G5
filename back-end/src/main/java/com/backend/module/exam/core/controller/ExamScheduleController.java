@@ -1,5 +1,6 @@
 package com.backend.module.exam.core.controller;
 
+import com.backend.module.auth.api.dto.UserDto;
 import com.backend.module.exam.api.dto.*;
 import com.backend.module.exam.api.service.ExamScheduleService;
 import com.backend.shared.response.ApiResponse;
@@ -20,6 +21,13 @@ import java.util.UUID;
 @PreAuthorize("hasAnyRole('LECTURER', 'ADMIN')")
 public class ExamScheduleController {
     private final ExamScheduleService scheduleService;
+
+    @Operation(summary = "Search students for scheduling by student code, name, username, or email")
+    @GetMapping("/api/lecturer/students")
+    public ResponseEntity<ApiResponse<List<UserDto>>> searchStudents(
+            @RequestParam(required = false, defaultValue = "") String query) {
+        return ResponseEntity.ok(ApiResponse.ok("Students searched successfully", scheduleService.searchStudents(query)));
+    }
 
     @Operation(summary = "Add student schedules atomically")
     @PostMapping("/api/lecturer/exams/{examId}/schedules")

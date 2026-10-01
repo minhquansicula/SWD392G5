@@ -218,4 +218,9 @@ public class ExamScheduleServiceImpl implements ExamScheduleService {
     private ExamScheduleDto dto(ExamSchedule schedule) {
         return mapper.schedules(List.of(schedule)).get(0);
     }
+
+    @Override
+    public List<UserDto> searchStudents(String query) {
+        return users.searchStudents(query, 20);
+    }
 }

@@ -8,6 +8,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.util.Collection;
+import java.util.List;
 import java.util.Map;
 import java.util.UUID;
 import java.util.function.Function;
@@ -25,5 +26,16 @@ public class UserLookupServiceImpl implements UserLookupService {
         return userRepository.findAllById(ids).stream()
                 .map(UserDtoMapper::toDto)
                 .collect(Collectors.toMap(UserDto::getId, Function.identity()));
+    }
+
+    @Override
+    public List<UserDto> searchStudents(String query, int limit) {
+        int pageSize = (limit <= 0 || limit > 50) ? 20 : limit;
+        String sanitizedQuery = query == null ? "" : query.trim();
+        org.springframework.data.domain.Pageable pageable = org.springframework.data.domain.PageRequest.of(0, pageSize, org.springframework.data.domain.Sort.by("fullName").ascending());
+        return userRepository.searchStudents(com.backend.module.auth.core.enums.Role.STUDENT, sanitizedQuery, pageable)
+                .stream()
+                .map(UserDtoMapper::toDto)
+                .toList();
     }
 }

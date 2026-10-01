@@ -105,3 +105,20 @@
 .animate-float-3 {
   animation: floatOrb3 14s ease-in-out infinite;
 }
+
+/* Silky smooth tab switch animation */
+@keyframes tabEnter {
+  0% {
+    opacity: 0;
+    transform: translateY(10px) scale(0.995);
+  }
+  100% {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
+
+.animate-tab-enter {
+  animation: tabEnter 0.28s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+  will-change: opacity, transform;
+}

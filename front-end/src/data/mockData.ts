@@ -155,7 +155,7 @@ export const mockExams: Exam[] = [
     title: 'Clinical Pharmacology: Antimicrobial Stewardship',
     course: 'Doctor of Medicine (M.D.) - Stage 2',
     department: 'School of Clinical Medicine',
-    term: 'Spring 2026',
+    term: 'Fall 2026',
     status: 'scheduled',
     scheduledDate: '2026-09-22',
     vivaDurationMin: 20,

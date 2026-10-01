@@ -11,8 +11,6 @@ import {
   Loader2,
   AlertTriangle,
   GraduationCap,
-  Sparkles,
-  Layers,
   Users,
   UserPlus,
   UserCheck,
@@ -116,6 +114,14 @@ export const CourseManagementPage: React.FC<CourseManagementPageProps> = ({
         c.courseName.toLowerCase().includes(q)
     );
   }, [courses, searchQuery]);
+
+  // Real course metrics
+  const courseStats = useMemo(() => {
+    const total = courses.length;
+    const assigned = courses.filter((c) => (c.lecturerCount ?? c.lecturers?.length ?? 0) > 0).length;
+    const unassigned = total - assigned;
+    return { total, assigned, unassigned };
+  }, [courses]);
 
   // Available & Filtered Lecturers for Assignment Modal
   const availableLecturers = useMemo(() => {
@@ -398,10 +404,6 @@ export const CourseManagementPage: React.FC<CourseManagementPageProps> = ({
             <span className="text-xs font-bold uppercase tracking-wider text-indigo-600 dark:text-indigo-400 bg-indigo-50 dark:bg-indigo-950/60 px-2.5 py-1 rounded-md border border-indigo-200 dark:border-indigo-800">
               {isVi ? 'Hệ thống AIVES' : 'AIVES System'}
             </span>
-            <span className="text-xs text-slate-400">•</span>
-            <span className="text-xs text-slate-500 dark:text-slate-400 font-medium">
-              {isVi ? 'Dữ liệu CSDL thời gian thực' : 'Real-time Database'}
-            </span>
           </div>
           <h1 className="text-2xl sm:text-3xl font-extrabold text-slate-900 dark:text-white tracking-tight">
             {isVi ? 'Quản Lý Môn Học & Học Phần' : 'Course & Subject Management'}
@@ -448,44 +450,44 @@ export const CourseManagementPage: React.FC<CourseManagementPageProps> = ({
             </div>
           </div>
           <p className="text-2xl sm:text-3xl font-extrabold text-slate-900 dark:text-white mt-2">
-            {courses.length}
+            {courseStats.total}
           </p>
           <p className="text-[11px] text-slate-500 dark:text-slate-400 mt-1">
-            {isVi ? 'Đang hoạt động trong CSDL' : 'Active courses in DB'}
-          </p>
-        </div>
-
-        <div className="p-4 rounded-2xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 shadow-xs">
-          <div className="flex items-center justify-between">
-            <span className="text-xs font-semibold text-purple-600 dark:text-purple-400 uppercase tracking-wider">
-              {isVi ? 'Hệ thống khảo thí' : 'Exam System'}
-            </span>
-            <div className="p-2 rounded-xl bg-purple-50 dark:bg-purple-950/50 text-purple-600 dark:text-purple-400">
-              <Layers className="w-4 h-4" />
-            </div>
-          </div>
-          <p className="text-2xl sm:text-3xl font-extrabold text-slate-900 dark:text-white mt-2">
-            AIVES Core
-          </p>
-          <p className="text-[11px] text-slate-500 dark:text-slate-400 mt-1">
-            {isVi ? 'Tích hợp đề thi tự động' : 'Auto question generation'}
+            {isVi ? 'Học phần trong hệ thống' : 'Active courses in system'}
           </p>
         </div>
 
         <div className="p-4 rounded-2xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 shadow-xs">
           <div className="flex items-center justify-between">
             <span className="text-xs font-semibold text-emerald-600 dark:text-emerald-400 uppercase tracking-wider">
-              {isVi ? 'Trạng thái đồng bộ' : 'Sync Status'}
+              {isVi ? 'Đã phân công GV' : 'Assigned Lecturers'}
             </span>
             <div className="p-2 rounded-xl bg-emerald-50 dark:bg-emerald-950/50 text-emerald-600 dark:text-emerald-400">
-              <Sparkles className="w-4 h-4" />
+              <UserCheck className="w-4 h-4" />
             </div>
           </div>
           <p className="text-2xl sm:text-3xl font-extrabold text-emerald-600 dark:text-emerald-400 mt-2">
-            100%
+            {courseStats.assigned}
           </p>
           <p className="text-[11px] text-slate-500 dark:text-slate-400 mt-1">
-            {isVi ? 'Đã kết nối PostgreSQL' : 'Connected to PostgreSQL'}
+            {isVi ? 'Môn đã có giảng viên phụ trách' : 'Courses with faculty assigned'}
+          </p>
+        </div>
+
+        <div className="p-4 rounded-2xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 shadow-xs">
+          <div className="flex items-center justify-between">
+            <span className="text-xs font-semibold text-amber-600 dark:text-amber-400 uppercase tracking-wider">
+              {isVi ? 'Chưa phân công' : 'Unassigned'}
+            </span>
+            <div className="p-2 rounded-xl bg-amber-50 dark:bg-amber-950/50 text-amber-600 dark:text-amber-400">
+              <Users className="w-4 h-4" />
+            </div>
+          </div>
+          <p className="text-2xl sm:text-3xl font-extrabold text-amber-600 dark:text-amber-400 mt-2">
+            {courseStats.unassigned}
+          </p>
+          <p className="text-[11px] text-slate-500 dark:text-slate-400 mt-1">
+            {isVi ? 'Môn chưa gán giảng viên' : 'Courses without faculty'}
           </p>
         </div>
       </div>
