@@ -2,7 +2,6 @@ import React, { useState, useRef, useEffect } from 'react';
 import {
   BrainCircuit,
   CalendarDays,
-  Radio,
   BarChart3,
   Moon,
   Sun,
@@ -15,13 +14,11 @@ import {
   Users,
   ChevronDown,
   LogOut,
-  UserPlus,
   LogIn,
   Check,
 } from 'lucide-react';
 import { ModuleType, UserAccount, UserRole } from '../../types';
 import { Language, translations } from '../../utils/i18n';
-import { DEMO_ACCOUNTS } from '../../services/authService';
 
 interface HeaderProps {
   activeModule: ModuleType;
@@ -32,8 +29,6 @@ interface HeaderProps {
   setIsSoundEnabled: (enabled: boolean) => void;
   userRole: 'faculty' | 'student';
   setUserRole: (role: 'faculty' | 'student') => void;
-  isSimpleMode: boolean;
-  setIsSimpleMode: (simple: boolean) => void;
   language: Language;
   setLanguage: (lang: Language) => void;
   currentUser?: UserAccount | null;
@@ -49,8 +44,8 @@ export const Header: React.FC<HeaderProps> = ({
   setIsDarkMode,
   isSoundEnabled,
   setIsSoundEnabled,
-  isSimpleMode,
-  setIsSimpleMode,
+  userRole,
+  setUserRole,
   language,
   setLanguage,
   currentUser,
@@ -138,18 +133,6 @@ export const Header: React.FC<HeaderProps> = ({
             </button>
 
             <button
-              onClick={() => setActiveModule('interview')}
-              className={`flex items-center gap-2 px-3.5 py-1.5 rounded-lg transition-all cursor-pointer ${
-                activeModule === 'interview'
-                  ? 'bg-white dark:bg-slate-800 text-rose-600 dark:text-rose-400 shadow-xs'
-                  : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white'
-              }`}
-            >
-              <Radio className="h-4 w-4 text-rose-500" />
-              <span>{t.navInterview}</span>
-            </button>
-
-            <button
               onClick={() => setActiveModule('analytics')}
               className={`flex items-center gap-2 px-3.5 py-1.5 rounded-lg transition-all cursor-pointer ${
                 activeModule === 'analytics'
@@ -179,19 +162,6 @@ export const Header: React.FC<HeaderProps> = ({
 
           {/* Right Action Controls */}
           <div className="flex items-center gap-2">
-            {/* Simple vs Detailed Mode Switcher */}
-            <button
-              onClick={() => setIsSimpleMode(!isSimpleMode)}
-              title={isSimpleMode ? t.simpleModeHint : t.detailedModeHint}
-              className={`hidden sm:flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-semibold border transition-all cursor-pointer ${
-                isSimpleMode
-                  ? 'bg-emerald-50 dark:bg-emerald-950/40 text-emerald-700 dark:text-emerald-300 border-emerald-300 dark:border-emerald-800 shadow-2xs'
-                  : 'bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 border-slate-200 dark:border-slate-700'
-              }`}
-            >
-              <Sparkles className={`h-3.5 w-3.5 ${isSimpleMode ? 'text-emerald-600' : 'text-slate-400'}`} />
-              <span>{isSimpleMode ? t.simpleModeOn : t.simpleModeOff}</span>
-            </button>
 
             {/* Language Switcher */}
             <button
@@ -296,40 +266,6 @@ export const Header: React.FC<HeaderProps> = ({
                     </p>
                   </div>
 
-                  {/* 1-Touch Demo Role Switcher */}
-                  <div className="px-3 py-2 border-b border-slate-100 dark:border-slate-800/80">
-                    <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-1.5">
-                      {isVi ? '⚡ Đổi tài khoản demo nhanh' : '⚡ Quick Switch Demo'}
-                    </p>
-                    <div className="space-y-1">
-                      {DEMO_ACCOUNTS.map((acc) => {
-                        const isCurrentAcc = currentUser.username === acc.username;
-                        return (
-                          <button
-                            key={acc.username}
-                            onClick={() => {
-                              if (onSwitchUser) onSwitchUser(acc.username);
-                              setIsUserMenuOpen(false);
-                            }}
-                            className={`w-full flex items-center justify-between px-2.5 py-1.5 rounded-lg text-xs transition-colors text-left cursor-pointer ${
-                              isCurrentAcc
-                                ? 'bg-indigo-50 dark:bg-indigo-950/50 text-indigo-700 dark:text-indigo-300 font-semibold'
-                                : 'text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800'
-                            }`}
-                          >
-                            <div className="flex items-center gap-2">
-                              {acc.role === 'ADMIN' && <ShieldCheck className="w-3.5 h-3.5 text-purple-500" />}
-                              {acc.role === 'LECTURER' && <GraduationCap className="w-3.5 h-3.5 text-indigo-500" />}
-                              {acc.role === 'STUDENT' && <Users className="w-3.5 h-3.5 text-emerald-500" />}
-                              <span>{acc.title}</span>
-                            </div>
-                            {isCurrentAcc && <Check className="w-3.5 h-3.5 text-indigo-600 dark:text-indigo-400" />}
-                          </button>
-                        );
-                      })}
-                    </div>
-                  </div>
-
                   {/* Admin Portal link if user is Admin */}
                   {currentUser.role === 'ADMIN' && (
                     <button
@@ -344,19 +280,8 @@ export const Header: React.FC<HeaderProps> = ({
                     </button>
                   )}
 
-                  {/* Auth Actions: Register new / Logout */}
+                  {/* Auth Actions: Logout */}
                   <div className="pt-1">
-                    <button
-                      onClick={() => {
-                        setIsUserMenuOpen(false);
-                        if (onOpenAuthModal) onOpenAuthModal('register');
-                      }}
-                      className="w-full flex items-center gap-2 px-4 py-2 text-xs text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors text-left cursor-pointer"
-                    >
-                      <UserPlus className="w-4 h-4 text-slate-400" />
-                      <span>{isVi ? 'Đăng ký tài khoản mới' : 'Register New Account'}</span>
-                    </button>
-
                     <button
                       onClick={() => {
                         setIsUserMenuOpen(false);
@@ -386,17 +311,6 @@ export const Header: React.FC<HeaderProps> = ({
           >
             <CalendarDays className="h-3.5 w-3.5" />
             <span>{t.navExams}</span>
-          </button>
-          <button
-            onClick={() => setActiveModule('interview')}
-            className={`flex items-center gap-1.5 px-3 py-1 rounded-lg ${
-              activeModule === 'interview'
-                ? 'bg-rose-100 dark:bg-rose-950 text-rose-700 dark:text-rose-300'
-                : 'text-slate-600 dark:text-slate-400'
-            }`}
-          >
-            <Radio className="h-3.5 w-3.5 text-rose-500" />
-            <span>{t.navInterview}</span>
           </button>
           <button
             onClick={() => setActiveModule('analytics')}

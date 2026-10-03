@@ -1,105 +1,137 @@
 package com.backend.module.auth.core.service;
 
-import com.backend.module.auth.api.dto.CreateUserRequest;
-import com.backend.module.auth.api.dto.UpdateUserRequest;
-import com.backend.module.auth.api.dto.UserDto;
+import com.backend.module.auth.api.dto.*;
 import com.backend.module.auth.api.exception.UserAlreadyExistsException;
 import com.backend.module.auth.api.exception.UserNotFoundException;
 import com.backend.module.auth.api.service.AdminUserService;
 import com.backend.module.auth.core.entity.User;
 import com.backend.module.auth.core.enums.Role;
 import com.backend.module.auth.core.repository.UserRepository;
+import com.backend.shared.exception.AppException;
+import jakarta.validation.Validator;
 import lombok.RequiredArgsConstructor;
-import org.springframework.data.domain.Page;
-import org.springframework.data.domain.Pageable;
+import org.springframework.dao.DataIntegrityViolationException;
+import org.springframework.data.domain.*;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
-import java.util.UUID;
+import java.util.*;
+
+import static org.springframework.http.HttpStatus.*;
 
 @Service
 @RequiredArgsConstructor
 @PreAuthorize("hasRole('ADMIN')")
 public class AdminUserServiceImpl implements AdminUserService {
-
     private final UserRepository userRepository;
     private final PasswordEncoder passwordEncoder;
+    private final Validator validator;
 
     @Override
     @Transactional(readOnly = true)
     public Page<UserDto> getUsers(String role, Pageable pageable) {
-        Page<User> users;
-        if (role != null && !role.isBlank()) {
-            Role roleEnum = Role.valueOf(role.trim().toUpperCase());
-            users = userRepository.findByRole(roleEnum, pageable);
-        } else {
-            users = userRepository.findAll(pageable);
+        Set<String> sortable = Set.of("id", "username", "fullName", "role", "studentCode", "email", "createdAt");
+        if (pageable.isUnpaged() || pageable.getPageSize() > 100
+                || pageable.getSort().stream().anyMatch(o -> !sortable.contains(o.getProperty()))) {
+            throw new AppException("Use page size 1-100 and a supported user sort field", BAD_REQUEST, "VALIDATION_FAILED");
         }
+        Page<User> users = role == null || role.isBlank() ? userRepository.findAll(pageable)
+                : userRepository.findByRole(parseRole(role), pageable);
+        return users.map(UserDtoMapper::toDto);
+    }
 
-        return users.map(u -> UserDto.builder()
-                .id(u.getId())
-                .username(u.getUsername())
-                .fullName(u.getFullName())
-                .role(u.getRole().name())
-                .build());
+    @Override
+    @Transactional(readOnly = true)
+    public UserDto getUserById(UUID id) {
+        User user = userRepository.findById(id).orElseThrow(() -> new UserNotFoundException(id.toString()));
+        return UserDtoMapper.toDto(user);
     }
 
     @Override
     @Transactional
     public UserDto createUser(CreateUserRequest request) {
-        if (userRepository.existsByUsername(request.getUsername())) {
-            throw new UserAlreadyExistsException(request.getUsername());
+        validate(request);
+        String username = request.getUsername().trim();
+        String studentCode = optionalText(request.getStudentCode());
+        if (userRepository.existsByUsername(username)) throw new UserAlreadyExistsException(username);
+        if (studentCode != null && userRepository.existsByStudentCode(studentCode)) {
+            throw new AppException("Student code already exists", CONFLICT, "STUDENT_CODE_EXISTS");
         }
+        User user = User.builder().username(username).passwordHash(passwordEncoder.encode(request.getPassword()))
+                .fullName(request.getFullName().trim()).role(request.getRole() == null ? Role.STUDENT : request.getRole())
+                .studentCode(studentCode).email(optionalText(request.getEmail())).build();
+        return UserDtoMapper.toDto(userRepository.saveAndFlush(user));
+    }
 
-        User user = User.builder()
-                .username(request.getUsername().trim())
-                .passwordHash(passwordEncoder.encode(request.getPassword()))
-                .fullName(request.getFullName().trim())
-                .role(request.getRole() != null ? request.getRole() : Role.STUDENT)
-                .build();
-
-        User savedUser = userRepository.save(user);
-
-        return UserDto.builder()
-                .id(savedUser.getId())
-                .username(savedUser.getUsername())
-                .fullName(savedUser.getFullName())
-                .role(savedUser.getRole().name())
-                .build();
+    @Override
+    @Transactional
+    public List<UserDto> batchCreateUsers(List<CreateUserRequest> requests) {
+        if (requests == null || requests.isEmpty()) {
+            throw new AppException("User list must not be empty", BAD_REQUEST, "VALIDATION_FAILED");
+        }
+        List<UserDto> result = new ArrayList<>();
+        for (CreateUserRequest request : requests) result.add(createUser(request));
+        return result;
     }
 
     @Override
     @Transactional
     public UserDto updateUser(UUID id, UpdateUserRequest request) {
-        User user = userRepository.findById(id)
-                .orElseThrow(() -> new UserNotFoundException(id.toString()));
-
-        if (request.getFullName() != null && !request.getFullName().isBlank()) {
-            user.setFullName(request.getFullName().trim());
+        validate(request);
+        User user = userRepository.findById(id).orElseThrow(() -> new UserNotFoundException(id.toString()));
+        if (request.getFullName() != null) user.setFullName(request.getFullName().trim());
+        if (request.getRole() != null) user.setRole(parseRole(request.getRole()));
+        if (request.getStudentCode() != null) {
+            String studentCode = optionalText(request.getStudentCode());
+            if (studentCode != null && userRepository.existsByStudentCodeAndIdNot(studentCode, id)) {
+                throw new AppException("Student code already exists", CONFLICT, "STUDENT_CODE_EXISTS");
+            }
+            user.setStudentCode(studentCode);
         }
+        if (request.getEmail() != null) user.setEmail(optionalText(request.getEmail()));
+        return UserDtoMapper.toDto(userRepository.saveAndFlush(user));
+    }
 
-        if (request.getRole() != null && !request.getRole().isBlank()) {
-            user.setRole(Role.valueOf(request.getRole().trim().toUpperCase()));
+    @Override
+    @Transactional
+    public void resetPassword(UUID userId, String newPassword) {
+        if (newPassword == null || newPassword.trim().length() < 6) {
+            throw new AppException("Password must be at least 6 characters", BAD_REQUEST, "VALIDATION_FAILED");
         }
-
-        User updatedUser = userRepository.save(user);
-
-        return UserDto.builder()
-                .id(updatedUser.getId())
-                .username(updatedUser.getUsername())
-                .fullName(updatedUser.getFullName())
-                .role(updatedUser.getRole().name())
-                .build();
+        User user = userRepository.findById(userId).orElseThrow(() -> new UserNotFoundException(userId.toString()));
+        user.setPasswordHash(passwordEncoder.encode(newPassword.trim()));
+        userRepository.saveAndFlush(user);
     }
 
     @Override
     @Transactional
     public void deleteUser(UUID userId) {
-        if (!userRepository.existsById(userId)) {
-            throw new UserNotFoundException(userId.toString());
+        if (!userRepository.existsById(userId)) throw new UserNotFoundException(userId.toString());
+        try {
+            userRepository.deleteById(userId);
+            userRepository.flush();
+        } catch (DataIntegrityViolationException ex) {
+            throw new AppException("User is referenced by examination data that cannot be deleted", CONFLICT, "USER_IN_USE");
         }
-        userRepository.deleteById(userId);
+    }
+
+    private Role parseRole(String role) {
+        try {
+            return Role.valueOf(role.trim().toUpperCase(Locale.ROOT));
+        } catch (IllegalArgumentException ex) {
+            throw new AppException("Role must be ADMIN, LECTURER or STUDENT", BAD_REQUEST, "INVALID_ROLE");
+        }
+    }
+
+    private void validate(Object request) {
+        if (request == null || !validator.validate(request).isEmpty()) {
+            throw new AppException("Invalid user data: check required fields, lengths and email", BAD_REQUEST, "VALIDATION_FAILED");
+        }
+    }
+
+    private String optionalText(String value) {
+        return value == null || value.isBlank() ? null : value.trim();
     }
 }

@@ -1,0 +1,29 @@
+{
+  "title": "Rubric vấn đáp — Hiểu và vận dụng kiến thức",
+  "criteria": [
+    {
+      "id": "concepts",
+      "name": "Hiểu khái niệm",
+      "weight": 25,
+      "description": "Đánh giá tính chính xác của khái niệm trong tài liệu. 0–2: chưa nêu được hoặc hiểu sai phần lớn; 3–5: nêu được ý cơ bản nhưng thiếu hoặc nhầm; 6–8: đúng và giải thích được; 9–10: phân biệt rõ các khái niệm dễ nhầm và nêu giới hạn áp dụng."
+    },
+    {
+      "id": "mechanisms",
+      "name": "Giải thích cơ chế",
+      "weight": 30,
+      "description": "Đánh giá khả năng giải thích cách hoạt động, quan hệ nguyên nhân–kết quả và các bước xử lý. 0–2: không giải thích được; 3–5: chỉ liệt kê hoặc thiếu bước quan trọng; 6–8: giải thích mạch lạc, đúng cơ chế; 9–10: giải thích cả điều kiện và trường hợp lỗi."
+    },
+    {
+      "id": "application",
+      "name": "Vận dụng vào tình huống",
+      "weight": 25,
+      "description": "Đánh giá việc dùng kiến thức giải quyết tình huống thực tế thuộc phạm vi tài liệu. 0–2: không đưa được cách làm; 3–5: có ý tưởng nhưng chưa phù hợp; 6–8: đưa giải pháp hợp lý và giải thích; 9–10: nêu giả định, cách kiểm chứng và xử lý trường hợp biên."
+    },
+    {
+      "id": "reasoning",
+      "name": "Lập luận và đánh đổi",
+      "weight": 20,
+      "description": "Đánh giá lập luận dựa trên bằng chứng, so sánh lựa chọn và thừa nhận giới hạn. 0–2: kết luận không có căn cứ; 3–5: lập luận còn chung chung; 6–8: so sánh có lý do; 9–10: xác định đánh đổi, phản biện giả định và điều kiện làm thay đổi quyết định."
+    }
+  ]
+}

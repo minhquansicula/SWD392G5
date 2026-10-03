@@ -16,6 +16,12 @@ CREATE TABLE courses (
     course_name VARCHAR(255) NOT NULL
 );
 
+CREATE TABLE course_lecturers (
+    course_id UUID NOT NULL REFERENCES courses(id) ON DELETE CASCADE,
+    lecturer_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    PRIMARY KEY (course_id, lecturer_id)
+);
+
 CREATE TABLE questions (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     course_id UUID REFERENCES courses(id) ON DELETE CASCADE,

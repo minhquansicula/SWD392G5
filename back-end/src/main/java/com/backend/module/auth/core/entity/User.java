@@ -15,6 +15,8 @@ import lombok.*;
 import org.hibernate.annotations.ColumnDefault;
 
 import java.util.UUID;
+import java.time.LocalDateTime;
+import jakarta.persistence.PrePersist;
 
 @Getter
 @Setter
@@ -32,7 +34,7 @@ public class User {
 
     @Size(max = 255)
     @NotNull
-    @Column(name = "username", nullable = false)
+    @Column(name = "username", nullable = false, unique = true)
     private String username;
 
     @Size(max = 255)
@@ -49,6 +51,24 @@ public class User {
     @Enumerated(EnumType.STRING)
     @Column(name = "role", nullable = false, length = 50)
     private Role role;
+
+    // PostgreSQL timestamp WITHOUT time zone, unlike the examination timestamps.
+    @ColumnDefault("CURRENT_TIMESTAMP")
+    @Column(name = "created_at")
+    private LocalDateTime createdAt;
+
+    @Size(max = 50)
+    @Column(name = "student_code", length = 50, unique = true)
+    private String studentCode;
+
+    @Size(max = 255)
+    @Column(name = "email", length = 255)
+    private String email;
+
+    @PrePersist
+    void onCreate() {
+        if (createdAt == null) createdAt = LocalDateTime.now().truncatedTo(java.time.temporal.ChronoUnit.MICROS);
+    }
 
 
 }

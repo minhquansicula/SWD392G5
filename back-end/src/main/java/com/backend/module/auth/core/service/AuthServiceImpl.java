@@ -37,12 +37,7 @@ public class AuthServiceImpl implements AuthService {
         return AuthResponse.builder()
                 .token(token)
                 .tokenType("Bearer")
-                .user(UserDto.builder()
-                        .id(user.getId())
-                        .username(user.getUsername())
-                        .fullName(user.getFullName())
-                        .role(user.getRole().name())
-                        .build())
+                .user(UserDtoMapper.toDto(user))
                 .build();
     }
 
@@ -51,11 +46,6 @@ public class AuthServiceImpl implements AuthService {
         User user = userRepository.findByUsername(username)
                 .orElseThrow(() -> new UserNotFoundException(username));
 
-        return UserDto.builder()
-                .id(user.getId())
-                .username(user.getUsername())
-                .fullName(user.getFullName())
-                .role(user.getRole().name())
-                .build();
+        return UserDtoMapper.toDto(user);
     }
 }

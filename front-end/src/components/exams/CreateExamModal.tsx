@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   X,
   Sparkles,
@@ -14,6 +14,7 @@ import {
   ShieldAlert,
 } from 'lucide-react';
 import { Exam, RubricCriterion, AiExaminerConfig } from '../../types';
+import { Course, getCourses } from '../../services/courseService';
 
 interface CreateExamModalProps {
   isOpen: boolean;
@@ -28,15 +29,33 @@ export const CreateExamModal: React.FC<CreateExamModalProps> = ({
 }) => {
   const [step, setStep] = useState<number>(1);
 
+  // Dynamic courses from backend
+  const [availableCourses, setAvailableCourses] = useState<Course[]>([]);
+
   // Form states
-  const [code, setCode] = useState('AI-450');
-  const [title, setTitle] = useState('Deep Learning & Neural Architectures');
-  const [course, setCourse] = useState('M.Sc. Artificial Intelligence');
-  const [department, setDepartment] = useState('Faculty of Computing & Data Science');
+  const [code, setCode] = useState('SWD392');
+  const [title, setTitle] = useState('Software Architecture & Design');
+  const [course, setCourse] = useState('Software Architecture & Design');
+  const [department, setDepartment] = useState('Faculty of Software Engineering');
   const [term, setTerm] = useState('Fall 2026');
   const [vivaDurationMin, setVivaDurationMin] = useState(15);
   const [totalQuestions, setTotalQuestions] = useState(5);
   const [passingMarks, setPassingMarks] = useState(25);
+
+  useEffect(() => {
+    if (isOpen) {
+      getCourses()
+        .then((data) => {
+          setAvailableCourses(data);
+          if (data.length > 0) {
+            setCode(data[0].courseCode);
+            setTitle(data[0].courseName);
+            setCourse(data[0].courseName);
+          }
+        })
+        .catch((err) => console.warn('Could not fetch courses for modal:', err));
+    }
+  }, [isOpen]);
 
   const [syllabusTopics, setSyllabusTopics] = useState<string[]>([
     'Attention Mechanism & Transformer Encoders/Decoders',
@@ -202,14 +221,37 @@ export const CreateExamModal: React.FC<CreateExamModalProps> = ({
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 <div>
                   <label className="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1">
-                    Course Code *
+                    Course / Môn học *
                   </label>
-                  <input
-                    type="text"
-                    value={code}
-                    onChange={(e) => setCode(e.target.value)}
-                    className="w-full px-3 py-2 text-sm rounded-lg bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-slate-900 dark:text-white"
-                  />
+                  {availableCourses.length > 0 ? (
+                    <select
+                      value={code}
+                      onChange={(e) => {
+                        const selected = availableCourses.find((c) => c.courseCode === e.target.value);
+                        if (selected) {
+                          setCode(selected.courseCode);
+                          setTitle(selected.courseName);
+                          setCourse(selected.courseName);
+                        } else {
+                          setCode(e.target.value);
+                        }
+                      }}
+                      className="w-full px-3 py-2 text-sm rounded-lg bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-slate-900 dark:text-white cursor-pointer"
+                    >
+                      {availableCourses.map((c) => (
+                        <option key={c.id} value={c.courseCode}>
+                          [{c.courseCode}] {c.courseName}
+                        </option>
+                      ))}
+                    </select>
+                  ) : (
+                    <input
+                      type="text"
+                      value={code}
+                      onChange={(e) => setCode(e.target.value)}
+                      className="w-full px-3 py-2 text-sm rounded-lg bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-slate-900 dark:text-white"
+                    />
+                  )}
                 </div>
                 <div>
                   <label className="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1">

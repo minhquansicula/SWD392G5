@@ -1,4 +1,4 @@
-export type ModuleType = 'exams' | 'interview' | 'analytics' | 'admin';
+export type ModuleType = 'exams' | 'questions' | 'analytics' | 'admin' | 'courses';
 
 export type UserRole = 'ADMIN' | 'LECTURER' | 'STUDENT';
 

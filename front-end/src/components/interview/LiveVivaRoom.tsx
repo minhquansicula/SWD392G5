@@ -26,7 +26,6 @@ interface LiveVivaRoomProps {
   onFinishViva: (completedScore?: number) => void;
   onExit: () => void;
   isSoundEnabled: boolean;
-  isSimpleMode?: boolean;
   language?: Language;
 }
 
@@ -36,7 +35,6 @@ export const LiveVivaRoom: React.FC<LiveVivaRoomProps> = ({
   onFinishViva,
   onExit,
   isSoundEnabled,
-  isSimpleMode = true,
   language = 'vi',
 }) => {
   const [currentQuestionIndex, setCurrentQuestionIndex] = useState(0);
@@ -330,7 +328,6 @@ export const LiveVivaRoom: React.FC<LiveVivaRoomProps> = ({
             totalQuestions={exam.totalQuestions}
             hasAdaptiveFollowUpActive={hasAdaptiveFollowUpActive}
             activeFollowUpText={activeFollowUpText}
-            isSimpleMode={isSimpleMode}
             language={language}
           />
 
@@ -342,7 +339,6 @@ export const LiveVivaRoom: React.FC<LiveVivaRoomProps> = ({
             onSubmitStudentAnswer={handleSubmitStudentAnswer}
             isAiSpeaking={avatarState === 'speaking'}
             isEvaluating={avatarState === 'evaluating'}
-            isSimpleMode={isSimpleMode}
             language={language}
           />
         </div>
@@ -353,7 +349,6 @@ export const LiveVivaRoom: React.FC<LiveVivaRoomProps> = ({
             transcript={transcript}
             isAiSpeaking={avatarState === 'speaking'}
             isStudentSpeaking={isStudentSpeaking}
-            isSimpleMode={isSimpleMode}
             language={language}
           />
         </div>

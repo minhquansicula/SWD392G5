@@ -20,14 +20,12 @@ import { Language, translations } from '../../utils/i18n';
 interface StudentScoreReportProps {
   report: StudentEvaluationReport;
   onViewTranscriptTab: () => void;
-  isSimpleMode?: boolean;
   language?: Language;
 }
 
 export const StudentScoreReport: React.FC<StudentScoreReportProps> = ({
   report,
   onViewTranscriptTab,
-  isSimpleMode = true,
   language = 'vi',
 }) => {
   const [expandedQuestion, setExpandedQuestion] = useState<number | null>(1);
@@ -119,69 +117,68 @@ export const StudentScoreReport: React.FC<StudentScoreReportProps> = ({
       </div>
 
       {/* 4-Pillar Competency Breakdown vs Cohort Average (Visible in Detailed Mode) */}
-      {!isSimpleMode && (
-        <div className="p-5 rounded-2xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 shadow-xs space-y-4">
-          <div className="flex items-center justify-between">
-            <div>
-              <h3 className="text-base font-bold text-slate-900 dark:text-white font-display">
-                Oral Competency Mastery Matrix
-              </h3>
-              <p className="text-xs text-slate-500 dark:text-slate-400">
-                Student score compared against the cohort average benchmark
-              </p>
-            </div>
-            <div className="flex items-center gap-3 text-xs">
-              <div className="flex items-center gap-1.5">
-                <span className="h-2.5 w-2.5 rounded-full bg-indigo-600 dark:bg-indigo-500" />
-                <span className="text-slate-600 dark:text-slate-400 font-medium">Candidate Score</span>
-              </div>
-              <div className="flex items-center gap-1.5">
-                <span className="h-2.5 w-2.5 rounded-full bg-slate-300 dark:bg-slate-700" />
-                <span className="text-slate-600 dark:text-slate-400 font-medium">Cohort Benchmark</span>
-              </div>
-            </div>
+      {/* 4-Pillar Competency Breakdown vs Cohort Average */}
+      <div className="p-5 rounded-2xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 shadow-xs space-y-4">
+        <div className="flex items-center justify-between">
+          <div>
+            <h3 className="text-base font-bold text-slate-900 dark:text-white font-display">
+              Oral Competency Mastery Matrix
+            </h3>
+            <p className="text-xs text-slate-500 dark:text-slate-400">
+              Student score compared against the cohort average benchmark
+            </p>
           </div>
-
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4 pt-2">
-            {report.competencyBreakdown.map((comp, idx) => {
-              const studentPercent = Math.round((comp.studentScore / comp.maxScore) * 100);
-              const cohortPercent = Math.round((comp.cohortAverage / comp.maxScore) * 100);
-
-              return (
-                <div
-                  key={idx}
-                  className="p-4 rounded-xl bg-slate-50/70 dark:bg-slate-800/40 border border-slate-200/80 dark:border-slate-700/80 space-y-2"
-                >
-                  <div className="flex justify-between items-start text-xs">
-                    <span className="font-semibold text-slate-900 dark:text-white">
-                      {comp.category}
-                    </span>
-                    <span className="font-mono font-bold text-indigo-600 dark:text-indigo-400">
-                      {comp.studentScore}/{comp.maxScore} pts ({studentPercent}%)
-                    </span>
-                  </div>
-
-                  {/* Comparative Double Bars */}
-                  <div className="space-y-1 pt-1">
-                    <div className="w-full h-2 rounded-full bg-slate-200 dark:bg-slate-700 overflow-hidden">
-                      <div
-                        className="h-full bg-indigo-600 dark:bg-indigo-500 rounded-full transition-all duration-500"
-                        style={{ width: `${studentPercent}%` }}
-                      />
-                    </div>
-                    <div className="flex justify-between text-[10px] text-slate-400 font-mono">
-                      <span>Benchmark: {comp.cohortAverage} pts ({cohortPercent}%)</span>
-                      <span className="text-emerald-600 dark:text-emerald-400 font-semibold">
-                        +{studentPercent - cohortPercent}% above avg
-                      </span>
-                    </div>
-                  </div>
-                </div>
-              );
-            })}
+          <div className="flex items-center gap-3 text-xs">
+            <div className="flex items-center gap-1.5">
+              <span className="h-2.5 w-2.5 rounded-full bg-indigo-600 dark:bg-indigo-500" />
+              <span className="text-slate-600 dark:text-slate-400 font-medium">Candidate Score</span>
+            </div>
+            <div className="flex items-center gap-1.5">
+              <span className="h-2.5 w-2.5 rounded-full bg-slate-300 dark:bg-slate-700" />
+              <span className="text-slate-600 dark:text-slate-400 font-medium">Cohort Benchmark</span>
+            </div>
           </div>
         </div>
-      )}
+
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4 pt-2">
+          {report.competencyBreakdown.map((comp, idx) => {
+            const studentPercent = Math.round((comp.studentScore / comp.maxScore) * 100);
+            const cohortPercent = Math.round((comp.cohortAverage / comp.maxScore) * 100);
+
+            return (
+              <div
+                key={idx}
+                className="p-4 rounded-xl bg-slate-50/70 dark:bg-slate-800/40 border border-slate-200/80 dark:border-slate-700/80 space-y-2"
+              >
+                <div className="flex justify-between items-start text-xs">
+                  <span className="font-semibold text-slate-900 dark:text-white">
+                    {comp.category}
+                  </span>
+                  <span className="font-mono font-bold text-indigo-600 dark:text-indigo-400">
+                    {comp.studentScore}/{comp.maxScore} pts ({studentPercent}%)
+                  </span>
+                </div>
+
+                {/* Comparative Double Bars */}
+                <div className="space-y-1 pt-1">
+                  <div className="w-full h-2 rounded-full bg-slate-200 dark:bg-slate-700 overflow-hidden">
+                    <div
+                      className="h-full bg-indigo-600 dark:bg-indigo-500 rounded-full transition-all duration-500"
+                      style={{ width: `${studentPercent}%` }}
+                    />
+                  </div>
+                  <div className="flex justify-between text-[10px] text-slate-400 font-mono">
+                    <span>Benchmark: {comp.cohortAverage} pts ({cohortPercent}%)</span>
+                    <span className="text-emerald-600 dark:text-emerald-400 font-semibold">
+                      +{studentPercent - cohortPercent}% above avg
+                    </span>
+                  </div>
+                </div>
+              </div>
+            );
+          })}
+        </div>
+      </div>
 
       {/* AI Examiner Qualitative Appraisal */}
       <div className="p-5 rounded-2xl bg-indigo-50/60 dark:bg-indigo-950/30 border border-indigo-200 dark:border-indigo-800 shadow-xs space-y-3">
