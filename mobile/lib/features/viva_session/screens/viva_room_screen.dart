@@ -5,6 +5,7 @@ import '../../../core/theme/app_text_styles.dart';
 import '../../../core/widgets/audio_pulse_orb.dart';
 import '../../../core/widgets/glass_card.dart';
 import '../../../core/widgets/status_badge.dart';
+import '../../auth/providers/auth_provider.dart';
 import '../../exam/models/exam_schedule_model.dart';
 import '../models/viva_question_model.dart';
 import '../providers/viva_session_provider.dart';
@@ -29,9 +30,11 @@ class _VivaRoomScreenState extends State<VivaRoomScreen> {
   void initState() {
     super.initState();
     WidgetsBinding.instance.addPostFrameCallback((_) {
+      final authProvider = context.read<AuthProvider>();
+      final studentId = authProvider.currentUser?.userCode ?? 'SE170245';
       context.read<VivaSessionProvider>().startSession(
             examId: widget.exam.id,
-            studentId: 'SE170245',
+            studentId: studentId,
           );
     });
   }

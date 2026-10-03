@@ -233,6 +233,23 @@ class VivaSessionProvider extends ChangeNotifier {
       if (_currentQuestionIndex + 1 < _questions.length) {
         _loadQuestionAt(_currentQuestionIndex + 1);
       } else {
+        finishExamSession();
+      }
+    });
+  }
+
+  /// Kết thúc toàn bộ ca thi và kích hoạt chấm điểm từ AI
+  Future<void> finishExamSession() async {
+    await _recorderService.stopRecording();
+    _mockSpeechStreamTimer?.cancel();
+    _sessionState = VivaSessionState.processing;
+    notifyListeners();
+
+    _wsService.finishExam();
+
+    // Timeout safety fallback
+    Future.delayed(const Duration(milliseconds: 2500), () {
+      if (_sessionState != VivaSessionState.completed) {
         _sessionState = VivaSessionState.completed;
         notifyListeners();
       }
@@ -240,17 +257,51 @@ class VivaSessionProvider extends ChangeNotifier {
   }
 
   void _handleIncomingWsMessage(Map<String, dynamic> msg) {
-    final type = msg['type']?.toString();
-    if (type == 'transcript') {
+    final type = msg['type']?.toString() ?? msg['event']?.toString();
+    if (type == 'transcript' || type == 'subtitle_delta') {
       final text = msg['text']?.toString() ?? '';
-      final isFinal = msg['is_final'] == true;
-      if (_transcripts.isNotEmpty && _transcripts.last.speaker == VivaRole.student) {
-        _transcripts[_transcripts.length - 1] = _transcripts.last.copyWith(
-          text: text,
-          isPartial: !isFinal,
-        );
+      final role = msg['role']?.toString() ?? 'EXAMINER';
+      final isInterim = msg['is_interim'] == true || msg['is_final'] == false;
+
+      if (role == 'EXAMINER') {
+        if (_transcripts.isNotEmpty &&
+            _transcripts.last.speaker == VivaRole.ai &&
+            _transcripts.last.isPartial) {
+          _transcripts[_transcripts.length - 1] = _transcripts.last.copyWith(
+            text: _transcripts.last.text + text,
+            isPartial: isInterim,
+          );
+        } else {
+          _transcripts.add(VivaTranscriptEntry(
+            speaker: VivaRole.ai,
+            speakerName: 'Giám Khảo AI • Gemini Live',
+            text: text,
+            timestamp: DateTime.now(),
+            isPartial: isInterim,
+          ));
+        }
+        notifyListeners();
+      } else {
+        if (_transcripts.isNotEmpty && _transcripts.last.speaker == VivaRole.student) {
+          _transcripts[_transcripts.length - 1] = _transcripts.last.copyWith(
+            text: text,
+            isPartial: isInterim,
+          );
+          notifyListeners();
+        }
+      }
+    } else if (type == 'turn_complete') {
+      if (_sessionState == VivaSessionState.aiSpeaking) {
+        _sessionState = VivaSessionState.listening;
+        _startAutoListening();
         notifyListeners();
       }
+    } else if (type == 'examiner_ready') {
+      _sessionState = VivaSessionState.aiSpeaking;
+      notifyListeners();
+    } else if (type == 'exam_completed') {
+      _sessionState = VivaSessionState.completed;
+      notifyListeners();
     } else if (type == 'adaptive_follow_up') {
       final qText = msg['content']?.toString() ?? '';
       _questions.insert(

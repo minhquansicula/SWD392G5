@@ -5,8 +5,8 @@ class ApiEndpoints {
   static String defaultBaseUrl = 'http://10.0.2.2:8080/api/v1';
 
   // Python AI Engine / WebSocket Viva Voice Core default
-  // Can be configured to direct Python service or Java WebSocket proxy
-  static String defaultWebSocketUrl = 'ws://10.0.2.2:8000/ws/viva/stream';
+  // Endpoint format: ws://<host>:8000/ws/viva/{scheduleId}
+  static String defaultWebSocketUrl = 'ws://10.0.2.2:8000/ws/viva/';
 
   // Auth endpoints (Nhóm 7)
   static const String login = '/auth/login';

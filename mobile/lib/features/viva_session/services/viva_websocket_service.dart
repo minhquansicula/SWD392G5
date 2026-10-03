@@ -36,7 +36,19 @@ class VivaWebSocketService {
     _statusController.add(_status);
 
     try {
-      final uri = Uri.parse('$wsUrl?examId=$examId&studentId=$studentId');
+      // Endpoint format in server.py: ws://<host>:8000/ws/viva/{scheduleId}
+      String targetUrl = wsUrl.trim();
+      if (targetUrl.contains('{scheduleId}') || targetUrl.contains('{schedule_id}')) {
+        targetUrl = targetUrl
+            .replaceAll('{scheduleId}', examId)
+            .replaceAll('{schedule_id}', examId);
+      } else if (targetUrl.endsWith('/')) {
+        targetUrl = '$targetUrl$examId';
+      } else if (!targetUrl.endsWith('/$examId')) {
+        targetUrl = '$targetUrl/$examId';
+      }
+
+      final uri = Uri.parse(targetUrl);
       _channel = WebSocketChannel.connect(uri);
 
       // Timeout connection check
@@ -52,6 +64,10 @@ class VivaWebSocketService {
           if (data is String) {
             try {
               final jsonMsg = jsonDecode(data) as Map<String, dynamic>;
+              // Normalize event and type
+              if (jsonMsg.containsKey('event') && !jsonMsg.containsKey('type')) {
+                jsonMsg['type'] = jsonMsg['event'];
+              }
               _messageController.add(jsonMsg);
             } catch (e) {
               debugPrint('[VivaWebSocketService] Error parsing incoming text: $e');
@@ -60,6 +76,7 @@ class VivaWebSocketService {
             // Audio response from TTS if streamed as binary
             _messageController.add({
               'type': 'tts_audio_chunk',
+              'event': 'audio_chunk',
               'data': data,
             });
           }
@@ -113,14 +130,30 @@ class VivaWebSocketService {
     }
   }
 
+  /// Gửi tín hiệu hoàn tất ca thi để Python AI Core chấm điểm
+  void finishExam() {
+    sendControlMessage({'event': 'finish_exam'});
+  }
+
   void _handleMockControl(Map<String, dynamic> message) {
-    final type = message['type']?.toString();
+    final type = message['type']?.toString() ?? message['event']?.toString();
     if (type == 'submit_answer') {
       // Simulate backend AI analyzing answer and triggering follow-up or completion
       Future.delayed(const Duration(milliseconds: 1400), () {
         _messageController.add({
           'type': 'ai_analysis_complete',
           'confidence': 0.968,
+        });
+      });
+    } else if (type == 'finish_exam') {
+      Future.delayed(const Duration(milliseconds: 1500), () {
+        _messageController.add({
+          'event': 'exam_completed',
+          'type': 'exam_completed',
+          'result': {
+            'overall_score': 8.8,
+            'summary': 'Hoàn thành tốt các câu hỏi kiến trúc Microservices và Design Patterns.',
+          },
         });
       });
     }
