@@ -1,0 +1,60 @@
+<!doctype html>
+<html lang="vi">
+<head>
+  <meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="theme-color" content="#183c35"><title>Viva — Phòng luyện vấn đáp</title>
+  <link rel="stylesheet" href="/static/style.css"><script src="/static/app.js" defer></script>
+</head>
+<body>
+<div class="shell">
+  <aside class="sidebar">
+    <a class="brand" href="/" aria-label="Viva trang chủ"><span class="brand-mark">v</span> viva<span class="brand-dot">.</span></a>
+    <p class="brand-caption">PHÒNG LUYỆN VẤN ĐÁP</p>
+    <div class="course-picker"><label for="course-select">KHÔNG GIAN MÔN HỌC</label><select id="course-select"><option value="">Chọn môn học</option></select><button id="new-course" class="subtle-light">＋ Tạo môn học mới</button></div>
+    <nav aria-label="Điều hướng"><button class="nav active" data-view="setup"><span>01</span> Chuẩn bị buổi học</button><button class="nav" data-view="interview"><span>02</span> Phòng phỏng vấn</button><button class="nav" data-view="history"><span>03</span> Lịch sử & kết quả</button></nav>
+    <div class="sidebar-note"><span class="star">✳</span><p>Một câu hỏi hay mở ra<br>một cách hiểu sâu hơn.</p><small>Học từ câu trả lời của chính bạn.</small></div>
+    <div class="sidebar-bottom"><span class="local-dot"></span> Bản thử nghiệm local <span class="version">v0.1</span></div>
+  </aside>
+  <main>
+    <header class="topbar"><div><span class="muted">Không gian học tập</span><span class="divider">/</span><strong id="course-name">Bắt đầu một môn học</strong></div><span id="health-badge" class="badge"><i></i> Đang kiểm tra</span></header>
+    <div class="main-content">
+      <div id="notice" class="notice" role="status" hidden></div>
+      <section id="view-setup" class="view">
+        <div class="hero"><div><span class="eyebrow">HỌC CHỦ ĐỘNG · HIỂU ĐẾN CÙNG</span><h1>Hiểu sâu. <em>Trả lời vững.</em></h1><p>Đưa tài liệu của bạn vào. Để giám khảo AI đặt câu hỏi,<br class="desktop"> lắng nghe và cùng bạn đi sâu vào từng lập luận.</p></div><div class="hero-symbol" aria-hidden="true"><span>?</span><span>✳</span></div></div>
+        <div class="section-heading"><h2>Chuẩn bị buổi phỏng vấn</h2><span class="muted">Ba bước để bắt đầu</span></div>
+        <div class="setup-grid">
+          <article class="card"><div class="card-title"><span class="step">1</span><div><h3>Tài liệu môn học</h3><p>Nguồn kiến thức cho các câu hỏi</p></div><span id="doc-count" class="count">0 file</span></div>
+            <label class="dropzone" id="document-zone" for="document-input"><span class="upload-icon">↥</span><strong>Chọn tài liệu để tải lên</strong><span>PDF có chữ, DOCX, TXT, MD · tối đa 10 MB/file</span><input id="document-input" type="file" accept=".pdf,.docx,.txt,.md" multiple></label>
+            <div id="upload-status" class="small-status" role="status"></div><ul id="document-list" class="file-list"></ul>
+            <div class="card-foot"><span>Chưa có tài liệu?</span><a href="/examples/course-notes.txt" download>Tải bài học mẫu ↗</a></div>
+          </article>
+          <article class="card"><div class="card-title"><span class="step">2</span><div><h3>Rubric chấm điểm</h3><p>Tiêu chí rõ ràng, phản hồi có căn cứ</p></div></div>
+            <label class="field-label" for="rubric-select">Rubric sử dụng</label><select id="rubric-select"><option value="">Chưa có rubric</option></select>
+            <div id="rubric-summary" class="rubric-preview"><p class="empty-small">Thêm rubric để định hướng buổi phỏng vấn.</p></div>
+            <div class="button-row"><button id="import-rubric" class="secondary">↥ Import rubric</button><button id="manual-rubric" class="text-button">Tạo thủ công ＋</button><input id="rubric-input" type="file" accept=".pdf,.docx,.txt,.md,.json" hidden></div>
+            <div id="rubric-status" class="small-status" role="status"></div><div class="card-foot"><span>Xem và sửa trước khi lưu.</span><a href="/examples/rubric.json" download>Tải rubric mẫu ↗</a></div>
+          </article>
+          <article class="card session-card"><div class="card-title"><span class="step">3</span><div><h3>Thiết lập buổi phỏng vấn</h3><p>Mỗi lượt một câu hỏi. Bạn quyết định khi nào kết thúc.</p></div></div>
+            <form id="session-form"><div class="session-fields"><label>Tên của bạn<input id="student-name" placeholder="Sinh viên" maxlength="80" autocomplete="given-name"></label><label>Tối đa số câu hỏi<input id="max-questions" type="number" min="1" max="20" value="8" required></label><label>Hỏi sâu mỗi tiêu chí<select id="max-followups"><option value="0">Không hỏi thêm</option><option value="1">Tối đa 1 lượt</option><option value="2" selected>Tối đa 2 lượt</option><option value="3">Tối đa 3 lượt</option></select></label></div><button id="start-button" class="primary" type="submit">Bắt đầu phỏng vấn <span>↗</span></button></form>
+          </article>
+        </div>
+        <p class="privacy-note">Ứng dụng và dữ liệu chạy trên máy bạn. Nội dung cần xử lý được gửi tới Gemini qua API.</p>
+      </section>
+      <section id="view-interview" class="view" hidden>
+        <div class="page-heading"><div><span class="eyebrow">LẮNG NGHE · LẬP LUẬN · ĐÀO SÂU</span><h1>Phòng <em>phỏng vấn.</em></h1></div><div class="button-row"><span id="socket-badge" class="badge"><i></i> Chưa kết nối</span><button id="export-button" class="secondary" disabled>Xuất phiên ↗</button></div></div>
+        <div class="interview-grid"><article class="chat-card"><div class="chat-header"><div class="examiner-avatar">✳</div><div><strong>Giám khảo AI</strong><small id="chat-subtitle">Sẵn sàng lắng nghe câu trả lời của bạn</small></div><span id="question-counter" class="count">Chưa bắt đầu</span></div>
+          <div id="messages" class="messages" role="log" aria-label="Hội thoại"><div class="chat-empty"><span>✳</span><h3>Sẵn sàng cho câu hỏi đầu tiên?</h3><p>Chọn tài liệu và rubric trong phần chuẩn bị<br>để bắt đầu buổi phỏng vấn của bạn.</p><button id="go-setup" class="secondary">Chuẩn bị buổi học ↗</button></div></div>
+          <div id="stream-status" class="stream-status" role="status"></div>
+          <div id="retry-row" class="retry-row" hidden><span>Lượt hỏi chưa hoàn thành. Câu trả lời đã lưu sẽ được giữ lại.</span><button id="retry-button" class="secondary">Thử lại</button></div>
+          <form id="answer-form" class="composer"><label class="sr-only" for="answer-input">Câu trả lời của bạn</label><textarea id="answer-input" placeholder="Trình bày câu trả lời theo cách hiểu của bạn…" rows="3" maxlength="4000" disabled></textarea><div class="composer-footer"><span><span id="char-count">0</span>/4000 · Ctrl + Enter để gửi</span><div class="button-row"><button id="cancel-button" type="button" class="text-button" hidden>Dừng</button><button id="send-button" class="primary compact" type="submit" disabled>Gửi câu trả lời ↑</button></div></div></form>
+        </article><aside class="session-panel"><article class="card"><span class="eyebrow">BUỔI HỌC CỦA BẠN</span><h3 id="session-student">Chưa chọn phiên</h3><p id="session-progress" class="muted">Tiến độ sẽ xuất hiện tại đây.</p><div class="progress-track"><div id="progress-fill"></div></div><div id="criteria-progress" class="criteria-progress"></div><p class="panel-tip">Bạn có thể thừa nhận điều chưa biết, giải thích giả định hoặc đưa ra ví dụ. Giám khảo sẽ hỏi tiếp từ chính câu trả lời đó.</p><button id="finish-button" class="secondary full" disabled>Kết thúc & xem đánh giá</button></article><article class="callout"><span>↳</span><p><strong>Chất lượng hơn độ dài.</strong><br>Một lập luận có căn cứ giúp thể hiện mức độ hiểu bài của bạn.</p></article></aside></div>
+      </section>
+      <section id="view-history" class="view" hidden><div class="page-heading"><div><span class="eyebrow">NHÌN LẠI ĐỂ TIẾN BỘ</span><h1>Từng buổi học. <em>Từng bước tiến.</em></h1></div><button id="refresh-history" class="secondary">Làm mới ↻</button></div><div id="history-list" class="history-list"></div></section>
+    </div>
+  </main>
+</div>
+<dialog id="course-dialog"><form id="course-form"><div class="dialog-head"><h2>Tạo môn học</h2><button type="button" class="icon-button" data-close="course-dialog" aria-label="Đóng">×</button></div><label>Tên môn học<input id="new-course-name" required minlength="2" maxlength="120" placeholder="Ví dụ: Kiến trúc hệ thống"></label><p class="muted">Tài liệu, rubric và lịch sử được lưu riêng theo môn.</p><button class="primary full" type="submit">Tạo không gian học tập</button></form></dialog>
+<dialog id="rubric-dialog" class="wide-dialog"><form id="rubric-form"><div class="dialog-head"><div><span class="eyebrow">XEM LẠI TRƯỚC KHI LƯU</span><h2>Rubric của bạn</h2></div><button type="button" class="icon-button" data-close="rubric-dialog" aria-label="Đóng">×</button></div><label>Tên rubric<input id="rubric-title" required minlength="2" maxlength="150"></label><p class="muted">Mô tả rõ điều cần đánh giá và mức đạt. Tổng trọng số phải bằng 100%.</p><div id="criteria-editor"></div><div class="editor-footer"><button id="add-criterion" type="button" class="secondary">＋ Thêm tiêu chí</button><strong id="weight-total">Tổng: 0%</strong></div><div id="rubric-error" class="form-error" role="alert"></div><button class="primary full" type="submit">Lưu rubric</button></form></dialog>
+<dialog id="report-dialog" class="wide-dialog"><div class="dialog-head"><div><span class="eyebrow">PHẢN HỒI SAU PHỎNG VẤN</span><h2>Điều bạn đã thể hiện</h2></div><button class="icon-button" data-close="report-dialog" aria-label="Đóng">×</button></div><div id="report-content"></div><button id="download-report" class="primary full">Tải kết quả & hội thoại ↓</button></dialog>
+</body>
+</html>

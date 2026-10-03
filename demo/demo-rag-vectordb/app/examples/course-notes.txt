@@ -1,0 +1,24 @@
+BÀI HỌC MẪU: CACHE VÀ TÍNH NHẤT QUÁN TRONG WEBSITE THƯƠNG MẠI ĐIỆN TỬ
+
+1. Cache-aside
+Khi đọc sản phẩm, ứng dụng kiểm tra cache trước. Nếu cache miss, ứng dụng đọc database và ghi kết quả vào cache với TTL. Cache hit có thể giảm độ trễ và tải đọc lên database. Cache không tự bảo đảm dữ liệu mới nhất. TTL giới hạn thời gian tồn tại nhưng trong khoảng TTL dữ liệu vẫn có thể cũ.
+
+2. Vô hiệu hóa cache
+Khi cập nhật giá, có thể ghi database rồi xóa cache để lần đọc sau nạp lại. Cách này vẫn có race condition: một request đọc giá cũ trước lúc ghi database và nạp lại cache sau khi cache bị xóa. Cần xem yêu cầu nhất quán, dùng version, cơ chế đồng bộ hoặc thiết kế tránh đọc cũ phù hợp. Không thể tuyên bố cache luôn nhất quán chỉ vì có TTL.
+
+3. Giỏ hàng và Redis
+Redis lưu dữ liệu trong bộ nhớ, hỗ trợ cấu trúc dữ liệu và thao tác nhanh. Khi dùng Redis lưu giỏ hàng, phải xác định Redis là nguồn dữ liệu chính hay chỉ là cache. Nếu Redis là nguồn dữ liệu chính, mất dữ liệu có thể làm mất giỏ hàng. Persistence AOF/RDB, replication và backup có đặc điểm khác nhau, cần cấu hình và kiểm tra khả năng khôi phục. Không phải bật replication là không bao giờ mất dữ liệu. Một lựa chọn khác là lưu giỏ hàng bền vững trong database và dùng Redis để tăng tốc.
+
+4. Tồn kho và checkout
+Giá hiển thị và số tồn trên giao diện có thể lấy từ cache, nhưng checkout phải xác thực lại ở nguồn dữ liệu có thẩm quyền. Kiểm tra tồn rồi trừ tồn trong hai thao tác tách rời có thể bán vượt khi nhiều request chạy đồng thời. Cần giao dịch với cập nhật có điều kiện, khóa phù hợp hoặc cơ chế reservation. Ví dụ UPDATE stock SET quantity = quantity - 1 WHERE product_id = ? AND quantity >= 1; số hàng cập nhật cho biết đặt giữ thành công hay không. Cần xử lý hoàn trả tồn khi thanh toán thất bại hoặc reservation hết hạn.
+
+5. Cache stampede
+Nếu một key phổ biến hết hạn, nhiều request có thể cùng đọc database, tạo đỉnh tải. Một số biện pháp: gộp các lần nạp cùng key, dùng lock với TTL phù hợp, thêm jitter cho TTL, hoặc phục vụ dữ liệu cũ trong giới hạn khi làm mới nền. Cần cân nhắc độ mới dữ liệu và độ phức tạp vận hành.
+
+6. Đánh giá hiệu năng
+Không chỉ nói "Redis nhanh hơn". Cần chỉ rõ workload, kích thước dữ liệu, network latency, hit rate, p50/p95/p99 latency, throughput và tải database. Cache miss hoặc kết nối mạng có thể làm tổng thời gian tăng. Benchmark cần giống tình huống sử dụng, có tải đồng thời và kiểm tra lỗi.
+
+7. Đánh đổi
+Cache cải thiện hiệu năng nhưng thêm công việc invalidation, quan sát, khôi phục lỗi và bảo đảm nhất quán. Với quy mô nhỏ, database có index tốt có thể đã đủ. Lựa chọn kiến trúc dựa trên yêu cầu, phép đo và rủi ro dữ liệu, không chỉ dựa trên việc công nghệ đang phổ biến.
+
+Đây là tài liệu tự soạn để thử nghiệm ứng dụng, không thay thế giáo trình môn học.
