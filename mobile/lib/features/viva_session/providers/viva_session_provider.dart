@@ -1,6 +1,7 @@
 import 'dart:async';
 import 'package:flutter/material.dart';
 import '../../../core/constants/api_endpoints.dart';
+import '../../../core/network/api_client.dart';
 import '../../../core/widgets/audio_pulse_orb.dart';
 import '../models/viva_question_model.dart';
 import '../services/audio_recorder_service.dart';
@@ -17,7 +18,7 @@ class VivaSessionProvider extends ChangeNotifier {
   final AudioRecorderService _recorderService = AudioRecorderService();
   final VivaWebSocketService _wsService = VivaWebSocketService();
 
-  List<VivaQuestionModel> _questions = VivaQuestionModel.getSampleExamQuestions();
+  List<VivaQuestionModel> _questions = [];
   int _currentQuestionIndex = 0;
   VivaSessionState _sessionState = VivaSessionState.aiSpeaking;
 
@@ -32,12 +33,20 @@ class VivaSessionProvider extends ChangeNotifier {
   StreamSubscription? _audioChunkSub;
   StreamSubscription? _amplitudeSub;
   StreamSubscription? _wsMessageSub;
-  Timer? _mockSpeechStreamTimer;
 
   // Getters
   List<VivaQuestionModel> get questions => _questions;
   int get currentQuestionIndex => _currentQuestionIndex;
-  VivaQuestionModel get currentQuestion => _questions[_currentQuestionIndex];
+  VivaQuestionModel get currentQuestion =>
+      _questions.isNotEmpty && _currentQuestionIndex < _questions.length
+          ? _questions[_currentQuestionIndex]
+          : const VivaQuestionModel(
+              id: 'q-live-01',
+              questionNumber: 1,
+              totalQuestions: 1,
+              bloomLevel: 'Vấn đáp Trực tiếp',
+              content: 'Chào mừng bạn đến với phòng thi vấn đáp trực tuyến.',
+            );
   VivaSessionState get sessionState => _sessionState;
   List<VivaTranscriptEntry> get transcripts => _transcripts;
   double get currentAudioLevel => _currentAudioLevel;
@@ -70,10 +79,40 @@ class VivaSessionProvider extends ChangeNotifier {
     required String studentId,
     String? customWsUrl,
   }) async {
-    _questions = VivaQuestionModel.getSampleExamQuestions();
     _currentQuestionIndex = 0;
     _transcripts.clear();
     _remainingSeconds = 14 * 60 + 52;
+
+    // Load real assigned questions snapshot from Spring Boot Backend
+    try {
+      final qRes = await ApiClient.instance.get(
+        '${ApiEndpoints.assignedQuestions}/$examId/assigned-questions',
+      );
+      if (qRes.success && qRes.data is List && (qRes.data as List).isNotEmpty) {
+        final list = qRes.data as List;
+        _questions = list
+            .map((item) => VivaQuestionModel.fromAssignedQuestion(
+                  item as Map<String, dynamic>,
+                  list.length,
+                ))
+            .toList();
+        debugPrint('[VivaSessionProvider] Loaded ${_questions.length} assigned questions.');
+      }
+    } catch (e) {
+      debugPrint('[VivaSessionProvider] Error fetching assigned questions: $e');
+    }
+
+    if (_questions.isEmpty) {
+      _questions = const [
+        VivaQuestionModel(
+          id: 'q-live-01',
+          questionNumber: 1,
+          totalQuestions: 1,
+          bloomLevel: 'Vấn đáp Trực tiếp',
+          content: 'Chào mừng bạn đến với phòng thi vấn đáp trực tuyến. AI Examiner đang sẵn sàng.',
+        ),
+      ];
+    }
 
     // 1. Initialize audio recorder
     await _recorderService.init();
@@ -145,69 +184,34 @@ class VivaSessionProvider extends ChangeNotifier {
 
   void _startAutoListening() async {
     await _recorderService.startRecording();
-    _startSimulatedSpeechStreaming();
     notifyListeners();
   }
 
   void toggleMicrophone() async {
     if (_recorderService.isRecording) {
       await _recorderService.stopRecording();
-      _mockSpeechStreamTimer?.cancel();
     } else {
       _sessionState = VivaSessionState.listening;
       await _recorderService.startRecording();
-      _startSimulatedSpeechStreaming();
+      _transcripts.add(VivaTranscriptEntry(
+        speaker: VivaRole.student,
+        speakerName: 'Thí sinh',
+        text: '...',
+        timestamp: DateTime.now(),
+        isPartial: true,
+      ));
     }
     notifyListeners();
-  }
-
-  void _startSimulatedSpeechStreaming() {
-    _mockSpeechStreamTimer?.cancel();
-
-    // Stream realistic student response words in real-time as speech-to-text
-    final words = [
-      '“Dạ', 'thưa', 'thầy,', 'đối', 'với', 'kiến', 'trúc', 'Monolithic,',
-      'khi', 'tải', 'lượng', 'tăng', 'thì', 'toàn', 'bộ', 'ứng', 'dụng',
-      'phải', 'được', 'nhân', 'bản', 'đồng', 'loạt,', 'dẫn', 'đến', 'lãng', 'phí', 'tài', 'nguyên.',
-      'Trong', 'khi', 'đó,', 'Microservices', 'cho', 'phép', 'scale', 'độc', 'lập',
-      'từng', 'module', 'nghiệp', 'vụ', 'đang', 'bị', 'nghẽn', 'cổ', 'chai...”'
-    ];
-
-    int wordIdx = 0;
-    String currentText = '';
-
-    // Add initial placeholder student transcript
-    final transcriptEntry = VivaTranscriptEntry(
-      speaker: VivaRole.student,
-      speakerName: 'Thí Sinh: Bạn (SE170245)',
-      text: 'Đang lắng nghe câu trả lời qua micro...',
-      timestamp: DateTime.now(),
-      isPartial: true,
-      confidence: 0.968,
-    );
-    _transcripts.add(transcriptEntry);
-    notifyListeners();
-
-    _mockSpeechStreamTimer = Timer.periodic(const Duration(milliseconds: 280), (timer) {
-      if (wordIdx < words.length && _recorderService.isRecording) {
-        currentText += '${words[wordIdx]} ';
-        wordIdx++;
-
-        final lastIndex = _transcripts.length - 1;
-        _transcripts[lastIndex] = transcriptEntry.copyWith(
-          text: currentText.trim(),
-          isPartial: wordIdx < words.length,
-        );
-        notifyListeners();
-      } else {
-        timer.cancel();
-      }
-    });
   }
 
   void repeatQuestion() {
     _sessionState = VivaSessionState.aiSpeaking;
     notifyListeners();
+
+    _wsService.sendControlMessage({
+      'type': 'repeat_question',
+      'question_id': currentQuestion.id,
+    });
 
     Future.delayed(const Duration(milliseconds: 2500), () {
       _sessionState = VivaSessionState.listening;
@@ -218,7 +222,6 @@ class VivaSessionProvider extends ChangeNotifier {
 
   Future<void> submitAnswer() async {
     await _recorderService.stopRecording();
-    _mockSpeechStreamTimer?.cancel();
     _sessionState = VivaSessionState.processing;
     notifyListeners();
 
@@ -228,7 +231,7 @@ class VivaSessionProvider extends ChangeNotifier {
       'transcript': _transcripts.isNotEmpty ? _transcripts.last.text : '',
     });
 
-    // Simulate AI evaluating rubric & triggering follow-up question
+    // Advance to next question or complete exam
     Future.delayed(const Duration(milliseconds: 2000), () {
       if (_currentQuestionIndex + 1 < _questions.length) {
         _loadQuestionAt(_currentQuestionIndex + 1);
@@ -241,7 +244,6 @@ class VivaSessionProvider extends ChangeNotifier {
   /// Kết thúc toàn bộ ca thi và kích hoạt chấm điểm từ AI
   Future<void> finishExamSession() async {
     await _recorderService.stopRecording();
-    _mockSpeechStreamTimer?.cancel();
     _sessionState = VivaSessionState.processing;
     notifyListeners();
 
@@ -323,7 +325,6 @@ class VivaSessionProvider extends ChangeNotifier {
   @override
   void dispose() {
     _countdownTimer?.cancel();
-    _mockSpeechStreamTimer?.cancel();
     _audioChunkSub?.cancel();
     _amplitudeSub?.cancel();
     _wsMessageSub?.cancel();

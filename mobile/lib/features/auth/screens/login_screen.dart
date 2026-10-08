@@ -176,7 +176,7 @@ class _LoginScreenState extends State<LoginScreen> {
                             keyboardType: TextInputType.emailAddress,
                             style: AppTextStyles.bodyMd.copyWith(color: Colors.white),
                             decoration: const InputDecoration(
-                              hintText: 'Nhập email FPT (VD: hoangnmse170245@fpt.edu.vn)...',
+                              hintText: 'Nhập email FPT',
                               prefixIcon: Icon(Icons.email_outlined, color: AppColors.primaryLight, size: 20),
                             ),
                           ),

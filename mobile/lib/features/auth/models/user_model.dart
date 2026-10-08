@@ -21,19 +21,6 @@ class UserModel {
     this.token,
   });
 
-  factory UserModel.mockStudent() {
-    return const UserModel(
-      id: 'usr-se-170245',
-      username: 'hoangse170245',
-      fullName: 'Nguyễn Minh Hoàng',
-      userCode: 'SE170245',
-      role: 'STUDENT',
-      department: 'Kỹ thuật Phần mềm (FIT Dept)',
-      semester: 'Fall 2026',
-      token: 'jwt_mock_token_student_aives_2026',
-    );
-  }
-
   factory UserModel.fromJson(Map<String, dynamic> json, {String? token}) {
     return UserModel(
       id: json['id']?.toString() ?? '',

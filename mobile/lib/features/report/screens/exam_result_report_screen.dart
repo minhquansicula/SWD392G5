@@ -30,47 +30,22 @@ class _ExamResultReportScreenState extends State<ExamResultReportScreen> {
     final isPendingOrNoScore = widget.exam != null &&
         (widget.exam!.status != ExamStatus.completed || widget.exam!.finalScore == null);
 
-    final report = context.watch<ReportProvider>().latestReport ?? VivaReportModel.getSampleReport();
+    final report = context.watch<ReportProvider>().latestReport ??
+        (widget.exam != null && widget.exam!.finalScore != null
+            ? VivaReportModel.fromExam(widget.exam!)
+            : null);
 
-    return Scaffold(
-      backgroundColor: AppColors.background,
-      appBar: AppBar(
-        title: Text(
-          isPendingOrNoScore ? 'Trạng Thái Điểm Số' : 'Báo Cáo Đánh Giá Viva',
-          style: AppTextStyles.headlineMd,
-        ),
-        leading: IconButton(
-          icon: const Icon(Icons.arrow_back_ios_new_rounded, size: 18),
-          onPressed: () {
-            if (Navigator.of(context).canPop()) {
-              Navigator.of(context).pop();
-            } else {
-              Navigator.of(context).pushAndRemoveUntil(
-                MaterialPageRoute(builder: (_) => const MainNavigationScreen(initialIndex: 1)),
-                (route) => false,
-              );
-            }
-          },
-        ),
-        actions: [
-          if (!isPendingOrNoScore)
-            IconButton(
-              icon: const Icon(Icons.share_outlined, size: 20),
-              onPressed: () {
-                ScaffoldMessenger.of(context).showSnackBar(
-                  const SnackBar(content: Text('Đang chuẩn bị liên kết chia sẻ bảng điểm...')),
-                );
-              },
-            ),
-        ],
-      ),
-      body: isPendingOrNoScore
-          ? _buildNoScoreBody(context, widget.exam!)
-          : SingleChildScrollView(
-              padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
+    final Widget bodyContent;
+    if (isPendingOrNoScore) {
+      bodyContent = _buildNoScoreBody(context, widget.exam!);
+    } else if (report == null) {
+      bodyContent = _buildEmptyReportView(context);
+    } else {
+      bodyContent = SingleChildScrollView(
+        padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
             // Score Summary Hero Card
             _buildScoreHeroCard(report),
             const SizedBox(height: 20),
@@ -123,7 +98,42 @@ class _ExamResultReportScreenState extends State<ExamResultReportScreen> {
             const SizedBox(height: 32),
           ],
         ),
+      );
+    }
+
+    return Scaffold(
+      backgroundColor: AppColors.background,
+      appBar: AppBar(
+        title: Text(
+          isPendingOrNoScore ? 'Trạng Thái Điểm Số' : 'Báo Cáo Đánh Giá Viva',
+          style: AppTextStyles.headlineMd,
+        ),
+        leading: IconButton(
+          icon: const Icon(Icons.arrow_back_ios_new_rounded, size: 18),
+          onPressed: () {
+            if (Navigator.of(context).canPop()) {
+              Navigator.of(context).pop();
+            } else {
+              Navigator.of(context).pushAndRemoveUntil(
+                MaterialPageRoute(builder: (_) => const MainNavigationScreen(initialIndex: 1)),
+                (route) => false,
+              );
+            }
+          },
+        ),
+        actions: [
+          if (!isPendingOrNoScore && report != null)
+            IconButton(
+              icon: const Icon(Icons.share_outlined, size: 20),
+              onPressed: () {
+                ScaffoldMessenger.of(context).showSnackBar(
+                  const SnackBar(content: Text('Đang chuẩn bị liên kết chia sẻ bảng điểm...')),
+                );
+              },
+            ),
+        ],
       ),
+      body: bodyContent,
     );
   }
 
@@ -261,53 +271,92 @@ class _ExamResultReportScreenState extends State<ExamResultReportScreen> {
         GlassCard(
           padding: const EdgeInsets.all(16),
           borderRadius: 18,
-          child: Column(
-            children: report.rubricCriteria.map((c) {
-              return Padding(
-                padding: const EdgeInsets.only(bottom: 14),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Row(
-                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                      children: [
-                        Text(
-                          c.title,
-                          style: AppTextStyles.labelBold.copyWith(fontSize: 13),
-                        ),
-                        Text(
-                          '${c.score.toStringAsFixed(1)} / 10',
-                          style: AppTextStyles.labelBold.copyWith(color: AppColors.primaryLight),
-                        ),
-                      ],
+          child: report.rubricCriteria.isEmpty
+              ? Padding(
+                  padding: const EdgeInsets.symmetric(vertical: 8),
+                  child: Center(
+                    child: Text(
+                      'Bảng phân rã tiêu chí rubric chi tiết đang được cập nhật từ Hội đồng Chấm thi.',
+                      textAlign: TextAlign.center,
+                      style: AppTextStyles.bodySm.copyWith(color: AppColors.textMuted),
                     ),
-                    const SizedBox(height: 6),
-                    ClipRRect(
-                      borderRadius: BorderRadius.circular(6),
-                      child: LinearProgressIndicator(
-                        value: c.percentage,
-                        minHeight: 8,
-                        backgroundColor: AppColors.surfaceCardHigh,
-                        valueColor: AlwaysStoppedAnimation<Color>(
-                          c.score >= 8.5
-                              ? AppColors.success
-                              : c.score >= 7.0
-                                  ? AppColors.primaryLight
-                                  : AppColors.warning,
-                        ),
+                  ),
+                )
+              : Column(
+                  children: report.rubricCriteria.map((c) {
+                    return Padding(
+                      padding: const EdgeInsets.only(bottom: 14),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Row(
+                            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                            children: [
+                              Text(
+                                c.title,
+                                style: AppTextStyles.labelBold.copyWith(fontSize: 13),
+                              ),
+                              Text(
+                                '${c.score.toStringAsFixed(1)} / 10',
+                                style: AppTextStyles.labelBold.copyWith(color: AppColors.primaryLight),
+                              ),
+                            ],
+                          ),
+                          const SizedBox(height: 6),
+                          ClipRRect(
+                            borderRadius: BorderRadius.circular(6),
+                            child: LinearProgressIndicator(
+                              value: c.percentage,
+                              minHeight: 8,
+                              backgroundColor: AppColors.surfaceCardHigh,
+                              valueColor: AlwaysStoppedAnimation<Color>(
+                                c.score >= 8.5
+                                    ? AppColors.success
+                                    : c.score >= 7.0
+                                        ? AppColors.primaryLight
+                                        : AppColors.warning,
+                              ),
+                            ),
+                          ),
+                        ],
                       ),
-                    ),
-                  ],
+                    );
+                  }).toList(),
                 ),
-              );
-            }).toList(),
-          ),
         ),
       ],
     );
   }
 
   Widget _buildAiFeedbackSection(VivaReportModel report) {
+    if (report.strengths.isEmpty && report.improvements.isEmpty) {
+      return Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              const Icon(Icons.auto_awesome_rounded, color: AppColors.secondaryLight, size: 20),
+              const SizedBox(width: 8),
+              Text('Nhận xét chi tiết từ AI Examiner', style: AppTextStyles.titleMd),
+            ],
+          ),
+          const SizedBox(height: 12),
+          GlassCard(
+            padding: const EdgeInsets.all(16),
+            borderRadius: 18,
+            child: Center(
+              child: Padding(
+                padding: const EdgeInsets.symmetric(vertical: 8),
+                child: Text(
+                  'Nhận xét đánh giá chi tiết buổi thi đang được đồng bộ.',
+                  style: AppTextStyles.bodySm.copyWith(color: AppColors.textMuted),
+                ),
+              ),
+            ),
+          ),
+        ],
+      );
+    }
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
@@ -390,7 +439,22 @@ class _ExamResultReportScreenState extends State<ExamResultReportScreen> {
           ],
         ),
         const SizedBox(height: 12),
-        ...List.generate(report.questionReports.length, (index) {
+        if (report.questionReports.isEmpty)
+          GlassCard(
+            padding: const EdgeInsets.all(16),
+            borderRadius: 18,
+            child: Center(
+              child: Padding(
+                padding: const EdgeInsets.symmetric(vertical: 8),
+                child: Text(
+                  'Bản ghi câu hỏi và câu trả lời đang được lưu trữ trong hồ sơ ca thi.',
+                  style: AppTextStyles.bodySm.copyWith(color: AppColors.textMuted),
+                ),
+              ),
+            ),
+          )
+        else
+          ...List.generate(report.questionReports.length, (index) {
           final q = report.questionReports[index];
           final isExpanded = _expandedQuestionIndex == index;
 
@@ -682,4 +746,50 @@ class _ExamResultReportScreenState extends State<ExamResultReportScreen> {
       ],
     );
   }
+
+  Widget _buildEmptyReportView(BuildContext context) {
+    return Center(
+      child: Padding(
+        padding: const EdgeInsets.all(24),
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Container(
+              width: 80,
+              height: 80,
+              decoration: BoxDecoration(
+                color: AppColors.surfaceCardHigh,
+                shape: BoxShape.circle,
+                border: Border.all(color: AppColors.borderGlass),
+              ),
+              child: const Icon(Icons.description_outlined, size: 40, color: AppColors.textMuted),
+            ),
+            const SizedBox(height: 18),
+            Text('Chưa có báo cáo điểm số', style: AppTextStyles.headlineMd),
+            const SizedBox(height: 8),
+            Text(
+              'Hệ thống chưa tìm thấy dữ liệu đánh giá hoặc ca thi chưa được giảng viên phê duyệt điểm.',
+              textAlign: TextAlign.center,
+              style: AppTextStyles.bodyMd.copyWith(color: AppColors.textMuted),
+            ),
+            const SizedBox(height: 24),
+            PrimaryButton(
+              text: 'Quay lại Lịch thi',
+              onPressed: () {
+                if (Navigator.of(context).canPop()) {
+                  Navigator.of(context).pop();
+                } else {
+                  Navigator.of(context).pushAndRemoveUntil(
+                    MaterialPageRoute(builder: (_) => const MainNavigationScreen(initialIndex: 1)),
+                    (route) => false,
+                  );
+                }
+              },
+            ),
+          ],
+        ),
+      ),
+    );
+  }
 }
+

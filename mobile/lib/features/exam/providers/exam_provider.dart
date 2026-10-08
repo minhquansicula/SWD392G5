@@ -4,12 +4,14 @@ import '../../../core/network/api_client.dart';
 import '../models/exam_schedule_model.dart';
 
 class ExamProvider extends ChangeNotifier {
-  List<ExamScheduleModel> _exams = ExamScheduleModel.getMockExams();
+  List<ExamScheduleModel> _exams = [];
   bool _isLoading = false;
+  String? _errorMessage;
   ExamScheduleModel? _selectedExam;
 
   List<ExamScheduleModel> get exams => _exams;
   bool get isLoading => _isLoading;
+  String? get errorMessage => _errorMessage;
   ExamScheduleModel? get selectedExam => _selectedExam ?? (_exams.isNotEmpty ? _exams.first : null);
 
   ExamScheduleModel? get upcomingHeroExam {
@@ -32,6 +34,7 @@ class ExamProvider extends ChangeNotifier {
   /// Tải danh sách ca thi của sinh viên từ Spring Boot: GET /api/student/my-schedules
   Future<void> refreshExams() async {
     _isLoading = true;
+    _errorMessage = null;
     notifyListeners();
 
     try {
@@ -39,22 +42,17 @@ class ExamProvider extends ChangeNotifier {
 
       if (res.success && res.data is List) {
         final list = res.data as List;
-        if (list.isNotEmpty) {
-          _exams = list
-              .map((item) => ExamScheduleModel.fromJson(item as Map<String, dynamic>))
-              .toList();
-          debugPrint('[ExamProvider] Loaded ${_exams.length} schedules from Spring Boot Backend.');
-        } else {
-          // Nếu CSDL chưa gán ca thi cho tài khoản này, giữ danh sách mẫu
-          _exams = ExamScheduleModel.getMockExams();
-        }
-      } else {
-        // Backend offline hoặc chưa có token -> fallback sang dữ liệu mẫu an toàn
-        _exams = ExamScheduleModel.getMockExams();
+        _exams = list
+            .map((item) => ExamScheduleModel.fromJson(item as Map<String, dynamic>))
+            .toList();
+        debugPrint('[ExamProvider] Loaded ${_exams.length} schedules from Spring Boot Backend.');
+        _exams = [];
+        _errorMessage = res.message.isNotEmpty ? res.message : 'Không thể tải lịch thi từ máy chủ.';
       }
     } catch (e) {
-      debugPrint('[ExamProvider] Error loading exams from Backend: $e. Fallback to mock.');
-      _exams = ExamScheduleModel.getMockExams();
+      debugPrint('[ExamProvider] Error loading exams from Backend: $e');
+      _exams = [];
+      _errorMessage = 'Lỗi kết nối máy chủ backend.';
     } finally {
       _isLoading = false;
       notifyListeners();
