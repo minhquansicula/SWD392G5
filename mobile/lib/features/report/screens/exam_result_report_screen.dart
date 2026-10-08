@@ -42,10 +42,14 @@ class _ExamResultReportScreenState extends State<ExamResultReportScreen> {
         leading: IconButton(
           icon: const Icon(Icons.arrow_back_ios_new_rounded, size: 18),
           onPressed: () {
-            Navigator.of(context).pushAndRemoveUntil(
-              MaterialPageRoute(builder: (_) => const MainNavigationScreen(initialIndex: 2)),
-              (route) => false,
-            );
+            if (Navigator.of(context).canPop()) {
+              Navigator.of(context).pop();
+            } else {
+              Navigator.of(context).pushAndRemoveUntil(
+                MaterialPageRoute(builder: (_) => const MainNavigationScreen(initialIndex: 1)),
+                (route) => false,
+              );
+            }
           },
         ),
         actions: [

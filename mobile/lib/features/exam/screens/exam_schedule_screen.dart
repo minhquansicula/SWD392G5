@@ -8,6 +8,7 @@ import '../../../core/widgets/status_badge.dart';
 import '../models/exam_schedule_model.dart';
 import '../providers/exam_provider.dart';
 import 'exam_detail_checklist_screen.dart';
+import '../../report/screens/exam_result_report_screen.dart';
 
 class ExamScheduleScreen extends StatefulWidget {
   const ExamScheduleScreen({super.key});
@@ -17,7 +18,8 @@ class ExamScheduleScreen extends StatefulWidget {
 }
 
 class _ExamScheduleScreenState extends State<ExamScheduleScreen> {
-  int _selectedFilter = 0; // 0: Tất cả, 1: Sắp diễn ra, 2: Đã hoàn thành
+  // 0: Tất cả, 1: Sắp thi, 2: Chờ duyệt điểm, 3: Đã có điểm
+  int _selectedFilter = 0;
 
   @override
   Widget build(BuildContext context) {
@@ -25,15 +27,26 @@ class _ExamScheduleScreenState extends State<ExamScheduleScreen> {
     final allExams = examProvider.exams;
 
     final filteredExams = allExams.where((exam) {
-      if (_selectedFilter == 1) return exam.status == ExamStatus.upcoming;
-      if (_selectedFilter == 2) return exam.status == ExamStatus.completed;
+      if (_selectedFilter == 1) {
+        return exam.status == ExamStatus.upcoming;
+      }
+      if (_selectedFilter == 2) {
+        return exam.status == ExamStatus.completed && exam.finalScore == null;
+      }
+      if (_selectedFilter == 3) {
+        return exam.status == ExamStatus.completed && exam.finalScore != null;
+      }
       return true;
     }).toList();
+
+    final upcomingCount = allExams.where((e) => e.status == ExamStatus.upcoming).length;
+    final pendingCount = allExams.where((e) => e.status == ExamStatus.completed && e.finalScore == null).length;
+    final gradedCount = allExams.where((e) => e.status == ExamStatus.completed && e.finalScore != null).length;
 
     return Scaffold(
       backgroundColor: AppColors.background,
       appBar: AppBar(
-        title: Text('Lịch Thi Vấn Đáp', style: AppTextStyles.headlineMd),
+        title: Text('Lịch Thi & Kết Quả', style: AppTextStyles.headlineMd),
         actions: [
           IconButton(
             icon: const Icon(Icons.refresh_rounded),
@@ -43,28 +56,52 @@ class _ExamScheduleScreenState extends State<ExamScheduleScreen> {
       ),
       body: Column(
         children: [
-          // Filter Tabs
-          Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 8),
+          // Filter Tabs (Scrollable pills)
+          SingleChildScrollView(
+            scrollDirection: Axis.horizontal,
+            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
             child: Row(
               children: [
                 _buildFilterTab(0, 'Tất cả (${allExams.length})'),
                 const SizedBox(width: 8),
-                _buildFilterTab(1, 'Sắp thi'),
+                _buildFilterTab(1, 'Sắp thi ($upcomingCount)'),
                 const SizedBox(width: 8),
-                _buildFilterTab(2, 'Đã xong'),
+                _buildFilterTab(2, 'Chờ duyệt điểm ($pendingCount)'),
+                const SizedBox(width: 8),
+                _buildFilterTab(3, 'Đã có điểm ($gradedCount)'),
               ],
             ),
           ),
-          const SizedBox(height: 8),
+          const SizedBox(height: 6),
 
           // Exams List
           Expanded(
             child: filteredExams.isEmpty
                 ? Center(
-                    child: Text(
-                      'Không có kỳ thi nào trong danh mục này',
-                      style: AppTextStyles.bodyMd.copyWith(color: AppColors.textMuted),
+                    child: Padding(
+                      padding: const EdgeInsets.all(32),
+                      child: Column(
+                        mainAxisAlignment: MainAxisAlignment.center,
+                        children: [
+                          Icon(
+                            _selectedFilter == 3
+                                ? Icons.verified_outlined
+                                : (_selectedFilter == 2 ? Icons.hourglass_top_rounded : Icons.event_note_rounded),
+                            size: 48,
+                            color: AppColors.textDisabled,
+                          ),
+                          const SizedBox(height: 12),
+                          Text(
+                            _selectedFilter == 3
+                                ? 'Chưa có ca thi nào được duyệt điểm chính thức'
+                                : (_selectedFilter == 2
+                                    ? 'Không có ca thi nào đang chờ giảng viên duyệt'
+                                    : 'Không có kỳ thi nào trong danh mục này'),
+                            textAlign: TextAlign.center,
+                            style: AppTextStyles.bodyMd.copyWith(color: AppColors.textMuted),
+                          ),
+                        ],
+                      ),
                     ),
                   )
                 : ListView.builder(
@@ -87,7 +124,7 @@ class _ExamScheduleScreenState extends State<ExamScheduleScreen> {
       onTap: () => setState(() => _selectedFilter = index),
       child: AnimatedContainer(
         duration: const Duration(milliseconds: 180),
-        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
         decoration: BoxDecoration(
           color: isSelected ? AppColors.primary : AppColors.surfaceCardLow,
           borderRadius: BorderRadius.circular(20),
@@ -108,17 +145,27 @@ class _ExamScheduleScreenState extends State<ExamScheduleScreen> {
 
   Widget _buildExamCard(ExamScheduleModel exam) {
     final isUpcoming = exam.status == ExamStatus.upcoming;
+    final isGraded = exam.status == ExamStatus.completed && exam.finalScore != null;
+    final isPendingReview = exam.status == ExamStatus.completed && exam.finalScore == null;
     final dateStr = DateFormat('dd/MM/yyyy • HH:mm').format(exam.scheduledAt);
 
     return GlassCard(
       margin: const EdgeInsets.only(bottom: 14),
       padding: const EdgeInsets.all(16),
       onTap: () {
-        Navigator.of(context).push(
-          MaterialPageRoute(
-            builder: (_) => ExamDetailChecklistScreen(exam: exam),
-          ),
-        );
+        if (isGraded || isPendingReview) {
+          Navigator.of(context).push(
+            MaterialPageRoute(
+              builder: (_) => ExamResultReportScreen(exam: exam),
+            ),
+          );
+        } else {
+          Navigator.of(context).push(
+            MaterialPageRoute(
+              builder: (_) => ExamDetailChecklistScreen(exam: exam),
+            ),
+          );
+        }
       },
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -137,11 +184,24 @@ class _ExamScheduleScreenState extends State<ExamScheduleScreen> {
                   style: AppTextStyles.labelBold.copyWith(color: AppColors.primaryLight),
                 ),
               ),
-              StatusBadge(
-                label: isUpcoming ? 'Sắp diễn ra' : 'Đã hoàn thành',
-                type: isUpcoming ? BadgeType.warning : BadgeType.success,
-                icon: isUpcoming ? Icons.schedule_rounded : Icons.check_circle_rounded,
-              ),
+              if (isUpcoming)
+                const StatusBadge(
+                  label: 'Sắp diễn ra',
+                  type: BadgeType.warning,
+                  icon: Icons.schedule_rounded,
+                )
+              else if (isGraded)
+                const StatusBadge(
+                  label: 'Đã duyệt điểm',
+                  type: BadgeType.success,
+                  icon: Icons.verified_rounded,
+                )
+              else
+                const StatusBadge(
+                  label: 'Chờ GV duyệt',
+                  type: BadgeType.warning,
+                  icon: Icons.hourglass_top_rounded,
+                ),
             ],
           ),
           const SizedBox(height: 10),
@@ -151,6 +211,8 @@ class _ExamScheduleScreenState extends State<ExamScheduleScreen> {
           const SizedBox(height: 12),
           const Divider(color: AppColors.borderGlass),
           const SizedBox(height: 8),
+
+          // Date & Room info
           Row(
             children: [
               const Icon(Icons.meeting_room_outlined, size: 16, color: AppColors.textMuted),
@@ -163,8 +225,10 @@ class _ExamScheduleScreenState extends State<ExamScheduleScreen> {
               Text(dateStr, style: AppTextStyles.bodySm),
             ],
           ),
+
+          // Action Row based on status
+          const SizedBox(height: 12),
           if (isUpcoming) ...[
-            const SizedBox(height: 12),
             SizedBox(
               width: double.infinity,
               height: 38,
@@ -182,6 +246,73 @@ class _ExamScheduleScreenState extends State<ExamScheduleScreen> {
                   backgroundColor: AppColors.primary,
                   shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
                 ),
+              ),
+            ),
+          ] else if (isGraded) ...[
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+              decoration: BoxDecoration(
+                color: AppColors.surfaceCardHigh,
+                borderRadius: BorderRadius.circular(12),
+                border: Border.all(color: AppColors.secondary.withValues(alpha: 0.3)),
+              ),
+              child: Row(
+                children: [
+                  Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text('Điểm chính thức:', style: AppTextStyles.labelSm.copyWith(color: AppColors.textMuted)),
+                      const SizedBox(height: 2),
+                      Text(
+                        '${exam.finalScore} / 10',
+                        style: AppTextStyles.headlineMd.copyWith(
+                          color: AppColors.secondaryLight,
+                          fontWeight: FontWeight.w800,
+                        ),
+                      ),
+                    ],
+                  ),
+                  const Spacer(),
+                  ElevatedButton.icon(
+                    onPressed: () {
+                      Navigator.of(context).push(
+                        MaterialPageRoute(
+                          builder: (_) => ExamResultReportScreen(exam: exam),
+                        ),
+                      );
+                    },
+                    icon: const Icon(Icons.analytics_outlined, size: 16),
+                    label: const Text('Xem nhận xét & Rubric', style: TextStyle(fontSize: 12)),
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: AppColors.secondary,
+                      foregroundColor: Colors.white,
+                      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ] else ...[
+            // Completed but waiting for lecturer approval
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+              decoration: BoxDecoration(
+                color: AppColors.warning.withValues(alpha: 0.1),
+                borderRadius: BorderRadius.circular(12),
+                border: Border.all(color: AppColors.warning.withValues(alpha: 0.3)),
+              ),
+              child: Row(
+                children: [
+                  const Icon(Icons.hourglass_top_rounded, size: 18, color: AppColors.warning),
+                  const SizedBox(width: 8),
+                  Expanded(
+                    child: Text(
+                      'Đã thi xong. Giảng viên đang xem lại ghi âm và chốt điểm chính thức.',
+                      style: AppTextStyles.bodySm.copyWith(color: AppColors.warning, fontSize: 11),
+                    ),
+                  ),
+                ],
               ),
             ),
           ],

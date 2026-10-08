@@ -4,7 +4,6 @@ import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_text_styles.dart';
 import 'student_home_screen.dart';
 import '../../exam/screens/exam_schedule_screen.dart';
-import '../../report/screens/exam_result_report_screen.dart';
 import '../../profile/screens/profile_settings_screen.dart';
 
 class MainNavigationScreen extends StatefulWidget {
@@ -25,14 +24,13 @@ class _MainNavigationScreenState extends State<MainNavigationScreen> {
   final List<Widget> _screens = const [
     StudentHomeScreen(),
     ExamScheduleScreen(),
-    ExamResultReportScreen(),
     ProfileSettingsScreen(),
   ];
 
   @override
   void initState() {
     super.initState();
-    _currentIndex = widget.initialIndex;
+    _currentIndex = widget.initialIndex.clamp(0, 2);
   }
 
   @override
@@ -73,11 +71,6 @@ class _MainNavigationScreenState extends State<MainNavigationScreen> {
                   icon: Icon(Icons.calendar_today_outlined),
                   activeIcon: Icon(Icons.calendar_month_rounded),
                   label: 'Lịch thi',
-                ),
-                BottomNavigationBarItem(
-                  icon: Icon(Icons.assessment_outlined),
-                  activeIcon: Icon(Icons.assessment_rounded),
-                  label: 'Kết quả',
                 ),
                 BottomNavigationBarItem(
                   icon: Icon(Icons.person_outline_rounded),

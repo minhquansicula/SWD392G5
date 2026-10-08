@@ -1,6 +1,5 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
-import '../../../core/constants/api_endpoints.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_text_styles.dart';
 import '../../../core/widgets/glass_card.dart';
@@ -17,24 +16,68 @@ class ProfileSettingsScreen extends StatefulWidget {
 }
 
 class _ProfileSettingsScreenState extends State<ProfileSettingsScreen> {
-  final _wsUrlController = TextEditingController(text: ApiEndpoints.defaultWebSocketUrl);
-  final _backendUrlController = TextEditingController(text: ApiEndpoints.defaultBaseUrl);
-  String _selectedLanguage = 'Tiếng Việt (Vi-VN)';
+  bool _examNotificationEnabled = true;
 
-  @override
-  void dispose() {
-    _wsUrlController.dispose();
-    _backendUrlController.dispose();
-    super.dispose();
+  void _showRegulationDialog() {
+    showDialog(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        backgroundColor: AppColors.surfaceCard,
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+        title: Row(
+          children: [
+            const Icon(Icons.menu_book_rounded, color: AppColors.primaryLight, size: 24),
+            const SizedBox(width: 8),
+            Text('Quy Chế Thi Vấn Đáp', style: AppTextStyles.headlineMd.copyWith(fontSize: 18)),
+          ],
+        ),
+        content: SingleChildScrollView(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Text('1. Thí sinh chuẩn bị không gian yên tĩnh, trang phục nghiêm túc.', style: AppTextStyles.bodySm),
+              const SizedBox(height: 8),
+              Text('2. Giữ micro và kết nối mạng ổn định trong suốt buổi vấn đáp.', style: AppTextStyles.bodySm),
+              const SizedBox(height: 8),
+              Text('3. Điểm số do AI chấm là điểm đề xuất. Giảng viên phụ trách sẽ nghe lại ghi âm để chốt điểm chính thức.', style: AppTextStyles.bodySm),
+              const SizedBox(height: 8),
+              Text('4. Kết quả thi sẽ hiển thị trong mục "Lịch thi & Kết quả" sau khi được giảng viên phê duyệt.', style: AppTextStyles.bodySm),
+            ],
+          ),
+        ),
+        actions: [
+          ElevatedButton(
+            style: ElevatedButton.styleFrom(
+              backgroundColor: AppColors.primary,
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+            ),
+            onPressed: () => Navigator.of(ctx).pop(),
+            child: const Text('Đã hiểu'),
+          ),
+        ],
+      ),
+    );
   }
 
-  void _saveServerConfig() {
-    ApiEndpoints.defaultWebSocketUrl = _wsUrlController.text.trim();
-    ApiEndpoints.defaultBaseUrl = _backendUrlController.text.trim();
+  void _testMicrophone() {
     ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(
+      SnackBar(
         backgroundColor: AppColors.successDark,
-        content: Text('Đã cập nhật cấu hình WebSocket & Backend URL!'),
+        behavior: SnackBarBehavior.floating,
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+        content: Row(
+          children: const [
+            Icon(Icons.mic_rounded, color: Colors.white, size: 20),
+            SizedBox(width: 10),
+            Expanded(
+              child: Text(
+                'Microphone hoạt động tốt! Định dạng thu âm 16kHz PCM đã sẵn sàng.',
+                style: TextStyle(color: Colors.white, fontSize: 13),
+              ),
+            ),
+          ],
+        ),
       ),
     );
   }
@@ -44,34 +87,52 @@ class _ProfileSettingsScreenState extends State<ProfileSettingsScreen> {
     final auth = context.watch<AuthProvider>();
     final user = auth.currentUser;
 
+    final displayName = user?.fullName.isNotEmpty == true ? user!.fullName : 'Nguyễn Minh Hoàng';
+    final userCode = user?.userCode.isNotEmpty == true ? user!.userCode : 'SE170245';
+    final userEmail = user?.username.contains('@') == true
+        ? user!.username
+        : '${userCode.toLowerCase()}@fpt.edu.vn';
+    final department = user?.department.isNotEmpty == true
+        ? user!.department
+        : 'Kỹ thuật Phần mềm (FIT Dept)';
+    final initialLetter = displayName.isNotEmpty ? displayName[0].toUpperCase() : 'S';
+
     return Scaffold(
       backgroundColor: AppColors.background,
       appBar: AppBar(
-        title: Text('Hồ Sơ & Cấu Hình', style: AppTextStyles.headlineMd),
+        title: Text('Hồ Sơ Sinh Viên', style: AppTextStyles.headlineMd),
       ),
       body: SingleChildScrollView(
         padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            // Student Profile Card
+            // Student Profile Identity Card
             GlassCard(
               padding: const EdgeInsets.all(20),
-              borderRadius: 20,
+              borderRadius: 22,
+              border: Border.all(color: AppColors.borderGlow),
               child: Row(
                 children: [
                   Container(
-                    width: 58,
-                    height: 58,
+                    width: 62,
+                    height: 62,
                     decoration: BoxDecoration(
                       shape: BoxShape.circle,
                       gradient: AppColors.primaryGradient,
-                      border: Border.all(color: AppColors.borderGlow, width: 2),
+                      boxShadow: [
+                        BoxShadow(
+                          color: AppColors.primary.withValues(alpha: 0.4),
+                          blurRadius: 16,
+                          offset: const Offset(0, 4),
+                        ),
+                      ],
+                      border: Border.all(color: Colors.white.withValues(alpha: 0.3), width: 2),
                     ),
-                    child: const Center(
+                    child: Center(
                       child: Text(
-                        'H',
-                        style: TextStyle(fontSize: 24, fontWeight: FontWeight.bold, color: Colors.white),
+                        initialLetter,
+                        style: const TextStyle(fontSize: 26, fontWeight: FontWeight.bold, color: Colors.white),
                       ),
                     ),
                   ),
@@ -81,148 +142,223 @@ class _ProfileSettingsScreenState extends State<ProfileSettingsScreen> {
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
                         Text(
-                          user?.fullName ?? 'Nguyễn Minh Hoàng',
-                          style: AppTextStyles.headlineMd.copyWith(fontSize: 17),
+                          displayName,
+                          style: AppTextStyles.headlineMd.copyWith(fontSize: 18),
                         ),
                         const SizedBox(height: 4),
                         Text(
-                          'MSSV: ${user?.userCode ?? 'SE170245'}',
-                          style: AppTextStyles.bodySm.copyWith(color: AppColors.primaryLight, fontWeight: FontWeight.w600),
+                          'MSSV: $userCode',
+                          style: AppTextStyles.labelBold.copyWith(
+                            color: AppColors.primaryLight,
+                            fontSize: 13,
+                          ),
                         ),
                         const SizedBox(height: 2),
                         Text(
-                          user?.department ?? 'Kỹ thuật Phần mềm',
-                          style: AppTextStyles.bodySm.copyWith(color: AppColors.textMuted),
+                          department,
+                          style: AppTextStyles.bodySm.copyWith(color: AppColors.textMuted, fontSize: 12),
                         ),
                       ],
                     ),
                   ),
                   const StatusBadge(
-                    label: 'STUDENT',
-                    type: BadgeType.purple,
+                    label: 'CHÍNH QUY',
+                    type: BadgeType.success,
                   ),
                 ],
               ),
             ),
             const SizedBox(height: 24),
 
-            // AI & Speech Settings (Nhóm chức năng 7)
-            Text('Cấu hình Giọng nói & AI (STT/TTS)', style: AppTextStyles.titleMd),
-            const SizedBox(height: 12),
-            GlassCard(
-              padding: const EdgeInsets.all(16),
-              borderRadius: 18,
-              child: Column(
-                children: [
-                  Row(
-                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                    children: [
-                      Expanded(
-                        child: Row(
-                          children: const [
-                            Icon(Icons.language_rounded, size: 20, color: AppColors.primaryLight),
-                            SizedBox(width: 10),
-                            Expanded(
-                              child: Text(
-                                'Ngôn ngữ Vấn đáp AI',
-                                overflow: TextOverflow.ellipsis,
-                              ),
-                            ),
-                          ],
-                        ),
-                      ),
-                      const SizedBox(width: 8),
-                      DropdownButton<String>(
-                        value: _selectedLanguage,
-                        dropdownColor: AppColors.surfaceCardHigh,
-                        underline: const SizedBox(),
-                        style: AppTextStyles.bodySm.copyWith(color: Colors.white),
-                        items: const [
-                          DropdownMenuItem(value: 'Tiếng Việt (Vi-VN)', child: Text('Tiếng Việt (Vi-VN)')),
-                          DropdownMenuItem(value: 'English (En-US)', child: Text('English (En-US)')),
-                        ],
-                        onChanged: (v) {
-                          if (v != null) setState(() => _selectedLanguage = v);
-                        },
-                      ),
-                    ],
-                  ),
-                  const Divider(color: AppColors.borderGlass),
-                  const SizedBox(height: 4),
-                  Row(
-                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                    children: [
-                      Expanded(
-                        child: Row(
-                          children: const [
-                            Icon(Icons.speed_rounded, size: 20, color: AppColors.tertiary),
-                            SizedBox(width: 10),
-                            Expanded(
-                              child: Text(
-                                'Định dạng âm thanh Micro',
-                                overflow: TextOverflow.ellipsis,
-                              ),
-                            ),
-                          ],
-                        ),
-                      ),
-                      const SizedBox(width: 8),
-                      Text(
-                        '16kHz PCM Mono',
-                        style: AppTextStyles.codeOrTimer.copyWith(fontSize: 12, color: AppColors.tertiary),
-                      ),
-                    ],
-                  ),
-                ],
-              ),
-            ),
-            const SizedBox(height: 24),
-
-            // Backend & WebSocket Server Configuration
-            Row(
-              mainAxisAlignment: MainAxisAlignment.spaceBetween,
-              children: [
-                Expanded(
-                  child: Text(
-                    'Kết Nối Server (Backend & Python)',
-                    style: AppTextStyles.titleMd,
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                  ),
-                ),
-                const SizedBox(width: 8),
-                TextButton(
-                  onPressed: _saveServerConfig,
-                  child: Text('Lưu cấu hình', style: AppTextStyles.labelBold.copyWith(color: AppColors.secondaryLight)),
-                ),
-              ],
-            ),
+            // Academic & Survey Information Section
+            Text('Thông Tin Học Vụ & Khảo Thí', style: AppTextStyles.titleMd),
             const SizedBox(height: 10),
             GlassCard(
               padding: const EdgeInsets.all(16),
               borderRadius: 18,
               child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Text('WebSocket Voice Streaming Endpoint', style: AppTextStyles.labelSm),
-                  const SizedBox(height: 6),
-                  TextField(
-                    controller: _wsUrlController,
-                    style: AppTextStyles.bodySm.copyWith(color: Colors.white),
-                    decoration: const InputDecoration(
-                      hintText: 'ws://10.0.2.2:8000/ws/viva/stream',
-                      prefixIcon: Icon(Icons.wifi_tethering_rounded, size: 18, color: AppColors.secondaryLight),
+                  _buildInfoRow(
+                    icon: Icons.alternate_email_rounded,
+                    iconColor: AppColors.secondaryLight,
+                    label: 'Email FPT',
+                    value: userEmail,
+                  ),
+                  const Divider(color: AppColors.borderGlass),
+                  _buildInfoRow(
+                    icon: Icons.school_rounded,
+                    iconColor: AppColors.primaryLight,
+                    label: 'Học kỳ hiện tại',
+                    value: user?.semester ?? 'Fall 2026',
+                  ),
+                  const Divider(color: AppColors.borderGlass),
+                  _buildInfoRow(
+                    icon: Icons.location_city_rounded,
+                    iconColor: AppColors.tertiary,
+                    label: 'Cơ sở đào tạo',
+                    value: 'FPT University • Campus Hòa Lạc',
+                  ),
+                  const Divider(color: AppColors.borderGlass),
+                  _buildInfoRow(
+                    icon: Icons.verified_user_rounded,
+                    iconColor: AppColors.success,
+                    label: 'Trạng thái học tập',
+                    value: 'Đang theo học (Active)',
+                  ),
+                ],
+              ),
+            ),
+            const SizedBox(height: 24),
+
+            // App Settings & Testing Section
+            Text('Tiện Ích & Cài Đặt', style: AppTextStyles.titleMd),
+            const SizedBox(height: 10),
+            GlassCard(
+              padding: const EdgeInsets.all(16),
+              borderRadius: 18,
+              child: Column(
+                children: [
+                  // Dark Mode Indicator
+                  Row(
+                    children: [
+                      const Icon(Icons.dark_mode_rounded, size: 20, color: AppColors.primaryLight),
+                      const SizedBox(width: 12),
+                      Expanded(
+                        child: Text(
+                          'Giao diện tối chuyên dụng',
+                          style: AppTextStyles.bodyMd.copyWith(color: Colors.white),
+                        ),
+                      ),
+                      Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                        decoration: BoxDecoration(
+                          color: AppColors.surfaceCardHigh,
+                          borderRadius: BorderRadius.circular(8),
+                          border: Border.all(color: AppColors.borderGlass),
+                        ),
+                        child: Text('AI Dark', style: AppTextStyles.labelSm.copyWith(color: AppColors.textMuted)),
+                      ),
+                    ],
+                  ),
+                  const Divider(color: AppColors.borderGlass),
+                  // Exam Reminder Notification Toggle
+                  Row(
+                    children: [
+                      const Icon(Icons.notifications_active_outlined, size: 20, color: AppColors.warning),
+                      const SizedBox(width: 12),
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(
+                              'Nhắc lịch thi vấn đáp',
+                              style: AppTextStyles.bodyMd.copyWith(color: Colors.white),
+                            ),
+                            Text(
+                              'Thông báo trước giờ thi 15 phút',
+                              style: AppTextStyles.bodySm.copyWith(color: AppColors.textMuted, fontSize: 11),
+                            ),
+                          ],
+                        ),
+                      ),
+                      Switch(
+                        value: _examNotificationEnabled,
+                        activeThumbColor: AppColors.primary,
+                        onChanged: (val) {
+                          setState(() => _examNotificationEnabled = val);
+                        },
+                      ),
+                    ],
+                  ),
+                  const Divider(color: AppColors.borderGlass),
+                  // Test Microphone Button
+                  InkWell(
+                    borderRadius: BorderRadius.circular(10),
+                    onTap: _testMicrophone,
+                    child: Padding(
+                      padding: const EdgeInsets.symmetric(vertical: 4),
+                      child: Row(
+                        children: [
+                          const Icon(Icons.mic_none_rounded, size: 20, color: AppColors.tertiary),
+                          const SizedBox(width: 12),
+                          Expanded(
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Text(
+                                  'Kiểm tra Microphone thiết bị',
+                                  style: AppTextStyles.bodyMd.copyWith(color: Colors.white),
+                                ),
+                                Text(
+                                  'Đảm bảo micro thu âm rõ trước khi vào thi',
+                                  style: AppTextStyles.bodySm.copyWith(color: AppColors.textMuted, fontSize: 11),
+                                ),
+                              ],
+                            ),
+                          ),
+                          const Icon(Icons.chevron_right_rounded, color: AppColors.textMuted),
+                        ],
+                      ),
                     ),
                   ),
-                  const SizedBox(height: 14),
-                  Text('Java Spring Boot REST API Endpoint', style: AppTextStyles.labelSm),
-                  const SizedBox(height: 6),
-                  TextField(
-                    controller: _backendUrlController,
-                    style: AppTextStyles.bodySm.copyWith(color: Colors.white),
-                    decoration: const InputDecoration(
-                      hintText: 'http://10.0.2.2:8080/api/v1',
-                      prefixIcon: Icon(Icons.dns_outlined, size: 18, color: AppColors.primaryLight),
+                ],
+              ),
+            ),
+            const SizedBox(height: 24),
+
+            // Regulations & Support Section
+            Text('Quy Chế & Hỗ Trợ', style: AppTextStyles.titleMd),
+            const SizedBox(height: 10),
+            GlassCard(
+              padding: const EdgeInsets.all(16),
+              borderRadius: 18,
+              child: Column(
+                children: [
+                  InkWell(
+                    borderRadius: BorderRadius.circular(10),
+                    onTap: _showRegulationDialog,
+                    child: Padding(
+                      padding: const EdgeInsets.symmetric(vertical: 4),
+                      child: Row(
+                        children: [
+                          const Icon(Icons.menu_book_rounded, size: 20, color: AppColors.primaryLight),
+                          const SizedBox(width: 12),
+                          Expanded(
+                            child: Text(
+                              'Quy chế thi Vấn đáp trực tuyến',
+                              style: AppTextStyles.bodyMd.copyWith(color: Colors.white),
+                            ),
+                          ),
+                          const Icon(Icons.chevron_right_rounded, color: AppColors.textMuted),
+                        ],
+                      ),
+                    ),
+                  ),
+                  const Divider(color: AppColors.borderGlass),
+                  InkWell(
+                    borderRadius: BorderRadius.circular(10),
+                    onTap: () {
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        const SnackBar(
+                          content: Text('Hotline Khảo thí FPT: (024) 7300 1866 • Email: khaothi@fpt.edu.vn'),
+                        ),
+                      );
+                    },
+                    child: Padding(
+                      padding: const EdgeInsets.symmetric(vertical: 4),
+                      child: Row(
+                        children: [
+                          const Icon(Icons.support_agent_rounded, size: 20, color: AppColors.secondaryLight),
+                          const SizedBox(width: 12),
+                          Expanded(
+                            child: Text(
+                              'Liên hệ Phòng Khảo Thí & Đảm Bảo Chất Lượng',
+                              style: AppTextStyles.bodyMd.copyWith(color: Colors.white),
+                            ),
+                          ),
+                          const Icon(Icons.chevron_right_rounded, color: AppColors.textMuted),
+                        ],
+                      ),
                     ),
                   ),
                 ],
@@ -246,6 +382,33 @@ class _ProfileSettingsScreenState extends State<ProfileSettingsScreen> {
             const SizedBox(height: 32),
           ],
         ),
+      ),
+    );
+  }
+
+  Widget _buildInfoRow({
+    required IconData icon,
+    required Color iconColor,
+    required String label,
+    required String value,
+  }) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 6),
+      child: Row(
+        children: [
+          Icon(icon, size: 18, color: iconColor),
+          const SizedBox(width: 12),
+          Text(label, style: AppTextStyles.bodySm.copyWith(color: AppColors.textMuted)),
+          const Spacer(),
+          Flexible(
+            child: Text(
+              value,
+              textAlign: TextAlign.end,
+              overflow: TextOverflow.ellipsis,
+              style: AppTextStyles.bodySm.copyWith(color: Colors.white, fontWeight: FontWeight.w600),
+            ),
+          ),
+        ],
       ),
     );
   }
