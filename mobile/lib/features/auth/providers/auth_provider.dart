@@ -14,19 +14,20 @@ class AuthProvider extends ChangeNotifier {
   String? get errorMessage => _errorMessage;
 
   Future<bool> login({
-    required String username,
+    required String email,
     required String password,
+    String? username,
     String role = 'STUDENT',
   }) async {
     _isLoading = true;
     _errorMessage = null;
     notifyListeners();
 
-    final trimmedUser = username.trim();
+    final inputIdentifier = (username ?? email).trim();
     final trimmedPass = password.trim();
 
-    if (trimmedUser.isEmpty) {
-      _errorMessage = 'Vui lòng nhập Mã số sinh viên hoặc Email';
+    if (inputIdentifier.isEmpty) {
+      _errorMessage = 'Vui lòng nhập Email FPT';
       _isLoading = false;
       notifyListeners();
       return false;
@@ -44,13 +45,13 @@ class AuthProvider extends ChangeNotifier {
       final res = await ApiClient.instance.post(
         ApiEndpoints.login,
         body: {
-          'username': trimmedUser,
+          'username': inputIdentifier,
           'password': trimmedPass,
         },
       );
 
+      // 2. Kiểm tra phản hồi từ Backend (KHÔNG dùng cơ chế dự phòng mock)
       if (res.success && res.data != null) {
-        // Đăng nhập thành công từ Spring Boot
         final data = res.data is Map ? Map<String, dynamic>.from(res.data as Map) : <String, dynamic>{};
         final token = data['token']?.toString();
         final userObj = data['user'] is Map
@@ -65,46 +66,15 @@ class AuthProvider extends ChangeNotifier {
         return true;
       }
 
-      // 2. Nếu Backend offline hoặc từ chối kết nối (statusCode == 0 hoặc 408)
-      // Tự động kích hoạt cơ chế Offline Demo Fallback để không làm gián đoạn buổi test của sinh viên
-      if (res.statusCode == 0 || res.statusCode == 408) {
-        debugPrint('[AuthProvider] Backend Spring Boot offline (${res.statusCode}). Activating Offline Intelligent Session.');
-        
-        String fullName = 'Sinh Viên FPT';
-        if (trimmedUser.toLowerCase().contains('hoang')) {
-          fullName = 'Nguyễn Minh Hoàng';
-        } else if (trimmedUser.toLowerCase().contains('quan')) {
-          fullName = 'Minh Quân';
-        } else if (trimmedUser.toLowerCase().contains('student')) {
-          fullName = 'Trần Văn Sinh Viên';
-        }
-
-        String userCode = trimmedUser.toUpperCase();
-        if (!userCode.startsWith('SE') && !userCode.startsWith('IA') && !userCode.startsWith('GD')) {
-          userCode = 'SE170245';
-        }
-
-        final token = 'jwt_offline_${DateTime.now().millisecondsSinceEpoch}';
-        ApiClient.instance.setAuthToken(token);
-
-        _currentUser = UserModel(
-          id: 'usr-student-${DateTime.now().millisecondsSinceEpoch}',
-          username: trimmedUser,
-          fullName: fullName,
-          userCode: userCode,
-          role: role,
-          department: 'Kỹ thuật Phần mềm (FIT Dept)',
-          semester: 'Fall 2026',
-          token: token,
-        );
-
-        _isLoading = false;
-        notifyListeners();
-        return true;
+      // Xử lý lỗi khi Backend từ chối hoặc không phản hồi
+      if (res.statusCode == 0) {
+        _errorMessage = 'Không thể kết nối đến máy chủ Backend (${ApiClient.instance.baseUrl}). Vui lòng kiểm tra kết nối mạng hoặc bật server.';
+      } else {
+        _errorMessage = res.message.isNotEmpty
+            ? res.message
+            : 'Email FPT hoặc mật khẩu không chính xác.';
       }
 
-      // 3. Nếu Backend trả về lỗi xác thực cụ thể (400, 401: Sai mật khẩu / không tồn tại)
-      _errorMessage = res.message.isNotEmpty ? res.message : 'Tài khoản hoặc mật khẩu không chính xác.';
       _isLoading = false;
       notifyListeners();
       return false;
@@ -120,11 +90,6 @@ class AuthProvider extends ChangeNotifier {
   void logout() {
     ApiClient.instance.setAuthToken(null);
     _currentUser = null;
-    notifyListeners();
-  }
-
-  void loginAsDemoStudent() {
-    _currentUser = UserModel.mockStudent();
     notifyListeners();
   }
 }

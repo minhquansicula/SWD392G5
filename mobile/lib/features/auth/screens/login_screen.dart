@@ -15,13 +15,13 @@ class LoginScreen extends StatefulWidget {
 }
 
 class _LoginScreenState extends State<LoginScreen> {
-  final _usernameController = TextEditingController(text: 'SE170245');
-  final _passwordController = TextEditingController(text: '123456');
+  final _emailController = TextEditingController();
+  final _passwordController = TextEditingController();
   bool _obscurePassword = true;
 
   @override
   void dispose() {
-    _usernameController.dispose();
+    _emailController.dispose();
     _passwordController.dispose();
     super.dispose();
   }
@@ -29,7 +29,7 @@ class _LoginScreenState extends State<LoginScreen> {
   void _handleLogin() async {
     final auth = context.read<AuthProvider>();
     final success = await auth.login(
-      username: _usernameController.text,
+      email: _emailController.text,
       password: _passwordController.text,
       role: 'STUDENT',
     );
@@ -167,16 +167,17 @@ class _LoginScreenState extends State<LoginScreen> {
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
                           Text(
-                            'Mã số sinh viên hoặc Email FPT',
+                            'Email FPT',
                             style: AppTextStyles.labelBold.copyWith(fontSize: 12),
                           ),
                           const SizedBox(height: 8),
                           TextField(
-                            controller: _usernameController,
+                            controller: _emailController,
+                            keyboardType: TextInputType.emailAddress,
                             style: AppTextStyles.bodyMd.copyWith(color: Colors.white),
                             decoration: const InputDecoration(
-                              hintText: 'Nhập SE170245 hoặc email...',
-                              prefixIcon: Icon(Icons.badge_outlined, color: AppColors.primaryLight, size: 20),
+                              hintText: 'Nhập email FPT (VD: hoangnmse170245@fpt.edu.vn)...',
+                              prefixIcon: Icon(Icons.email_outlined, color: AppColors.primaryLight, size: 20),
                             ),
                           ),
                           const SizedBox(height: 16),
