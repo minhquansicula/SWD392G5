@@ -34,16 +34,16 @@ class UserModel {
     );
   }
 
-  factory UserModel.fromJson(Map<String, dynamic> json) {
+  factory UserModel.fromJson(Map<String, dynamic> json, {String? token}) {
     return UserModel(
       id: json['id']?.toString() ?? '',
       username: json['username']?.toString() ?? '',
-      fullName: json['fullName'] ?? json['full_name'] ?? '',
-      userCode: json['userCode'] ?? json['user_code'] ?? '',
+      fullName: json['fullName'] ?? json['full_name'] ?? 'Sinh viên FPT',
+      userCode: json['studentCode'] ?? json['userCode'] ?? json['user_code'] ?? 'SE170245',
       role: json['role']?.toString() ?? 'STUDENT',
-      department: json['department'] ?? 'Software Engineering',
+      department: json['department'] ?? 'Kỹ thuật Phần mềm (FIT Dept)',
       semester: json['semester'] ?? 'Fall 2026',
-      token: json['token'] ?? json['access_token'],
+      token: token ?? json['token'] ?? json['access_token'],
     );
   }
 }

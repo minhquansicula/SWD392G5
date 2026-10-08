@@ -7,6 +7,7 @@ import '../../../core/widgets/glass_card.dart';
 import '../../../core/widgets/status_badge.dart';
 import '../../auth/providers/auth_provider.dart';
 import '../../exam/models/exam_schedule_model.dart';
+import '../../exam/providers/exam_provider.dart';
 import '../models/viva_question_model.dart';
 import '../providers/viva_session_provider.dart';
 import '../../report/screens/exam_result_report_screen.dart';
@@ -32,6 +33,10 @@ class _VivaRoomScreenState extends State<VivaRoomScreen> {
     WidgetsBinding.instance.addPostFrameCallback((_) {
       final authProvider = context.read<AuthProvider>();
       final studentId = authProvider.currentUser?.userCode ?? 'SE170245';
+      
+      // Báo Spring Boot Backend chuyển trạng thái ca thi sang IN_PROGRESS
+      context.read<ExamProvider>().startExamOnBackend(widget.exam.id);
+
       context.read<VivaSessionProvider>().startSession(
             examId: widget.exam.id,
             studentId: studentId,

@@ -22,8 +22,13 @@ class StudentHomeScreen extends StatelessWidget {
     return Scaffold(
       backgroundColor: AppColors.background,
       body: SafeArea(
-        child: SingleChildScrollView(
-          padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
+        child: RefreshIndicator(
+          color: AppColors.primaryLight,
+          backgroundColor: AppColors.surfaceCard,
+          onRefresh: () => context.read<ExamProvider>().refreshExams(),
+          child: SingleChildScrollView(
+            physics: const AlwaysScrollableScrollPhysics(),
+            padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
@@ -46,8 +51,9 @@ class StudentHomeScreen extends StatelessWidget {
           ),
         ),
       ),
-    );
-  }
+    ),
+  );
+}
 
   Widget _buildTopHeader(dynamic user) {
     return Row(
