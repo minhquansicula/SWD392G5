@@ -27,33 +27,21 @@ class _ExamResultReportScreenState extends State<ExamResultReportScreen> {
 
   @override
   Widget build(BuildContext context) {
-    final report = context.watch<ReportProvider>().latestReport ?? VivaReportModel.getSampleReport();
+    final isPendingOrNoScore = widget.exam != null &&
+        (widget.exam!.status != ExamStatus.completed || widget.exam!.finalScore == null);
 
-    return Scaffold(
-      backgroundColor: AppColors.background,
-      appBar: AppBar(
-        title: Text('Báo Cáo Đánh Giá Viva', style: AppTextStyles.headlineMd),
-        leading: IconButton(
-          icon: const Icon(Icons.arrow_back_ios_new_rounded, size: 18),
-          onPressed: () {
-            Navigator.of(context).pushAndRemoveUntil(
-              MaterialPageRoute(builder: (_) => const MainNavigationScreen(initialIndex: 2)),
-              (route) => false,
-            );
-          },
-        ),
-        actions: [
-          IconButton(
-            icon: const Icon(Icons.share_outlined, size: 20),
-            onPressed: () {
-              ScaffoldMessenger.of(context).showSnackBar(
-                const SnackBar(content: Text('Đang chuẩn bị liên kết chia sẻ bảng điểm...')),
-              );
-            },
-          ),
-        ],
-      ),
-      body: SingleChildScrollView(
+    final report = context.watch<ReportProvider>().latestReport ??
+        (widget.exam != null && widget.exam!.finalScore != null
+            ? VivaReportModel.fromExam(widget.exam!)
+            : null);
+
+    final Widget bodyContent;
+    if (isPendingOrNoScore) {
+      bodyContent = _buildNoScoreBody(context, widget.exam!);
+    } else if (report == null) {
+      bodyContent = _buildEmptyReportView(context);
+    } else {
+      bodyContent = SingleChildScrollView(
         padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
@@ -110,7 +98,42 @@ class _ExamResultReportScreenState extends State<ExamResultReportScreen> {
             const SizedBox(height: 32),
           ],
         ),
+      );
+    }
+
+    return Scaffold(
+      backgroundColor: AppColors.background,
+      appBar: AppBar(
+        title: Text(
+          isPendingOrNoScore ? 'Trạng Thái Điểm Số' : 'Báo Cáo Đánh Giá Viva',
+          style: AppTextStyles.headlineMd,
+        ),
+        leading: IconButton(
+          icon: const Icon(Icons.arrow_back_ios_new_rounded, size: 18),
+          onPressed: () {
+            if (Navigator.of(context).canPop()) {
+              Navigator.of(context).pop();
+            } else {
+              Navigator.of(context).pushAndRemoveUntil(
+                MaterialPageRoute(builder: (_) => const MainNavigationScreen(initialIndex: 1)),
+                (route) => false,
+              );
+            }
+          },
+        ),
+        actions: [
+          if (!isPendingOrNoScore && report != null)
+            IconButton(
+              icon: const Icon(Icons.share_outlined, size: 20),
+              onPressed: () {
+                ScaffoldMessenger.of(context).showSnackBar(
+                  const SnackBar(content: Text('Đang chuẩn bị liên kết chia sẻ bảng điểm...')),
+                );
+              },
+            ),
+        ],
       ),
+      body: bodyContent,
     );
   }
 
@@ -248,53 +271,92 @@ class _ExamResultReportScreenState extends State<ExamResultReportScreen> {
         GlassCard(
           padding: const EdgeInsets.all(16),
           borderRadius: 18,
-          child: Column(
-            children: report.rubricCriteria.map((c) {
-              return Padding(
-                padding: const EdgeInsets.only(bottom: 14),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Row(
-                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                      children: [
-                        Text(
-                          c.title,
-                          style: AppTextStyles.labelBold.copyWith(fontSize: 13),
-                        ),
-                        Text(
-                          '${c.score.toStringAsFixed(1)} / 10',
-                          style: AppTextStyles.labelBold.copyWith(color: AppColors.primaryLight),
-                        ),
-                      ],
+          child: report.rubricCriteria.isEmpty
+              ? Padding(
+                  padding: const EdgeInsets.symmetric(vertical: 8),
+                  child: Center(
+                    child: Text(
+                      'Bảng phân rã tiêu chí rubric chi tiết đang được cập nhật từ Hội đồng Chấm thi.',
+                      textAlign: TextAlign.center,
+                      style: AppTextStyles.bodySm.copyWith(color: AppColors.textMuted),
                     ),
-                    const SizedBox(height: 6),
-                    ClipRRect(
-                      borderRadius: BorderRadius.circular(6),
-                      child: LinearProgressIndicator(
-                        value: c.percentage,
-                        minHeight: 8,
-                        backgroundColor: AppColors.surfaceCardHigh,
-                        valueColor: AlwaysStoppedAnimation<Color>(
-                          c.score >= 8.5
-                              ? AppColors.success
-                              : c.score >= 7.0
-                                  ? AppColors.primaryLight
-                                  : AppColors.warning,
-                        ),
+                  ),
+                )
+              : Column(
+                  children: report.rubricCriteria.map((c) {
+                    return Padding(
+                      padding: const EdgeInsets.only(bottom: 14),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Row(
+                            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                            children: [
+                              Text(
+                                c.title,
+                                style: AppTextStyles.labelBold.copyWith(fontSize: 13),
+                              ),
+                              Text(
+                                '${c.score.toStringAsFixed(1)} / 10',
+                                style: AppTextStyles.labelBold.copyWith(color: AppColors.primaryLight),
+                              ),
+                            ],
+                          ),
+                          const SizedBox(height: 6),
+                          ClipRRect(
+                            borderRadius: BorderRadius.circular(6),
+                            child: LinearProgressIndicator(
+                              value: c.percentage,
+                              minHeight: 8,
+                              backgroundColor: AppColors.surfaceCardHigh,
+                              valueColor: AlwaysStoppedAnimation<Color>(
+                                c.score >= 8.5
+                                    ? AppColors.success
+                                    : c.score >= 7.0
+                                        ? AppColors.primaryLight
+                                        : AppColors.warning,
+                              ),
+                            ),
+                          ),
+                        ],
                       ),
-                    ),
-                  ],
+                    );
+                  }).toList(),
                 ),
-              );
-            }).toList(),
-          ),
         ),
       ],
     );
   }
 
   Widget _buildAiFeedbackSection(VivaReportModel report) {
+    if (report.strengths.isEmpty && report.improvements.isEmpty) {
+      return Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              const Icon(Icons.auto_awesome_rounded, color: AppColors.secondaryLight, size: 20),
+              const SizedBox(width: 8),
+              Text('Nhận xét chi tiết từ AI Examiner', style: AppTextStyles.titleMd),
+            ],
+          ),
+          const SizedBox(height: 12),
+          GlassCard(
+            padding: const EdgeInsets.all(16),
+            borderRadius: 18,
+            child: Center(
+              child: Padding(
+                padding: const EdgeInsets.symmetric(vertical: 8),
+                child: Text(
+                  'Nhận xét đánh giá chi tiết buổi thi đang được đồng bộ.',
+                  style: AppTextStyles.bodySm.copyWith(color: AppColors.textMuted),
+                ),
+              ),
+            ),
+          ),
+        ],
+      );
+    }
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
@@ -377,7 +439,22 @@ class _ExamResultReportScreenState extends State<ExamResultReportScreen> {
           ],
         ),
         const SizedBox(height: 12),
-        ...List.generate(report.questionReports.length, (index) {
+        if (report.questionReports.isEmpty)
+          GlassCard(
+            padding: const EdgeInsets.all(16),
+            borderRadius: 18,
+            child: Center(
+              child: Padding(
+                padding: const EdgeInsets.symmetric(vertical: 8),
+                child: Text(
+                  'Bản ghi câu hỏi và câu trả lời đang được lưu trữ trong hồ sơ ca thi.',
+                  style: AppTextStyles.bodySm.copyWith(color: AppColors.textMuted),
+                ),
+              ),
+            ),
+          )
+        else
+          ...List.generate(report.questionReports.length, (index) {
           final q = report.questionReports[index];
           final isExpanded = _expandedQuestionIndex == index;
 
@@ -472,4 +549,247 @@ class _ExamResultReportScreenState extends State<ExamResultReportScreen> {
       ],
     );
   }
+
+  Widget _buildNoScoreBody(BuildContext context, ExamScheduleModel exam) {
+    final status = exam.status;
+    final isInProgress = status == ExamStatus.inProgress;
+    final isCompleted = status == ExamStatus.completed;
+
+    String badgeLabel = 'CHƯA THI • SẮP DIỄN RA';
+    Color badgeColor = AppColors.warning;
+    IconData statusIcon = Icons.calendar_today_rounded;
+    String title = 'Chưa có kết quả điểm thi';
+    String desc = 'Thí sinh chưa bước vào ca thi này. Điểm số, biên bản đối thoại và phiếu đánh giá năng lực sẽ xuất hiện sau khi hoàn thành buổi thi.';
+
+    if (isInProgress) {
+      badgeLabel = 'ĐANG THI VẤN ĐÁP';
+      badgeColor = AppColors.primaryLight;
+      statusIcon = Icons.play_circle_outline_rounded;
+      title = 'Ca thi đang diễn ra — Chưa có điểm';
+      desc = 'Thí sinh đang trong phòng thi vấn đáp trực tiếp với AI. Kết quả sẽ được tổng hợp ngay sau khi ca thi kết thúc.';
+    } else if (isCompleted) {
+      badgeLabel = 'ĐANG CHỜ CHỐT ĐIỂM';
+      badgeColor = AppColors.secondaryLight;
+      statusIcon = Icons.hourglass_top_rounded;
+      title = 'Ca thi đã hoàn thành — Chờ thẩm định';
+      desc = 'Thí sinh đã hoàn thành phần thi vấn đáp. Biên bản hội thoại đang được AI và Hội đồng Giảng viên thẩm định trước khi công bố điểm chính thức.';
+    }
+
+    return SingleChildScrollView(
+      padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          // Hero Pending Card
+          GlassCard(
+            padding: const EdgeInsets.all(22),
+            borderRadius: 22,
+            border: Border.all(color: badgeColor.withValues(alpha: 0.4)),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  children: [
+                    Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                      decoration: BoxDecoration(
+                        color: badgeColor.withValues(alpha: 0.15),
+                        borderRadius: BorderRadius.circular(20),
+                        border: Border.all(color: badgeColor.withValues(alpha: 0.4)),
+                      ),
+                      child: Row(
+                        children: [
+                          Icon(statusIcon, size: 14, color: badgeColor),
+                          const SizedBox(width: 6),
+                          Text(
+                            badgeLabel,
+                            style: AppTextStyles.labelBold.copyWith(color: badgeColor, fontSize: 11),
+                          ),
+                        ],
+                      ),
+                    ),
+                    Text(
+                      exam.courseCode,
+                      style: AppTextStyles.labelBold.copyWith(color: AppColors.primaryLight),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 16),
+                Text(
+                  title,
+                  style: AppTextStyles.headlineLg.copyWith(fontSize: 20),
+                ),
+                const SizedBox(height: 8),
+                Text(
+                  desc,
+                  style: AppTextStyles.bodyMd.copyWith(color: AppColors.textMuted, height: 1.4),
+                ),
+                const SizedBox(height: 20),
+
+                // Meta Grid
+                Container(
+                  padding: const EdgeInsets.all(14),
+                  decoration: BoxDecoration(
+                    color: AppColors.surfaceCardLow.withValues(alpha: 0.6),
+                    borderRadius: BorderRadius.circular(14),
+                    border: Border.all(color: AppColors.borderGlass),
+                  ),
+                  child: Column(
+                    children: [
+                      _buildMetaRow('Môn học & Kỳ thi', '${exam.courseCode} - ${exam.examTitle}'),
+                      const Divider(color: AppColors.borderGlass, height: 16),
+                      _buildMetaRow('Thời gian ca thi', exam.timeRemainingText),
+                      const Divider(color: AppColors.borderGlass, height: 16),
+                      _buildMetaRow('Phòng thi / Hội đồng', exam.room),
+                      const Divider(color: AppColors.borderGlass, height: 16),
+                      _buildMetaRow('Trạng thái điểm', 'Chưa có điểm (Đang xử lý)', valueColor: AppColors.warning),
+                    ],
+                  ),
+                ),
+              ],
+            ),
+          ),
+          const SizedBox(height: 20),
+
+          // 3-step Examination flow
+          _buildFlowExplanation(),
+          const SizedBox(height: 24),
+
+          // Back to Home Button
+          PrimaryButton(
+            text: 'Về Trang Chủ',
+            icon: Icons.home_rounded,
+            onPressed: () {
+              Navigator.of(context).pushAndRemoveUntil(
+                MaterialPageRoute(builder: (_) => const MainNavigationScreen()),
+                (route) => false,
+              );
+            },
+          ),
+          const SizedBox(height: 24),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildMetaRow(String label, String value, {Color? valueColor}) {
+    return Row(
+      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+      children: [
+        Text(label, style: AppTextStyles.bodySm.copyWith(color: AppColors.textMuted)),
+        const SizedBox(width: 8),
+        Expanded(
+          child: Text(
+            value,
+            textAlign: TextAlign.right,
+            style: AppTextStyles.labelBold.copyWith(fontSize: 12, color: valueColor ?? Colors.white),
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+          ),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildFlowExplanation() {
+    return GlassCard(
+      padding: const EdgeInsets.all(18),
+      borderRadius: 18,
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              const Icon(Icons.help_outline_rounded, size: 18, color: AppColors.primaryLight),
+              const SizedBox(width: 8),
+              Text('Quy trình khảo thí & Công bố điểm', style: AppTextStyles.labelBold.copyWith(fontSize: 13)),
+            ],
+          ),
+          const SizedBox(height: 14),
+          _buildFlowStep('1', 'Thi vấn đáp AI (Mobile)', 'Thí sinh trả lời trực tiếp các câu hỏi của AI Examiner trên ứng dụng điện thoại.'),
+          const SizedBox(height: 10),
+          _buildFlowStep('2', 'AI Phân tích Rubric & Điểm', 'Hệ thống tự động đối chiếu câu trả lời với tiêu chí Rubric và xuất đề xuất điểm.'),
+          const SizedBox(height: 10),
+          _buildFlowStep('3', 'Hội đồng Chốt & Công bố', 'Giảng viên thẩm định bài thi, điều chỉnh nếu cần và chốt điểm chính thức.'),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildFlowStep(String step, String title, String desc) {
+    return Row(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Container(
+          width: 22,
+          height: 22,
+          decoration: const BoxDecoration(
+            color: AppColors.primary,
+            shape: BoxShape.circle,
+          ),
+          child: Center(
+            child: Text(step, style: const TextStyle(fontSize: 11, fontWeight: FontWeight.bold, color: Colors.white)),
+          ),
+        ),
+        const SizedBox(width: 10),
+        Expanded(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(title, style: AppTextStyles.labelBold.copyWith(fontSize: 12)),
+              const SizedBox(height: 2),
+              Text(desc, style: AppTextStyles.bodySm.copyWith(color: AppColors.textMuted, fontSize: 11, height: 1.3)),
+            ],
+          ),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildEmptyReportView(BuildContext context) {
+    return Center(
+      child: Padding(
+        padding: const EdgeInsets.all(24),
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Container(
+              width: 80,
+              height: 80,
+              decoration: BoxDecoration(
+                color: AppColors.surfaceCardHigh,
+                shape: BoxShape.circle,
+                border: Border.all(color: AppColors.borderGlass),
+              ),
+              child: const Icon(Icons.description_outlined, size: 40, color: AppColors.textMuted),
+            ),
+            const SizedBox(height: 18),
+            Text('Chưa có báo cáo điểm số', style: AppTextStyles.headlineMd),
+            const SizedBox(height: 8),
+            Text(
+              'Hệ thống chưa tìm thấy dữ liệu đánh giá hoặc ca thi chưa được giảng viên phê duyệt điểm.',
+              textAlign: TextAlign.center,
+              style: AppTextStyles.bodyMd.copyWith(color: AppColors.textMuted),
+            ),
+            const SizedBox(height: 24),
+            PrimaryButton(
+              text: 'Quay lại Lịch thi',
+              onPressed: () {
+                if (Navigator.of(context).canPop()) {
+                  Navigator.of(context).pop();
+                } else {
+                  Navigator.of(context).pushAndRemoveUntil(
+                    MaterialPageRoute(builder: (_) => const MainNavigationScreen(initialIndex: 1)),
+                    (route) => false,
+                  );
+                }
+              },
+            ),
+          ],
+        ),
+      ),
+    );
+  }
 }
+

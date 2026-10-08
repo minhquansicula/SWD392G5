@@ -17,13 +17,19 @@ class StudentHomeScreen extends StatelessWidget {
   Widget build(BuildContext context) {
     final user = context.watch<AuthProvider>().currentUser;
     final examProvider = context.watch<ExamProvider>();
-    final heroExam = examProvider.upcomingHeroExam ?? examProvider.exams.first;
+    final heroExam = examProvider.upcomingHeroExam ??
+        (examProvider.exams.isNotEmpty ? examProvider.exams.first : null);
 
     return Scaffold(
       backgroundColor: AppColors.background,
       body: SafeArea(
-        child: SingleChildScrollView(
-          padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
+        child: RefreshIndicator(
+          color: AppColors.primaryLight,
+          backgroundColor: AppColors.surfaceCard,
+          onRefresh: () => context.read<ExamProvider>().refreshExams(),
+          child: SingleChildScrollView(
+            physics: const AlwaysScrollableScrollPhysics(),
+            padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
@@ -46,8 +52,9 @@ class StudentHomeScreen extends StatelessWidget {
           ),
         ),
       ),
-    );
-  }
+    ),
+  );
+}
 
   Widget _buildTopHeader(dynamic user) {
     return Row(
@@ -63,10 +70,12 @@ class StudentHomeScreen extends StatelessWidget {
                 gradient: AppColors.primaryGradient,
                 border: Border.all(color: AppColors.borderGlow, width: 2),
               ),
-              child: const Center(
+              child: Center(
                 child: Text(
-                  'H',
-                  style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold, color: Colors.white),
+                  user != null && user.fullName.isNotEmpty
+                      ? user.fullName[0].toUpperCase()
+                      : 'S',
+                  style: const TextStyle(fontSize: 20, fontWeight: FontWeight.bold, color: Colors.white),
                 ),
               ),
             ),
@@ -92,9 +101,13 @@ class StudentHomeScreen extends StatelessWidget {
             children: [
               Row(
                 children: [
-                  Text(
-                    'Chào Hoàng',
-                    style: AppTextStyles.headlineMd.copyWith(fontSize: 17),
+                  Expanded(
+                    child: Text(
+                      'Chào ${user != null && user.fullName.isNotEmpty ? user.fullName : "bạn"}',
+                      style: AppTextStyles.headlineMd.copyWith(fontSize: 16),
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                    ),
                   ),
                   const SizedBox(width: 4),
                   const Text('👋', style: TextStyle(fontSize: 16)),
@@ -102,7 +115,7 @@ class StudentHomeScreen extends StatelessWidget {
               ),
               const SizedBox(height: 2),
               Text(
-                '${user?.userCode ?? 'SE170245'} • Kỹ thuật Phần mềm',
+                '${user?.userCode ?? 'SE170245'} • ${user?.department ?? 'Kỹ thuật Phần mềm'}',
                 style: AppTextStyles.bodySm.copyWith(color: AppColors.textMuted),
                 maxLines: 1,
                 overflow: TextOverflow.ellipsis,
@@ -133,7 +146,41 @@ class StudentHomeScreen extends StatelessWidget {
     );
   }
 
-  Widget _buildUpcomingExamHero(BuildContext context, ExamScheduleModel exam) {
+  Widget _buildUpcomingExamHero(BuildContext context, ExamScheduleModel? exam) {
+    if (exam == null) {
+      return GlassCard(
+        padding: const EdgeInsets.all(20),
+        borderRadius: 22,
+        child: Row(
+          children: [
+            Container(
+              width: 48,
+              height: 48,
+              decoration: BoxDecoration(
+                color: AppColors.primary.withValues(alpha: 0.15),
+                shape: BoxShape.circle,
+              ),
+              child: const Icon(Icons.event_available_rounded, color: AppColors.primaryLight, size: 26),
+            ),
+            const SizedBox(width: 14),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text('Không có lịch thi sắp tới', style: AppTextStyles.titleMd),
+                  const SizedBox(height: 4),
+                  Text(
+                    'Hiện tại bạn không có ca thi vấn đáp nào cần thực hiện.',
+                    style: AppTextStyles.bodySm.copyWith(color: AppColors.textMuted),
+                  ),
+                ],
+              ),
+            ),
+          ],
+        ),
+      );
+    }
+
     return GlassCard(
       padding: const EdgeInsets.all(20),
       borderRadius: 22,
@@ -276,18 +323,33 @@ class StudentHomeScreen extends StatelessWidget {
           ],
         ),
         const SizedBox(height: 12),
-        SizedBox(
-          height: 150,
-          child: ListView.separated(
-            scrollDirection: Axis.horizontal,
-            itemCount: exams.length,
-            separatorBuilder: (_, _) => const SizedBox(width: 12),
-            itemBuilder: (context, index) {
-              final exam = exams[index];
-              return _buildCourseCard(context, exam);
-            },
+        if (exams.isEmpty)
+          GlassCard(
+            padding: const EdgeInsets.all(16),
+            borderRadius: 18,
+            child: Center(
+              child: Padding(
+                padding: const EdgeInsets.symmetric(vertical: 8),
+                child: Text(
+                  'Chưa có học phần nào được ghi nhận trong kỳ học.',
+                  style: AppTextStyles.bodySm.copyWith(color: AppColors.textMuted),
+                ),
+              ),
+            ),
+          )
+        else
+          SizedBox(
+            height: 150,
+            child: ListView.separated(
+              scrollDirection: Axis.horizontal,
+              itemCount: exams.length,
+              separatorBuilder: (_, _) => const SizedBox(width: 12),
+              itemBuilder: (context, index) {
+                final exam = exams[index];
+                return _buildCourseCard(context, exam);
+              },
+            ),
           ),
-        ),
       ],
     );
   }
@@ -396,6 +458,8 @@ class StudentHomeScreen extends StatelessWidget {
   }
 
   Widget _buildRecentResultsSection(BuildContext context, List<ExamScheduleModel> completed) {
+    final latestCompleted = completed.isNotEmpty ? completed.first : null;
+
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
@@ -417,72 +481,118 @@ class StudentHomeScreen extends StatelessWidget {
                 ],
               ),
             ),
-            const SizedBox(width: 8),
-            GestureDetector(
-              onTap: () {
-                Navigator.of(context).push(
-                  MaterialPageRoute(builder: (_) => const ExamResultReportScreen()),
-                );
-              },
-              child: Text(
-                'Chi tiết',
-                style: AppTextStyles.bodySm.copyWith(color: AppColors.secondaryLight, fontWeight: FontWeight.w600),
+            if (latestCompleted != null) ...[
+              const SizedBox(width: 8),
+              GestureDetector(
+                onTap: () {
+                  Navigator.of(context).push(
+                    MaterialPageRoute(builder: (_) => ExamResultReportScreen(exam: latestCompleted)),
+                  );
+                },
+                child: Text(
+                  'Chi tiết',
+                  style: AppTextStyles.bodySm.copyWith(color: AppColors.secondaryLight, fontWeight: FontWeight.w600),
+                ),
               ),
-            ),
+            ],
           ],
         ),
         const SizedBox(height: 12),
-        GlassCard(
-          padding: const EdgeInsets.all(16),
-          borderRadius: 18,
-          onTap: () {
-            Navigator.of(context).push(
-              MaterialPageRoute(builder: (_) => const ExamResultReportScreen()),
-            );
-          },
-          child: Row(
-            children: [
-              Container(
-                width: 44,
-                height: 44,
-                decoration: BoxDecoration(
-                  color: AppColors.success.withValues(alpha: 0.15),
-                  shape: BoxShape.circle,
+        if (latestCompleted == null)
+          GlassCard(
+            padding: const EdgeInsets.all(16),
+            borderRadius: 18,
+            child: Row(
+              children: [
+                Container(
+                  width: 44,
+                  height: 44,
+                  decoration: const BoxDecoration(
+                    color: AppColors.surfaceCardHigh,
+                    shape: BoxShape.circle,
+                  ),
+                  child: const Icon(Icons.history_toggle_off_rounded, color: AppColors.textMuted, size: 22),
                 ),
-                child: const Icon(Icons.psychology_rounded, color: AppColors.success, size: 24),
-              ),
-              const SizedBox(width: 12),
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
+                const SizedBox(width: 14),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text('Chưa có kết quả thi vấn đáp', style: AppTextStyles.labelBold),
+                      const SizedBox(height: 2),
+                      Text(
+                        'Điểm số sau khi giảng viên xác nhận sẽ xuất hiện tại đây.',
+                        style: AppTextStyles.bodySm.copyWith(color: AppColors.textMuted, fontSize: 11),
+                      ),
+                    ],
+                  ),
+                ),
+              ],
+            ),
+          )
+        else
+          GlassCard(
+            padding: const EdgeInsets.all(16),
+            borderRadius: 18,
+            onTap: () {
+              Navigator.of(context).push(
+                MaterialPageRoute(builder: (_) => ExamResultReportScreen(exam: latestCompleted)),
+              );
+            },
+            child: Row(
+              children: [
+                Container(
+                  width: 44,
+                  height: 44,
+                  decoration: BoxDecoration(
+                    color: AppColors.success.withValues(alpha: 0.15),
+                    shape: BoxShape.circle,
+                  ),
+                  child: const Icon(Icons.psychology_rounded, color: AppColors.success, size: 24),
+                ),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text('${latestCompleted.courseCode} - ${latestCompleted.courseName}', style: AppTextStyles.labelBold),
+                      const SizedBox(height: 2),
+                      Text(
+                        '${latestCompleted.examTitle} • ${latestCompleted.examiners.isNotEmpty ? latestCompleted.examiners.first : "Hội đồng khảo thí"}',
+                        style: AppTextStyles.bodySm,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                    ],
+                  ),
+                ),
+                Column(
+                  crossAxisAlignment: CrossAxisAlignment.end,
                   children: [
-                    Text('SWD392 - Software Architecture', style: AppTextStyles.labelBold),
-                    const SizedBox(height: 2),
-                    Text('Final Viva Defense • TS. Nguyễn Văn A', style: AppTextStyles.bodySm),
+                    Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                      decoration: BoxDecoration(
+                        color: (latestCompleted.finalScore != null ? AppColors.success : AppColors.warning).withValues(alpha: 0.2),
+                        borderRadius: BorderRadius.circular(10),
+                      ),
+                      child: Text(
+                        latestCompleted.finalScore != null ? '${latestCompleted.finalScore!.toStringAsFixed(1)} / 10' : 'Chờ duyệt',
+                        style: AppTextStyles.labelBold.copyWith(
+                          color: latestCompleted.finalScore != null ? AppColors.success : AppColors.warning,
+                          fontSize: 13,
+                        ),
+                      ),
+                    ),
+                    const SizedBox(height: 4),
+                    Text(
+                      latestCompleted.finalScore != null ? 'Đã có điểm' : 'Đang xử lý',
+                      style: AppTextStyles.bodySm.copyWith(fontSize: 11, color: AppColors.textDisabled),
+                    ),
                   ],
                 ),
-              ),
-              Column(
-                crossAxisAlignment: CrossAxisAlignment.end,
-                children: [
-                  Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
-                    decoration: BoxDecoration(
-                      color: AppColors.success.withValues(alpha: 0.2),
-                      borderRadius: BorderRadius.circular(10),
-                    ),
-                    child: Text(
-                      '8.5 / 10',
-                      style: AppTextStyles.labelBold.copyWith(color: AppColors.success, fontSize: 13),
-                    ),
-                  ),
-                  const SizedBox(height: 4),
-                  Text('Đã xong', style: AppTextStyles.bodySm.copyWith(fontSize: 11, color: AppColors.textDisabled)),
-                ],
-              ),
-            ],
+              ],
+            ),
           ),
-        ),
       ],
     );
   }
