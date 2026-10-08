@@ -1,6 +1,6 @@
 class UserModel {
   final String id;
-  final String username;
+  final String email;
   final String fullName;
   final String userCode; // e.g. SE170245
   final String role; // STUDENT
@@ -11,7 +11,7 @@ class UserModel {
 
   const UserModel({
     required this.id,
-    required this.username,
+    required this.email,
     required this.fullName,
     required this.userCode,
     required this.role,
@@ -21,10 +21,13 @@ class UserModel {
     this.token,
   });
 
+  /// Getter username for backward compatibility
+  String get username => email;
+
   factory UserModel.fromJson(Map<String, dynamic> json, {String? token}) {
     return UserModel(
       id: json['id']?.toString() ?? '',
-      username: json['username']?.toString() ?? '',
+      email: json['email']?.toString() ?? json['username']?.toString() ?? '',
       fullName: json['fullName'] ?? json['full_name'] ?? 'Sinh viên FPT',
       userCode: json['studentCode'] ?? json['userCode'] ?? json['user_code'] ?? 'SE170245',
       role: json['role']?.toString() ?? 'STUDENT',

@@ -89,8 +89,8 @@ class _ProfileSettingsScreenState extends State<ProfileSettingsScreen> {
 
     final displayName = user?.fullName.isNotEmpty == true ? user!.fullName : 'Nguyễn Minh Hoàng';
     final userCode = user?.userCode.isNotEmpty == true ? user!.userCode : 'SE170245';
-    final userEmail = user?.username.contains('@') == true
-        ? user!.username
+    final userEmail = user?.email.isNotEmpty == true && user!.email.contains('@')
+        ? user.email
         : '${userCode.toLowerCase()}@fpt.edu.vn';
     final department = user?.department.isNotEmpty == true
         ? user!.department

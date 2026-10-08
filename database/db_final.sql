@@ -88,13 +88,13 @@ CREATE TABLE "transcripts" (
 );
 CREATE TABLE "users" (
                          "id" uuid PRIMARY KEY DEFAULT gen_random_uuid(),
-                         "username" varchar(255) NOT NULL CONSTRAINT "users_username_key" UNIQUE,
+                         "email" varchar(255) NOT NULL CONSTRAINT "users_email_key" UNIQUE,
                          "password_hash" varchar(255) NOT NULL,
                          "full_name" varchar(255) NOT NULL,
                          "role" varchar(50) NOT NULL,
                          "created_at" timestamp DEFAULT CURRENT_TIMESTAMP,
                          "student_code" varchar(50) CONSTRAINT "users_student_code_key" UNIQUE,
-                         "email" varchar(255),
+                         "username" varchar(255),
                          CONSTRAINT "users_role_check" CHECK (((role)::text = ANY ((ARRAY['ADMIN'::character varying, 'LECTURER'::character varying, 'STUDENT'::character varying])::text[])))
 );
 CREATE UNIQUE INDEX "assigned_questions_pkey" ON "assigned_questions" ("id");
@@ -114,7 +114,7 @@ CREATE UNIQUE INDEX "questions_pkey" ON "questions" ("id");
 CREATE UNIQUE INDEX "transcripts_pkey" ON "transcripts" ("id");
 CREATE UNIQUE INDEX "users_pkey" ON "users" ("id");
 CREATE UNIQUE INDEX "users_student_code_key" ON "users" ("student_code");
-CREATE UNIQUE INDEX "users_username_key" ON "users" ("username");
+CREATE UNIQUE INDEX "users_email_key" ON "users" ("email");
 ALTER TABLE "assigned_questions" ADD CONSTRAINT "assigned_questions_exam_schedule_id_fkey" FOREIGN KEY ("exam_schedule_id") REFERENCES "exam_schedules"("id") ON DELETE RESTRICT;
 ALTER TABLE "assigned_questions" ADD CONSTRAINT "assigned_questions_question_id_fkey" FOREIGN KEY ("question_id") REFERENCES "questions"("id") ON DELETE RESTRICT;
 ALTER TABLE "course_lecturers" ADD CONSTRAINT "course_lecturers_assigned_by_fkey" FOREIGN KEY ("assigned_by") REFERENCES "users"("id") ON DELETE SET NULL;

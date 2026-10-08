@@ -46,6 +46,7 @@ class AuthProvider extends ChangeNotifier {
         ApiEndpoints.login,
         body: {
           'username': inputIdentifier,
+          'email': inputIdentifier,
           'password': trimmedPass,
         },
       );
