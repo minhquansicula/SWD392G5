@@ -48,7 +48,7 @@ export const AuthModal: React.FC<AuthModalProps> = ({
     setSuccessMessage('');
 
     if (!loginIdentifier.trim()) {
-      setErrorMessage(isVi ? 'Vui lòng nhập tên tài khoản' : 'Please enter your username');
+      setErrorMessage(isVi ? 'Vui lòng nhập email' : 'Please enter your email');
       return;
     }
     if (!loginPassword) {
@@ -100,14 +100,14 @@ export const AuthModal: React.FC<AuthModalProps> = ({
           </h2>
           <p className="text-xs text-slate-400 mt-1">
             {isVi
-              ? 'Nhập tài khoản được cấp bởi Quản trị viên để tiếp tục.'
-              : 'Enter credentials provisioned by administrator.'}
+              ? 'Đăng nhập bằng email đã được Quản trị viên gán cho tài khoản.'
+              : 'Sign in with the email assigned to your account by the administrator.'}
           </p>
         </div>
 
         {/* Notifications */}
         {errorMessage && (
-          <div className="mb-4 p-3 rounded-xl bg-rose-500/15 border border-rose-500/30 text-rose-300 text-xs flex items-center gap-2">
+          <div id="modal-login-error" role="alert" className="mb-4 p-3 rounded-xl bg-rose-500/15 border border-rose-500/30 text-rose-300 text-xs flex items-center gap-2">
             <AlertCircle className="w-4 h-4 shrink-0 text-rose-400" />
             <span>{errorMessage}</span>
           </div>
@@ -121,28 +121,35 @@ export const AuthModal: React.FC<AuthModalProps> = ({
         )}
 
         {/* Form */}
-        <form onSubmit={handleLoginSubmit} className="space-y-4">
+        <form onSubmit={handleLoginSubmit} className="space-y-4" aria-busy={isLoading}>
           <div>
-            <label className="block text-xs font-semibold text-slate-300 mb-1.5">
-              {isVi ? 'Tên đăng nhập' : 'Username'}
+            <label htmlFor="modal-login-email" className="block text-xs font-semibold text-slate-300 mb-1.5">
+              Email
             </label>
             <div className="relative">
               <div className="absolute inset-y-0 left-0 pl-3.5 flex items-center pointer-events-none text-slate-500">
                 <User className="w-4 h-4" />
               </div>
               <input
+                id="modal-login-email"
+                name="username"
                 type="text"
+                inputMode="email"
+                autoComplete="username"
+                autoCapitalize="none"
+                spellCheck={false}
+                aria-describedby={errorMessage ? 'modal-login-error' : undefined}
                 required
                 value={loginIdentifier}
                 onChange={(e) => setLoginIdentifier(e.target.value)}
-                placeholder={isVi ? 'Ví dụ: admin, lecturer1, student1' : 'Enter username'}
+                placeholder="name@example.com"
                 className="w-full pl-10 pr-3.5 py-2.5 text-sm rounded-xl border border-white/15 bg-white/5 text-white placeholder-slate-500 focus:outline-hidden focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 transition-colors"
               />
             </div>
           </div>
 
           <div>
-            <label className="block text-xs font-semibold text-slate-300 mb-1.5">
+            <label htmlFor="modal-login-password" className="block text-xs font-semibold text-slate-300 mb-1.5">
               {isVi ? 'Mật khẩu' : 'Password'}
             </label>
             <div className="relative">
@@ -150,6 +157,9 @@ export const AuthModal: React.FC<AuthModalProps> = ({
                 <Lock className="w-4 h-4" />
               </div>
               <input
+                id="modal-login-password"
+                name="password"
+                autoComplete="current-password"
                 type={showLoginPassword ? 'text' : 'password'}
                 required
                 value={loginPassword}

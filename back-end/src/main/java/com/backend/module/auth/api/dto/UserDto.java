@@ -13,6 +13,7 @@ public class UserDto {
     private String role;
     private String studentCode;
     private String email;
+    private PasswordStatus passwordStatus;
     private LocalDateTime createdAt;
 }
 

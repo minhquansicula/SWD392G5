@@ -3,7 +3,6 @@ package com.backend.module.auth.api.dto;
 import io.swagger.v3.oas.annotations.media.Schema;
 import jakarta.validation.constraints.Pattern;
 import jakarta.validation.constraints.Size;
-import jakarta.validation.constraints.Email;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
 import lombok.Data;
@@ -32,7 +31,6 @@ public class UpdateUserRequest {
     @Size(max = 50)
     private String studentCode;
 
-    @Email
-    @Size(max = 255)
+    // Null preserves existing values; supplied input is validated after normalization.
     private String email;
 }
