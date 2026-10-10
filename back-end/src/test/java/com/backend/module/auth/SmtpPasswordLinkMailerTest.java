@@ -42,8 +42,8 @@ class SmtpPasswordLinkMailerTest {
 
     private final RecordingSender sender = new RecordingSender();
 
-    private SmtpPasswordLinkMailer mailer(String smtpUsername) {
-        return new SmtpPasswordLinkMailer(sender, smtpUsername, "noreply@example.com", 72, false);
+    private SmtpPasswordLinkMailer mailer(String smtpPassword) {
+        return new SmtpPasswordLinkMailer(sender, smtpPassword, "noreply@example.com", 72, false);
     }
 
     private static PasswordLinkMail mail(String to, boolean activation) {

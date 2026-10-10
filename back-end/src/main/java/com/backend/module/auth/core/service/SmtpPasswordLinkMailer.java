@@ -25,18 +25,19 @@ public class SmtpPasswordLinkMailer implements PasswordLinkMailer {
     private static final String ENCODING = "UTF-8";
 
     private final JavaMailSender mailSender;
-    private final String smtpUsername;
+    private final boolean smtpConfigured;
     private final String from;
     private final long linkHours;
     private final boolean logLinks;
 
+    // The sender address has a default in application.yml, so the password decides whether SMTP is usable.
     public SmtpPasswordLinkMailer(JavaMailSender mailSender,
-                                  @Value("${spring.mail.username:}") String smtpUsername,
+                                  @Value("${spring.mail.password:}") String smtpPassword,
                                   @Value("${aives.mail.from:}") String from,
                                   @Value("${aives.mail.password-link-hours:72}") long linkHours,
                                   @Value("${aives.mail.log-links:false}") boolean logLinks) {
         this.mailSender = mailSender;
-        this.smtpUsername = smtpUsername;
+        this.smtpConfigured = smtpPassword != null && !smtpPassword.isBlank();
         this.from = from;
         this.linkHours = linkHours;
         this.logLinks = logLinks;
@@ -46,8 +47,8 @@ public class SmtpPasswordLinkMailer implements PasswordLinkMailer {
     public Set<UUID> send(List<PasswordLinkMail> mails) {
         Set<UUID> failed = new HashSet<>();
         if (mails.isEmpty()) return failed;
-        if (smtpUsername == null || smtpUsername.isBlank()) {
-            log.warn("SMTP is not configured (MAIL_USERNAME is empty); {} password link mail(s) not sent", mails.size());
+        if (!smtpConfigured) {
+            log.warn("SMTP is not configured (MAIL_PASSWORD is empty); {} password link mail(s) not sent", mails.size());
             if (logLinks) mails.forEach(mail -> log.info("Password link for user {}: {}", mail.userId(), mail.link()));
             mails.forEach(mail -> failed.add(mail.userId()));
             return failed;
