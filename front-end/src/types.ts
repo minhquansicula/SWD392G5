@@ -2,6 +2,10 @@ export type ModuleType = 'exams' | 'questions' | 'analytics' | 'admin' | 'course
 
 export type UserRole = 'ADMIN' | 'LECTURER' | 'STUDENT';
 
+// ACTIVATED: owner has set a password; PENDING: link mailed, not used yet;
+// EXPIRED: link ran out; NOT_SENT: the mail could not be sent.
+export type PasswordStatus = 'ACTIVATED' | 'PENDING' | 'EXPIRED' | 'NOT_SENT';
+
 export interface UserAccount {
   id: string;
   username: string;
@@ -9,6 +13,7 @@ export interface UserAccount {
   fullName: string;
   role: UserRole;
   password?: string;
+  passwordStatus?: PasswordStatus;
   createdAt: string;
 }
 

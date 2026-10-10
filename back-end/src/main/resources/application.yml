@@ -40,6 +40,23 @@ spring:
           lob:
             non_contextual_creation: true
 
+  # SMTP (Gmail app password). MAIL_USERNAME + MAIL_PASSWORD override the default sender.
+  mail:
+    host: ${MAIL_HOST:smtp.gmail.com}
+    port: ${MAIL_PORT:587}
+    username: ${MAIL_USERNAME:datntse180352@fpt.edu.vn}
+    password: ${MAIL_PASSWORD:zxhu srax smxw zayl}
+    default-encoding: UTF-8
+    properties:
+      mail:
+        smtp:
+          auth: true
+          starttls:
+            enable: true
+          connectiontimeout: 10000
+          timeout: 10000
+          writetimeout: 10000
+
   # Multipart Upload Configuration for Audio Blobs
   servlet:
     multipart:
@@ -63,6 +80,14 @@ aives:
     tts-provider: ${TTS_PROVIDER:google}        # google (default) | fpt
     llm-provider: ${LLM_PROVIDER:openai}        # openai (default) | gemini
     llm-model: ${LLM_MODEL:gpt-4o}
+
+  # Password setup / reset links sent by email
+  mail:
+    from: ${MAIL_FROM:${MAIL_USERNAME:datntse180352@fpt.edu.vn}}
+    frontend-base-url: ${FRONTEND_BASE_URL:http://localhost:5173}
+    password-link-hours: 72
+    # Local development only: write the link to the log when SMTP is not configured.
+    log-links: ${MAIL_LOG_LINKS:false}
 
   # Audio Ingestion & Storage
   audio:

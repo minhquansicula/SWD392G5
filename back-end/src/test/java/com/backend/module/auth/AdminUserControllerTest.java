@@ -4,7 +4,6 @@ import com.backend.module.auth.api.dto.CreateUserRequest;
 import com.backend.module.auth.api.dto.UserDto;
 import com.backend.module.auth.api.service.AdminUserService;
 import com.backend.module.auth.core.controller.AdminUserController;
-import com.backend.module.auth.core.enums.Role;
 import com.backend.shared.exception.GlobalExceptionHandler;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import org.junit.jupiter.api.BeforeEach;
@@ -23,7 +22,9 @@ import java.util.List;
 import java.util.UUID;
 
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.argThat;
 import static org.mockito.Mockito.doNothing;
+import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.*;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.*;
@@ -70,9 +71,9 @@ class AdminUserControllerTest {
     void createUser_Returns201Created() throws Exception {
         CreateUserRequest request = CreateUserRequest.builder()
                 .username("SE170002")
-                .password("password123")
                 .fullName("Le Thi B")
-                .role(Role.STUDENT)
+                .role("STUDENT")
+                .email(" Alice@EXAMPLE.COM ")
                 .build();
 
         UserDto createdDto = UserDto.builder()
@@ -90,6 +91,8 @@ class AdminUserControllerTest {
                 .andExpect(status().isCreated())
                 .andExpect(jsonPath("$.success").value(true))
                 .andExpect(jsonPath("$.data.username").value("SE170002"));
+        verify(adminUserService).createUser(argThat(dto ->
+                "STUDENT".equals(dto.getRole()) && " Alice@EXAMPLE.COM ".equals(dto.getEmail())));
     }
 
     @Test

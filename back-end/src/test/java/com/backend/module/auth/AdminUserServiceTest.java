@@ -9,10 +9,13 @@ import com.backend.module.auth.core.entity.User;
 import com.backend.module.auth.core.enums.Role;
 import com.backend.module.auth.core.repository.UserRepository;
 import com.backend.module.auth.core.service.AdminUserServiceImpl;
+import com.backend.module.auth.core.service.PasswordLinkService;
+import jakarta.validation.Validation;
+import jakarta.validation.ValidatorFactory;
+import org.junit.jupiter.api.AfterAll;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
-import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.data.domain.Page;
@@ -20,6 +23,7 @@ import org.springframework.data.domain.PageImpl;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
 import org.springframework.security.crypto.password.PasswordEncoder;
+import org.springframework.transaction.PlatformTransactionManager;
 
 import java.util.List;
 import java.util.Optional;
@@ -27,10 +31,18 @@ import java.util.UUID;
 
 import static org.junit.jupiter.api.Assertions.*;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyString;
+import static org.mockito.ArgumentMatchers.argThat;
 import static org.mockito.Mockito.*;
 
 @ExtendWith(MockitoExtension.class)
 class AdminUserServiceTest {
+    private static final ValidatorFactory VALIDATOR_FACTORY = Validation.buildDefaultValidatorFactory();
+
+    @AfterAll
+    static void closeValidatorFactory() {
+        VALIDATOR_FACTORY.close();
+    }
 
     @Mock
     private UserRepository userRepository;
@@ -39,9 +51,8 @@ class AdminUserServiceTest {
     private PasswordEncoder passwordEncoder;
 
     @Mock
-    private jakarta.validation.Validator validator;
+    private PlatformTransactionManager transactionManager;
 
-    @InjectMocks
     private AdminUserServiceImpl adminUserService;
 
     private User sampleUser;
@@ -49,6 +60,10 @@ class AdminUserServiceTest {
 
     @BeforeEach
     void setUp() {
+        PasswordLinkService passwordLinks = new PasswordLinkService(userRepository, passwordEncoder,
+                mails -> new java.util.HashSet<>(), transactionManager, 72, "http://localhost:5173", Runnable::run);
+        adminUserService = new AdminUserServiceImpl(userRepository, passwordEncoder,
+                VALIDATOR_FACTORY.getValidator(), transactionManager, passwordLinks);
         sampleUserId = UUID.randomUUID();
         sampleUser = User.builder()
                 .id(sampleUserId)
@@ -87,12 +102,12 @@ class AdminUserServiceTest {
     void createUser_Success() {
         CreateUserRequest request = new CreateUserRequest();
         request.setUsername("SE170002");
-        request.setPassword("password123");
         request.setFullName("Le Thi B");
-        request.setRole(Role.STUDENT);
+        request.setRole("STUDENT");
+        request.setEmail(" Alice@EXAMPLE.COM ");
 
         when(userRepository.existsByUsername("SE170002")).thenReturn(false);
-        when(passwordEncoder.encode("password123")).thenReturn("encoded_new_pwd");
+        when(passwordEncoder.encode(anyString())).thenReturn("encoded_new_pwd");
         when(userRepository.saveAndFlush(any(User.class))).thenAnswer(invocation -> {
             User u = invocation.getArgument(0);
             u.setId(UUID.randomUUID());
@@ -105,14 +120,19 @@ class AdminUserServiceTest {
         assertEquals("SE170002", result.getUsername());
         assertEquals("Le Thi B", result.getFullName());
         assertEquals("STUDENT", result.getRole());
+        assertEquals(" Alice@EXAMPLE.COM ", result.getEmail());
+        assertEquals(" Alice@EXAMPLE.COM ", request.getEmail());
+        verify(userRepository).saveAndFlush(argThat(user ->
+                " Alice@EXAMPLE.COM ".equals(user.getEmail())
+                        && "alice@example.com".equals(user.getEmailNormalized())));
     }
 
     @Test
     void createUser_UsernameAlreadyExists_ThrowsException() {
         CreateUserRequest request = new CreateUserRequest();
         request.setUsername("SE170001");
-        request.setPassword("password123");
         request.setFullName("Duplicate");
+        request.setEmail("duplicate@example.com");
 
         when(userRepository.existsByUsername("SE170001")).thenReturn(true);
 
@@ -133,6 +153,8 @@ class AdminUserServiceTest {
         assertNotNull(result);
         assertEquals("Tran Van Sinh Vien Updated", sampleUser.getFullName());
         assertEquals(Role.LECTURER, sampleUser.getRole());
+        assertNull(sampleUser.getEmail());
+        assertNull(sampleUser.getEmailNormalized());
     }
 
     @Test

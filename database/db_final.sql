@@ -52,6 +52,19 @@ CREATE TABLE "exams" (
                          "main_answer_time_limit_seconds" integer DEFAULT 120,
                          "followup_answer_time_limit_seconds" integer DEFAULT 60
 );
+CREATE TABLE "flyway_schema_history" (
+	"installed_rank" integer,
+	"version" varchar(50),
+	"description" varchar(200) NOT NULL,
+	"type" varchar(20) NOT NULL,
+	"script" varchar(1000) NOT NULL,
+	"checksum" integer,
+	"installed_by" varchar(100) NOT NULL,
+	"installed_on" timestamp DEFAULT now() NOT NULL,
+	"execution_time" integer NOT NULL,
+	"success" boolean NOT NULL,
+	CONSTRAINT "flyway_schema_history_pk" PRIMARY KEY("installed_rank")
+);
 CREATE TABLE "question_results" (
                                     "id" uuid PRIMARY KEY DEFAULT gen_random_uuid(),
                                     "exam_schedule_id" uuid,
@@ -109,6 +122,8 @@ CREATE UNIQUE INDEX "courses_pkey" ON "courses" ("id");
 CREATE UNIQUE INDEX "exam_schedules_pkey" ON "exam_schedules" ("id");
 CREATE UNIQUE INDEX "uq_exam_schedule_student" ON "exam_schedules" ("exam_id","student_id");
 CREATE UNIQUE INDEX "exams_pkey" ON "exams" ("id");
+CREATE UNIQUE INDEX "flyway_schema_history_pk" ON "flyway_schema_history" ("installed_rank");
+CREATE INDEX "flyway_schema_history_s_idx" ON "flyway_schema_history" ("success");
 CREATE UNIQUE INDEX "question_results_pkey" ON "question_results" ("id");
 CREATE UNIQUE INDEX "questions_pkey" ON "questions" ("id");
 CREATE UNIQUE INDEX "transcripts_pkey" ON "transcripts" ("id");

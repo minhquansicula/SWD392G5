@@ -264,11 +264,13 @@ class ExamModuleIntegrationTest extends PostgresSpringTest {
 
     @Test
     void realLoginTokenAuthenticatesExamRequestsAndSwaggerDescribesEndpoints() throws Exception {
-        jdbc.update("UPDATE users SET password_hash = ? WHERE id = ?", passwordEncoder.encode("test-password"), ownerId);
+        jdbc.update("UPDATE users SET password_hash = ?, email = ?, email_normalized = ? WHERE id = ?",
+                passwordEncoder.encode("test-password"),
+                "owner@example.com", "owner@example.com", ownerId);
         createExam(2);
         SecurityContextHolder.clearContext();
         String response = mvc.perform(post("/api/auth/login").contentType(MediaType.APPLICATION_JSON)
-                .content("{\"username\":\"owner\",\"password\":\"test-password\"}"))
+                .content("{\"username\":\"owner@example.com\",\"password\":\"test-password\"}"))
                 .andExpect(status().isOk()).andReturn().getResponse().getContentAsString();
         String token = com.jayway.jsonpath.JsonPath.read(response, "$.data.token");
         mvc.perform(get("/api/exams").header("Authorization", "Bearer " + token))
