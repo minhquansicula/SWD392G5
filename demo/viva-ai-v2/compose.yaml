@@ -1,0 +1,19 @@
+services:
+  db:
+    image: pgvector/pgvector:pg17
+    environment:
+      POSTGRES_DB: viva
+      POSTGRES_USER: viva
+      POSTGRES_PASSWORD: viva_local
+    ports:
+      - "127.0.0.1:5433:5432"
+    volumes:
+      - viva_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U viva -d viva"]
+      interval: 3s
+      timeout: 3s
+      retries: 20
+volumes:
+  viva_data:
+
