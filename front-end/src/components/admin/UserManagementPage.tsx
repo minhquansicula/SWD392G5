@@ -24,7 +24,7 @@ import {
   BookOpen,
 } from 'lucide-react';
 import * as XLSX from 'xlsx';
-import { UserAccount, UserRole } from '../../types';
+import { PasswordStatus, UserAccount, UserRole } from '../../types';
 import {
   getRegisteredUsers,
   updateUserRole,
@@ -32,27 +32,27 @@ import {
   deleteUser,
   createUserByAdmin,
   importStudentsBatch,
-  getCurrentSession,
+  resendPasswordLink,
+  ImportRowResult,
+  ImportSkipReason,
 } from '../../services/authService';
 import { Language } from '../../utils/i18n';
 
 interface UserManagementPageProps {
   language: Language;
   currentUserId?: string;
-  onRefreshCurrentUser?: () => void;
   onNavigateToCourses?: () => void;
 }
 
 interface ParsedStudentRow {
   username: string;
   fullName: string;
-  password?: string;
+  email: string;
 }
 
 export const UserManagementPage: React.FC<UserManagementPageProps> = ({
   language,
   currentUserId,
-  onRefreshCurrentUser,
   onNavigateToCourses,
 }) => {
   const isVi = language === 'vi';
@@ -68,7 +68,7 @@ export const UserManagementPage: React.FC<UserManagementPageProps> = ({
   const [isCreateModalOpen, setIsCreateModalOpen] = useState(false);
   const [newFullName, setNewFullName] = useState('');
   const [newUsername, setNewUsername] = useState('');
-  const [newPassword, setNewPassword] = useState('password123');
+  const [newEmail, setNewEmail] = useState('');
   const [newRole, setNewRole] = useState<UserRole>('STUDENT');
   const [createError, setCreateError] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -78,6 +78,8 @@ export const UserManagementPage: React.FC<UserManagementPageProps> = ({
   const [editingUser, setEditingUser] = useState<UserAccount | null>(null);
   const [editFullName, setEditFullName] = useState('');
   const [editRole, setEditRole] = useState<UserRole>('STUDENT');
+  const [editEmail, setEditEmail] = useState('');
+  const [editEmailDirty, setEditEmailDirty] = useState(false);
   const [editError, setEditError] = useState('');
   const [isEditSubmitting, setIsEditSubmitting] = useState(false);
 
@@ -86,6 +88,12 @@ export const UserManagementPage: React.FC<UserManagementPageProps> = ({
   const [parsedStudents, setParsedStudents] = useState<ParsedStudentRow[]>([]);
   const [importFileName, setImportFileName] = useState('');
   const [importError, setImportError] = useState('');
+  const [importResult, setImportResult] = useState<{
+    success: number;
+    failed: number;
+    rows: ImportRowResult[];
+  } | null>(null);
+  const [showOnlySkipped, setShowOnlySkipped] = useState(false);
   const [isImporting, setIsImporting] = useState(false);
   const fileInputRef = useRef<HTMLInputElement | null>(null);
 
@@ -94,23 +102,14 @@ export const UserManagementPage: React.FC<UserManagementPageProps> = ({
   const [userToDelete, setUserToDelete] = useState<UserAccount | null>(null);
   const [isDeleting, setIsDeleting] = useState(false);
 
-  // Get active user session to enforce self-protection
-  const activeUser = useMemo(() => getCurrentSession(), []);
+  // Id of the account whose password link is being re-sent
+  const [resendingId, setResendingId] = useState<string | null>(null);
 
-  // Helper to check if a target user is the currently logged-in user
-  const isSelfUser = (u: UserAccount) => {
-    if (currentUserId && u.id === currentUserId) return true;
-    if (activeUser && (u.id === activeUser.id || u.username.toLowerCase() === activeUser.username.toLowerCase())) {
-      return true;
-    }
-    return false;
-  };
+  // Helper to check if a target user is the currently logged-in user (identity confirmed by /auth/me)
+  const isSelfUser = (u: UserAccount) => Boolean(currentUserId) && u.id === currentUserId;
 
-  // Load all users directly from backend API (Only if ADMIN)
+  // Load all users directly from backend API (ADMIN permission is enforced by the backend)
   const loadUsers = async () => {
-    if (activeUser && activeUser.role !== 'ADMIN') {
-      return;
-    }
     setIsLoading(true);
     try {
       const list = await getRegisteredUsers();
@@ -123,14 +122,81 @@ export const UserManagementPage: React.FC<UserManagementPageProps> = ({
   };
 
   useEffect(() => {
-    if (activeUser?.role === 'ADMIN') {
-      loadUsers();
-    }
-  }, [activeUser]);
+    loadUsers();
+  }, []);
 
   const showToast = (msg: string, type: 'success' | 'error' = 'success') => {
     setNotification({ msg, type });
     setTimeout(() => setNotification(null), 3500);
+  };
+
+  // Label & color of the password link status shown under each account
+  const passwordStatusInfo = (status?: PasswordStatus) => {
+    switch (status) {
+      case 'ACTIVATED':
+        return {
+          label: isVi ? 'Đã đặt mật khẩu' : 'Password set',
+          className: 'bg-emerald-100 dark:bg-emerald-950 text-emerald-700 dark:text-emerald-300 border-emerald-200 dark:border-emerald-800',
+        };
+      case 'PENDING':
+        return {
+          label: isVi ? 'Đã gửi link – chờ đặt mật khẩu' : 'Link sent – awaiting password',
+          className: 'bg-amber-100 dark:bg-amber-950 text-amber-700 dark:text-amber-300 border-amber-200 dark:border-amber-800',
+        };
+      case 'EXPIRED':
+        return {
+          label: isVi ? 'Link đã hết hạn' : 'Link expired',
+          className: 'bg-rose-100 dark:bg-rose-950 text-rose-700 dark:text-rose-300 border-rose-200 dark:border-rose-800',
+        };
+      case 'NOT_SENT':
+        return {
+          label: isVi ? 'Chưa gửi được email' : 'Email not sent',
+          className: 'bg-rose-100 dark:bg-rose-950 text-rose-700 dark:text-rose-300 border-rose-200 dark:border-rose-800',
+        };
+      default:
+        return null;
+    }
+  };
+
+  // Why the backend skipped an imported row
+  const skipReasonLabel = (reason: ImportSkipReason | null) => {
+    switch (reason) {
+      case 'MISSING_REQUIRED':
+        return isVi ? 'Thiếu username, họ tên hoặc email' : 'Missing username, full name or email';
+      case 'INVALID_EMAIL':
+        return isVi ? 'Email sai định dạng' : 'Invalid email format';
+      case 'DUPLICATE_IN_FILE':
+        return isVi ? 'Trùng username hoặc email với dòng phía trên trong file' : 'Same username or email as an earlier row in the file';
+      case 'USERNAME_EXISTS':
+        return isVi ? 'Username đã tồn tại trong hệ thống' : 'Username already exists';
+      case 'EMAIL_EXISTS':
+        return isVi ? 'Email đã được dùng bởi tài khoản khác' : 'Email is already used by another account';
+      case 'STUDENT_CODE_EXISTS':
+        return isVi ? 'Mã sinh viên đã tồn tại' : 'Student code already exists';
+      default:
+        return isVi ? 'Dữ liệu không hợp lệ (quá dài hoặc sai kiểu)' : 'Invalid data (too long or wrong type)';
+    }
+  };
+
+  // Mail a fresh password link; the previous link stops working
+  const handleResendLink = async (user: UserAccount) => {
+    setResendingId(user.id);
+    try {
+      const updated = await resendPasswordLink(user.id);
+      setUsers((prev) =>
+        prev.map((u) => (u.id === user.id ? { ...u, passwordStatus: updated.passwordStatus } : u))
+      );
+      showToast(
+        isVi
+          ? `Đã gửi link đặt mật khẩu tới ${user.email.trim()}`
+          : `Password link sent to ${user.email.trim()}`
+      );
+    } catch (err: any) {
+      showToast(err.message || (isVi ? 'Không thể gửi lại link' : 'Could not resend link'), 'error');
+      await loadUsers();
+    } finally {
+      setResendingId(null);
+    }
   };
 
   // Filter users based on search and role
@@ -139,7 +205,8 @@ export const UserManagementPage: React.FC<UserManagementPageProps> = ({
       const name = u.fullName || (u as any).name || u.username || '';
       const matchesSearch =
         name.toLowerCase().includes(searchQuery.toLowerCase()) ||
-        u.username.toLowerCase().includes(searchQuery.toLowerCase());
+        u.username.toLowerCase().includes(searchQuery.toLowerCase()) ||
+        (u.email || '').toLowerCase().includes(searchQuery.toLowerCase());
 
       const matchesRole =
         selectedRoleFilter === 'ALL' || u.role === selectedRoleFilter;
@@ -147,6 +214,12 @@ export const UserManagementPage: React.FC<UserManagementPageProps> = ({
       return matchesSearch && matchesRole;
     });
   }, [users, searchQuery, selectedRoleFilter]);
+
+  // Created rows of the last import whose email could not be sent
+  const importNotSentCount = useMemo(
+    () => (importResult ? importResult.rows.filter((r) => r.passwordStatus === 'NOT_SENT').length : 0),
+    [importResult]
+  );
 
   // Summary counts
   const stats = useMemo(() => {
@@ -180,7 +253,6 @@ export const UserManagementPage: React.FC<UserManagementPageProps> = ({
           ? `Đã cập nhật phân quyền thành công sang ${newRoleValue}`
           : `Role updated to ${newRoleValue}`
       );
-      if (onRefreshCurrentUser) onRefreshCurrentUser();
     } catch (err: any) {
       showToast(err.message || (isVi ? 'Lỗi cập nhật phân quyền' : 'Role update failed'), 'error');
     }
@@ -201,6 +273,8 @@ export const UserManagementPage: React.FC<UserManagementPageProps> = ({
     setEditingUser(user);
     setEditFullName(user.fullName || user.username);
     setEditRole(user.role);
+    setEditEmail(user.email);
+    setEditEmailDirty(false);
     setEditError('');
     setIsEditModalOpen(true);
   };
@@ -221,18 +295,31 @@ export const UserManagementPage: React.FC<UserManagementPageProps> = ({
       const updated = await updateUserAccount(editingUser.id, {
         fullName: editFullName.trim(),
         role: editRole,
+        ...(editEmailDirty ? { email: editEmail } : {}),
       });
 
       setUsers((prev) =>
-        prev.map((u) => (u.id === editingUser.id ? { ...u, fullName: updated.fullName, role: updated.role } : u))
+        prev.map((u) => (u.id === editingUser.id
+          ? {
+              ...u,
+              fullName: updated.fullName,
+              role: updated.role,
+              email: updated.email,
+              passwordStatus: updated.passwordStatus,
+            }
+          : u))
       );
       setIsEditModalOpen(false);
+      const linkRevoked = editEmailDirty && updated.passwordStatus === 'NOT_SENT';
       showToast(
-        isVi
+        linkRevoked
+          ? isVi
+            ? `Đã cập nhật @${editingUser.username}. Email đã đổi nên link cũ bị vô hiệu — hãy bấm gửi lại link đặt mật khẩu.`
+            : `Updated @${editingUser.username}. The email changed, so the old link is void — resend the password link.`
+          : isVi
           ? `Đã cập nhật tài khoản @${editingUser.username} thành công`
           : `Account @${editingUser.username} updated successfully`
       );
-      if (onRefreshCurrentUser) onRefreshCurrentUser();
     } catch (err: any) {
       setEditError(err.message || (isVi ? 'Cập nhật tài khoản thất bại' : 'Update failed'));
     } finally {
@@ -287,17 +374,8 @@ export const UserManagementPage: React.FC<UserManagementPageProps> = ({
     e.preventDefault();
     setCreateError('');
 
-    if (!newFullName.trim() || !newUsername.trim() || !newPassword) {
+    if (!newFullName.trim() || !newUsername.trim() || newEmail === '') {
       setCreateError(isVi ? 'Vui lòng điền đầy đủ các mục bắt buộc' : 'Please fill all required fields');
-      return;
-    }
-
-    if (newPassword.length < 8) {
-      setCreateError(
-        isVi
-          ? 'Mật khẩu phải có tối thiểu 8 ký tự theo quy định'
-          : 'Password must contain at least 8 characters'
-      );
       return;
     }
 
@@ -306,22 +384,31 @@ export const UserManagementPage: React.FC<UserManagementPageProps> = ({
       const created = await createUserByAdmin({
         fullName: newFullName.trim(),
         username: newUsername.trim(),
-        password: newPassword,
         role: newRole,
+        email: newEmail,
       });
 
       setUsers((prev) => [created, ...prev]);
       setIsCreateModalOpen(false);
       setNewFullName('');
       setNewUsername('');
-      setNewPassword('password123');
+      setNewEmail('');
       setNewRole('STUDENT');
 
-      showToast(
-        isVi
-          ? `Đã tạo tài khoản @${created.username} thành công với quyền ${created.role}`
-          : `User @${created.username} created successfully as ${created.role}`
-      );
+      if (created.passwordStatus === 'NOT_SENT') {
+        showToast(
+          isVi
+            ? `Đã tạo @${created.username} nhưng chưa gửi được email đặt mật khẩu. Hãy bấm "Gửi lại link".`
+            : `Created @${created.username}, but the password email could not be sent. Use "Resend link".`,
+          'error'
+        );
+      } else {
+        showToast(
+          isVi
+            ? `Đã tạo @${created.username} (${created.role}) và gửi link đặt mật khẩu tới email`
+            : `Created @${created.username} (${created.role}) and emailed a password link`
+        );
+      }
     } catch (err: any) {
       setCreateError(err.message || (isVi ? 'Tạo tài khoản thất bại' : 'Create failed'));
     } finally {
@@ -335,17 +422,17 @@ export const UserManagementPage: React.FC<UserManagementPageProps> = ({
       {
         'Mã sinh viên / Username': 'SE170001',
         'Họ và tên': 'Nguyễn Văn Minh',
-        'Mật khẩu': 'password123',
+        'Email': 'minh@example.com',
       },
       {
         'Mã sinh viên / Username': 'SE170002',
         'Họ và tên': 'Trần Phương Thảo',
-        'Mật khẩu': 'password123',
+        'Email': 'thao@example.com',
       },
       {
         'Mã sinh viên / Username': 'SE170003',
         'Họ và tên': 'Lê Hoàng Long',
-        'Mật khẩu': 'password123',
+        'Email': 'long@example.com',
       },
     ];
 
@@ -362,15 +449,21 @@ export const UserManagementPage: React.FC<UserManagementPageProps> = ({
 
     setImportFileName(file.name);
     setImportError('');
+    setImportResult(null);
+    setParsedStudents([]);
 
     const reader = new FileReader();
     reader.onload = (event) => {
       try {
         const data = new Uint8Array(event.target?.result as ArrayBuffer);
-        const workbook = XLSX.read(data, { type: 'array' });
+        const workbook = XLSX.read(data, { type: 'array', raw: true });
         const sheetName = workbook.SheetNames[0];
         const worksheet = workbook.Sheets[sheetName];
-        const json: any[] = XLSX.utils.sheet_to_json(worksheet);
+        const json: any[] = XLSX.utils.sheet_to_json(worksheet, {
+          raw: true,
+          defval: '',
+          blankrows: false,
+        });
 
         if (!json || json.length === 0) {
           setImportError(isVi ? 'Tệp Excel trống hoặc không đúng định dạng.' : 'Excel sheet is empty.');
@@ -380,40 +473,36 @@ export const UserManagementPage: React.FC<UserManagementPageProps> = ({
 
         const parsed: ParsedStudentRow[] = [];
         for (const row of json) {
-          // Normalize column headers
+          // Keep all nonblank records; the backend owns row validation.
           const username =
-            row['Mã sinh viên / Username'] ||
-            row['Username'] ||
-            row['username'] ||
-            row['Mã sinh viên'] ||
-            row['MSSV'] ||
-            row['Tài khoản'];
+            row['Mã sinh viên / Username'] ??
+            row['Username'] ??
+            row['username'] ??
+            row['Mã sinh viên'] ??
+            row['MSSV'] ??
+            row['Tài khoản'] ??
+            '';
           const fullName =
-            row['Họ và tên'] ||
-            row['FullName'] ||
-            row['fullName'] ||
-            row['Họ tên'] ||
-            row['Name'];
-          const password =
-            row['Mật khẩu'] ||
-            row['Password'] ||
-            row['password'] ||
-            'password123';
+            row['Họ và tên'] ??
+            row['FullName'] ??
+            row['fullName'] ??
+            row['Họ tên'] ??
+            row['Name'] ??
+            '';
+          const email = row['Email'] ?? row['email'] ?? row['E-mail'] ?? '';
 
-          if (username && fullName) {
-            parsed.push({
-              username: String(username).trim().toLowerCase(),
-              fullName: String(fullName).trim(),
-              password: String(password).trim(),
-            });
-          }
+          parsed.push({
+            username: String(username).trim().toLowerCase(),
+            fullName: String(fullName).trim(),
+            email: String(email),
+          });
         }
 
         if (parsed.length === 0) {
           setImportError(
             isVi
-              ? 'Không tìm thấy dòng sinh viên hợp lệ. Cột cần có: Username (hoặc Mã sinh viên), Họ và tên.'
-              : 'No valid students found. Expected columns: Username, Full Name.'
+              ? 'Không tìm thấy dữ liệu. Cột cần có: Username (hoặc Mã sinh viên), Họ và tên, Email.'
+              : 'No records found. Expected columns: Username, Full Name, Email.'
           );
           setParsedStudents([]);
         } else {
@@ -428,36 +517,51 @@ export const UserManagementPage: React.FC<UserManagementPageProps> = ({
     reader.readAsArrayBuffer(file);
   };
 
+  // Download the skipped rows with their reason so they can be fixed and imported again
+  const handleDownloadSkipped = () => {
+    if (!importResult) return;
+    const skipped = importResult.rows
+      .filter((r) => r.status === 'SKIPPED')
+      .map((r) => ({
+        'Mã sinh viên / Username': parsedStudents[r.row - 1]?.username ?? r.username,
+        'Họ và tên': parsedStudents[r.row - 1]?.fullName ?? '',
+        'Email': parsedStudents[r.row - 1]?.email ?? r.email,
+        'Lý do': skipReasonLabel(r.reason),
+      }));
+    const worksheet = XLSX.utils.json_to_sheet(skipped);
+    const workbook = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(workbook, worksheet, 'Students');
+    XLSX.writeFile(workbook, 'Dong_Loi_Import_AIVES.xlsx');
+  };
+
   // Submit Batch Import
   const handleExecuteImport = async () => {
     if (parsedStudents.length === 0) return;
 
     setIsImporting(true);
     setImportError('');
+    setImportResult(null);
+    setShowOnlySkipped(false);
 
     try {
       const res = await importStudentsBatch(parsedStudents);
+      setImportResult({
+        success: res.success,
+        failed: res.failed,
+        rows: res.rows,
+      });
       if (res.success > 0) {
         showToast(
           isVi
             ? `Đã thêm thành công ${res.success} sinh viên vào hệ thống!`
             : `Successfully imported ${res.success} students!`
         );
-        setIsImportModalOpen(false);
-        setParsedStudents([]);
-        setImportFileName('');
         await loadUsers();
       }
 
-      if (res.failed > 0) {
-        setImportError(
-          isVi
-            ? `Có ${res.failed} sinh viên không thể thêm (trùng lặp hoặc dữ liệu không hợp lệ): ${res.errors.slice(0, 3).join(', ')}${res.errors.length > 3 ? '...' : ''}`
-            : `${res.failed} records failed: ${res.errors.slice(0, 3).join(', ')}`
-        );
-      }
     } catch (err: any) {
       setImportError(err.message || (isVi ? 'Nhập danh sách thất bại' : 'Import failed'));
+      await loadUsers();
     } finally {
       setIsImporting(false);
     }
@@ -504,6 +608,7 @@ export const UserManagementPage: React.FC<UserManagementPageProps> = ({
               setParsedStudents([]);
               setImportFileName('');
               setImportError('');
+              setImportResult(null);
               setIsImportModalOpen(true);
             }}
             className="inline-flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl border border-emerald-500/30 bg-emerald-50 dark:bg-emerald-950/40 hover:bg-emerald-100 dark:hover:bg-emerald-900/50 text-emerald-700 dark:text-emerald-300 text-sm font-semibold shadow-xs transition-all cursor-pointer"
@@ -614,8 +719,8 @@ export const UserManagementPage: React.FC<UserManagementPageProps> = ({
             onChange={(e) => setSearchQuery(e.target.value)}
             placeholder={
               isVi
-                ? 'Tìm kiếm theo tên hoặc username (@)...'
-                : 'Search by name or username (@)...'
+                ? 'Tìm kiếm theo tên, email hoặc username (@)...'
+                : 'Search by name, email or username (@)...'
             }
             className="w-full pl-9 pr-4 py-2 text-sm rounded-xl border border-slate-200 dark:border-slate-800 bg-slate-50/50 dark:bg-slate-800/60 text-slate-900 dark:text-white placeholder-slate-400 focus:outline-hidden focus:ring-2 focus:ring-indigo-500"
           />
@@ -713,6 +818,7 @@ export const UserManagementPage: React.FC<UserManagementPageProps> = ({
                 filteredUsers.map((user) => {
                   const isCurrent = isSelfUser(user);
                   const isDefaultAdmin = user.username === 'admin';
+                  const statusInfo = passwordStatusInfo(user.passwordStatus);
 
                   return (
                     <tr
@@ -739,6 +845,16 @@ export const UserManagementPage: React.FC<UserManagementPageProps> = ({
                             <span className="text-xs text-slate-500 dark:text-slate-400 font-mono">
                               @{user.username}
                             </span>
+                            <p className="text-xs text-slate-500 dark:text-slate-400 whitespace-pre-wrap break-all">
+                              {user.email || (isVi ? 'Chưa có email' : 'No email assigned')}
+                            </p>
+                            {statusInfo && (
+                              <span
+                                className={`inline-block mt-1 text-[10px] px-1.5 py-0.5 rounded-sm font-bold border ${statusInfo.className}`}
+                              >
+                                {statusInfo.label}
+                              </span>
+                            )}
                           </div>
                         </div>
                       </td>
@@ -747,6 +863,7 @@ export const UserManagementPage: React.FC<UserManagementPageProps> = ({
                       <td className="py-3.5 px-4">
                         <div className="inline-flex items-center">
                           <select
+                            aria-label={isVi ? `Vai trò của ${user.username}` : `Role for ${user.username}`}
                             value={user.role}
                             onChange={(e) => handleRoleChange(user.id, e.target.value as UserRole)}
                             disabled={isDefaultAdmin || isCurrent}
@@ -789,6 +906,36 @@ export const UserManagementPage: React.FC<UserManagementPageProps> = ({
                       {/* Actions: Edit & Delete */}
                       <td className="py-3.5 px-4 text-right">
                         <div className="inline-flex items-center justify-end gap-1">
+                          <button
+                            onClick={() => handleResendLink(user)}
+                            disabled={!user.email || resendingId === user.id}
+                            title={
+                              !user.email
+                                ? isVi
+                                  ? 'Tài khoản chưa có email'
+                                  : 'Account has no email'
+                                : user.passwordStatus === 'ACTIVATED'
+                                ? isVi
+                                  ? 'Gửi link đặt lại mật khẩu'
+                                  : 'Send password reset link'
+                                : isVi
+                                ? 'Gửi lại link đặt mật khẩu'
+                                : 'Resend password link'
+                            }
+                            aria-label={isVi ? `Gửi link đặt mật khẩu cho ${user.username}` : `Send password link to ${user.username}`}
+                            className={`p-2 rounded-xl transition-colors ${
+                              !user.email
+                                ? 'opacity-30 cursor-not-allowed text-slate-400'
+                                : 'text-slate-400 hover:text-emerald-600 hover:bg-emerald-50 dark:hover:bg-emerald-950/40 cursor-pointer'
+                            }`}
+                          >
+                            {resendingId === user.id ? (
+                              <Loader2 className="w-4 h-4 animate-spin" />
+                            ) : (
+                              <Mail className="w-4 h-4" />
+                            )}
+                          </button>
+
                           <button
                             onClick={() => handleOpenEdit(user)}
                             disabled={isCurrent}
@@ -868,18 +1015,20 @@ export const UserManagementPage: React.FC<UserManagementPageProps> = ({
             </p>
 
             {createError && (
-              <div className="mb-4 p-3 rounded-xl bg-rose-50 dark:bg-rose-950/40 border border-rose-200 dark:border-rose-800 text-rose-700 dark:text-rose-300 text-xs flex items-center gap-2">
+              <div id="create-user-error" role="alert" className="mb-4 p-3 rounded-xl bg-rose-50 dark:bg-rose-950/40 border border-rose-200 dark:border-rose-800 text-rose-700 dark:text-rose-300 text-xs flex items-center gap-2">
                 <AlertCircle className="w-4 h-4 shrink-0 text-rose-500" />
                 <span>{createError}</span>
               </div>
             )}
 
-            <form onSubmit={handleCreateSubmit} className="space-y-3.5">
+            <form onSubmit={handleCreateSubmit} aria-busy={isSubmitting}>
+              <fieldset disabled={isSubmitting} className="space-y-3.5">
               <div>
-                <label className="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1">
+                <label htmlFor="create-user-full-name" className="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1">
                   {isVi ? 'Họ và tên' : 'Full Name'} *
                 </label>
                 <input
+                  id="create-user-full-name"
                   type="text"
                   required
                   value={newFullName}
@@ -890,10 +1039,11 @@ export const UserManagementPage: React.FC<UserManagementPageProps> = ({
               </div>
 
               <div>
-                <label className="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1">
+                <label htmlFor="create-user-username" className="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1">
                   {isVi ? 'Tên đăng nhập' : 'Username'} *
                 </label>
                 <input
+                  id="create-user-username"
                   type="text"
                   required
                   value={newUsername}
@@ -904,16 +1054,33 @@ export const UserManagementPage: React.FC<UserManagementPageProps> = ({
               </div>
 
               <div>
-                <label className="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1">
-                  {isVi ? 'Mật khẩu khởi tạo (tối thiểu 8 ký tự)' : 'Initial Password (min 8 chars)'} *
-                </label>
+                <label htmlFor="create-user-email" className="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1">Email *</label>
                 <input
+                  id="create-user-email"
+                  name="email"
                   type="text"
+                  inputMode="email"
+                  autoComplete="email"
+                  autoCapitalize="none"
+                  spellCheck={false}
                   required
-                  value={newPassword}
-                  onChange={(e) => setNewPassword(e.target.value)}
-                  className="w-full px-3 py-2 text-sm font-mono rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50/50 dark:bg-slate-800/60 text-slate-900 dark:text-white focus:outline-hidden focus:ring-2 focus:ring-indigo-500"
+                  value={newEmail}
+                  onChange={(e) => setNewEmail(e.target.value)}
+                  aria-describedby={createError ? 'create-user-email-help create-user-error' : 'create-user-email-help'}
+                  className="w-full px-3 py-2 text-sm rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50/50 dark:bg-slate-800/60 text-slate-900 dark:text-white focus:outline-hidden focus:ring-2 focus:ring-indigo-500"
                 />
+                <p id="create-user-email-help" className="text-[11px] text-slate-500 dark:text-slate-400 mt-1">
+                  {isVi ? 'Nhập email thật. Máy chủ kiểm tra định dạng và giới hạn 255 ký tự Unicode.' : 'Enter a real email. The server validates its format and 255 Unicode code point limit.'}
+                </p>
+              </div>
+
+              <div className="p-3 rounded-xl bg-indigo-50 dark:bg-indigo-950/40 border border-indigo-200 dark:border-indigo-800 text-indigo-700 dark:text-indigo-300 text-xs flex items-start gap-2">
+                <Mail className="w-4 h-4 shrink-0 text-indigo-500 mt-0.5" />
+                <span>
+                  {isVi
+                    ? 'Không cần nhập mật khẩu. Hệ thống gửi tới email này một link dùng một lần (hạn 72 giờ) để người dùng tự đặt mật khẩu.'
+                    : 'No password needed. The system emails a one-time link (valid 72 hours) so the user sets their own password.'}
+                </span>
               </div>
 
               <div>
@@ -984,6 +1151,7 @@ export const UserManagementPage: React.FC<UserManagementPageProps> = ({
                     : 'Create Account'}
                 </button>
               </div>
+              </fieldset>
             </form>
           </div>
         </div>
@@ -1015,13 +1183,14 @@ export const UserManagementPage: React.FC<UserManagementPageProps> = ({
             </p>
 
             {editError && (
-              <div className="mb-4 p-3 rounded-xl bg-rose-50 dark:bg-rose-950/40 border border-rose-200 dark:border-rose-800 text-rose-700 dark:text-rose-300 text-xs flex items-center gap-2">
+              <div id="edit-user-error" role="alert" className="mb-4 p-3 rounded-xl bg-rose-50 dark:bg-rose-950/40 border border-rose-200 dark:border-rose-800 text-rose-700 dark:text-rose-300 text-xs flex items-center gap-2">
                 <AlertCircle className="w-4 h-4 shrink-0 text-rose-500" />
                 <span>{editError}</span>
               </div>
             )}
 
-            <form onSubmit={handleEditSubmit} className="space-y-4">
+            <form onSubmit={handleEditSubmit} aria-busy={isEditSubmitting}>
+              <fieldset disabled={isEditSubmitting} className="space-y-4">
               <div>
                 <label className="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1">
                   {isVi ? 'Tên đăng nhập (Username)' : 'Username'}
@@ -1038,10 +1207,11 @@ export const UserManagementPage: React.FC<UserManagementPageProps> = ({
               </div>
 
               <div>
-                <label className="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1">
+                <label htmlFor="edit-user-full-name" className="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1">
                   {isVi ? 'Họ và tên' : 'Full Name'} *
                 </label>
                 <input
+                  id="edit-user-full-name"
                   type="text"
                   required
                   value={editFullName}
@@ -1051,10 +1221,34 @@ export const UserManagementPage: React.FC<UserManagementPageProps> = ({
               </div>
 
               <div>
-                <label className="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1">
+                <label htmlFor="edit-user-email" className="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1">Email</label>
+                <input
+                  id="edit-user-email"
+                  name="email"
+                  type="text"
+                  inputMode="email"
+                  autoComplete="email"
+                  autoCapitalize="none"
+                  spellCheck={false}
+                  value={editEmail}
+                  onChange={(e) => {
+                    setEditEmail(e.target.value);
+                    setEditEmailDirty(true);
+                  }}
+                  aria-describedby={editError ? 'edit-user-email-help edit-user-error' : 'edit-user-email-help'}
+                  className="w-full px-3 py-2 text-sm rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50/50 dark:bg-slate-800/60 text-slate-900 dark:text-white focus:outline-hidden focus:ring-2 focus:ring-indigo-500"
+                />
+                <p id="edit-user-email-help" className="text-[11px] text-slate-500 dark:text-slate-400 mt-1">
+                  {isVi ? 'Không sửa ô này để giữ email cũ. Nếu thay đổi, phải nhập email hợp lệ; không được xoá bằng chuỗi rỗng.' : 'Leave this field untouched to preserve the existing email. Changes require a valid email; an empty value cannot clear it.'}
+                </p>
+              </div>
+
+              <div>
+                <label htmlFor="edit-user-role" className="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1">
                   {isVi ? 'Vai trò (Role)' : 'Role'}
                 </label>
                 <select
+                  id="edit-user-role"
                   value={editRole}
                   onChange={(e) => setEditRole(e.target.value as UserRole)}
                   disabled={editingUser.username === 'admin'}
@@ -1087,6 +1281,7 @@ export const UserManagementPage: React.FC<UserManagementPageProps> = ({
                   {isEditSubmitting ? (isVi ? 'Đang lưu...' : 'Saving...') : isVi ? 'Lưu thay đổi' : 'Save Changes'}
                 </button>
               </div>
+              </fieldset>
             </form>
           </div>
         </div>
@@ -1097,7 +1292,7 @@ export const UserManagementPage: React.FC<UserManagementPageProps> = ({
       {/* ============================================================ */}
       {isImportModalOpen && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-xs">
-          <div className="relative w-full max-w-xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl shadow-2xl p-6 max-h-[90vh] flex flex-col">
+          <div className={`relative w-full ${importResult ? 'max-w-3xl' : 'max-w-xl'} bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl shadow-2xl p-6 max-h-[90vh] flex flex-col`}>
             <button
               onClick={() => setIsImportModalOpen(false)}
               className="absolute top-4 right-4 p-2 rounded-xl text-slate-400 hover:text-slate-700 dark:hover:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors"
@@ -1118,36 +1313,62 @@ export const UserManagementPage: React.FC<UserManagementPageProps> = ({
             </p>
 
             {importError && (
-              <div className="mb-4 p-3 rounded-xl bg-rose-50 dark:bg-rose-950/40 border border-rose-200 dark:border-rose-800 text-rose-700 dark:text-rose-300 text-xs flex items-center gap-2">
+              <div role="alert" className="mb-4 p-3 rounded-xl bg-rose-50 dark:bg-rose-950/40 border border-rose-200 dark:border-rose-800 text-rose-700 dark:text-rose-300 text-xs flex items-center gap-2">
                 <AlertCircle className="w-4 h-4 shrink-0 text-rose-500" />
                 <span>{importError}</span>
               </div>
             )}
 
-            {/* Template Download Prompt */}
-            <div className="p-3 mb-4 rounded-xl bg-slate-50 dark:bg-slate-800/60 border border-slate-200 dark:border-slate-800 flex items-center justify-between gap-3">
-              <div className="flex items-center gap-2.5">
-                <FileText className="w-4 h-4 text-indigo-500" />
-                <div>
-                  <p className="text-xs font-semibold text-slate-800 dark:text-slate-200">
-                    {isVi ? 'Chưa có file mẫu Excel?' : 'Need an Excel template?'}
-                  </p>
-                  <p className="text-[11px] text-slate-500 dark:text-slate-400">
-                    {isVi
-                      ? 'Tải file mẫu định dạng chuẩn các cột: Username, Họ và tên, Mật khẩu.'
-                      : 'Download a pre-formatted template with required columns.'}
-                  </p>
+            {/* Import Result Summary (stays visible until the admin closes the modal) */}
+            {importResult && (
+              <div role="status" className="mb-4 p-3 rounded-xl bg-emerald-50 dark:bg-emerald-950/40 border border-emerald-200 dark:border-emerald-800 text-emerald-700 dark:text-emerald-300 text-xs flex items-start gap-2">
+                <CheckCircle2 className="w-4 h-4 shrink-0 text-emerald-500 mt-0.5" />
+                <div className="min-w-0">
+                  <p className="font-semibold">{isVi ? `Đã tạo: ${importResult.success}. Bỏ qua: ${importResult.failed}.` : `Created: ${importResult.success}. Skipped: ${importResult.failed}.`}</p>
+                  {importResult.success > 0 && (
+                    <p className="mt-1">
+                      {isVi
+                        ? 'Mỗi tài khoản vừa tạo được gửi một link đặt mật khẩu qua email (hạn 72 giờ).'
+                        : 'Each created account was emailed a password link (valid 72 hours).'}
+                    </p>
+                  )}
+                  {importNotSentCount > 0 && (
+                    <p className="mt-1 text-rose-600 dark:text-rose-300">
+                      {isVi
+                        ? `${importNotSentCount} email chưa gửi được — dùng nút "Gửi lại link" trong danh sách tài khoản.`
+                        : `${importNotSentCount} emails could not be sent — use "Resend link" in the account list.`}
+                    </p>
+                  )}
                 </div>
               </div>
-              <button
-                type="button"
-                onClick={handleDownloadTemplate}
-                className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-700 dark:text-slate-200 text-xs font-semibold hover:bg-slate-50 transition-colors shrink-0 cursor-pointer"
-              >
-                <Download className="w-3.5 h-3.5 text-indigo-500" />
-                <span>{isVi ? 'Tải file mẫu' : 'Template'}</span>
-              </button>
-            </div>
+            )}
+
+            {/* Template Download Prompt (hidden once a result is shown) */}
+            {!importResult && (
+              <div className="p-3 mb-4 rounded-xl bg-slate-50 dark:bg-slate-800/60 border border-slate-200 dark:border-slate-800 flex items-center justify-between gap-3">
+                <div className="flex items-center gap-2.5">
+                  <FileText className="w-4 h-4 text-indigo-500" />
+                  <div>
+                    <p className="text-xs font-semibold text-slate-800 dark:text-slate-200">
+                      {isVi ? 'Chưa có file mẫu Excel?' : 'Need an Excel template?'}
+                    </p>
+                    <p className="text-[11px] text-slate-500 dark:text-slate-400">
+                      {isVi
+                        ? 'Cột bắt buộc: Username, Họ và tên, Email. Nhập email dưới dạng văn bản; không tự tạo email từ username.'
+                        : 'Required columns: Username, Full Name, Email. Store email as text; do not derive it from username.'}
+                    </p>
+                  </div>
+                </div>
+                <button
+                  type="button"
+                  onClick={handleDownloadTemplate}
+                  className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-700 dark:text-slate-200 text-xs font-semibold hover:bg-slate-50 transition-colors shrink-0 cursor-pointer"
+                >
+                  <Download className="w-3.5 h-3.5 text-indigo-500" />
+                  <span>{isVi ? 'Tải file mẫu' : 'Template'}</span>
+                </button>
+              </div>
+            )}
 
             {/* Upload Box */}
             <div
@@ -1170,44 +1391,117 @@ export const UserManagementPage: React.FC<UserManagementPageProps> = ({
               </p>
             </div>
 
-            {/* Parsed Preview Table */}
+            {/* Parsed Preview Table (becomes the per-row result table after import) */}
             {parsedStudents.length > 0 && (
               <div className="mt-4 flex-1 overflow-hidden flex flex-col">
-                <div className="flex items-center justify-between mb-2">
+                <div className="flex items-center justify-between gap-2 mb-2">
                   <span className="text-xs font-bold text-slate-700 dark:text-slate-300 flex items-center gap-1.5">
                     <CheckCircle2 className="w-4 h-4 text-emerald-500" />
-                    {isVi
-                      ? `Đã phát hiện ${parsedStudents.length} tài khoản sinh viên:`
-                      : `Found ${parsedStudents.length} student records:`}
+                    {importResult
+                      ? isVi
+                        ? `Kết quả từng dòng (${parsedStudents.length} dòng):`
+                        : `Result per row (${parsedStudents.length} rows):`
+                      : isVi
+                      ? `Đã đọc ${parsedStudents.length} dòng; máy chủ sẽ kiểm tra và bỏ dòng lỗi/trùng:`
+                      : `Read ${parsedStudents.length} records; the server will validate and skip invalid or duplicate records:`}
                   </span>
-                  <span className="text-[11px] text-slate-400">
-                    {isVi ? 'Role mặc định: STUDENT' : 'Default role: STUDENT'}
-                  </span>
+                  {importResult && importResult.failed > 0 ? (
+                    <div className="flex items-center gap-2 shrink-0">
+                      <label className="inline-flex items-center gap-1.5 text-[11px] text-slate-600 dark:text-slate-300 cursor-pointer">
+                        <input
+                          type="checkbox"
+                          checked={showOnlySkipped}
+                          onChange={(e) => setShowOnlySkipped(e.target.checked)}
+                          className="rounded-sm border-slate-300 text-indigo-600 focus:ring-indigo-500"
+                        />
+                        {isVi ? 'Chỉ xem dòng lỗi' : 'Skipped only'}
+                      </label>
+                      <button
+                        type="button"
+                        onClick={handleDownloadSkipped}
+                        className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-700 dark:text-slate-200 text-[11px] font-semibold hover:bg-slate-50 transition-colors cursor-pointer"
+                      >
+                        <Download className="w-3.5 h-3.5 text-indigo-500" />
+                        <span>{isVi ? 'Tải dòng lỗi' : 'Download skipped'}</span>
+                      </button>
+                    </div>
+                  ) : (
+                    <span className="text-[11px] text-slate-400">
+                      {isVi ? 'Role mặc định: STUDENT' : 'Default role: STUDENT'}
+                    </span>
+                  )}
                 </div>
 
-                <div className="border border-slate-200 dark:border-slate-800 rounded-xl overflow-y-auto max-h-48 text-xs">
+                {!importResult && parsedStudents.length > 50 && (
+                  <p className="mb-2 text-[11px] text-amber-600 dark:text-amber-400">
+                    {isVi
+                      ? `Mỗi tài khoản được gửi một email nên ${parsedStudents.length} dòng có thể mất vài phút. Đừng đóng trang khi đang xử lý.`
+                      : `Each account is sent an email, so ${parsedStudents.length} rows may take a few minutes. Keep this page open while it runs.`}
+                  </p>
+                )}
+
+                <div className={`border border-slate-200 dark:border-slate-800 rounded-xl overflow-y-auto ${importResult ? 'max-h-72' : 'max-h-48'} text-xs`}>
                   <table className="w-full text-left">
                     <thead className="sticky top-0 bg-slate-100 dark:bg-slate-800 border-b border-slate-200 dark:border-slate-700 font-bold text-slate-600 dark:text-slate-300">
                       <tr>
                         <th className="py-2 px-3">#</th>
                         <th className="py-2 px-3">Username (MSSV)</th>
                         <th className="py-2 px-3">{isVi ? 'Họ và tên' : 'Full Name'}</th>
-                        <th className="py-2 px-3">{isVi ? 'Mật khẩu' : 'Password'}</th>
+                        <th className="py-2 px-3">Email</th>
+                        {importResult && <th className="py-2 px-3">{isVi ? 'Kết quả' : 'Result'}</th>}
                       </tr>
                     </thead>
                     <tbody className="divide-y divide-slate-100 dark:divide-slate-800">
-                      {parsedStudents.map((s, idx) => (
-                        <tr key={idx} className="hover:bg-slate-50 dark:hover:bg-slate-800/40">
-                          <td className="py-1.5 px-3 text-slate-400">{idx + 1}</td>
-                          <td className="py-1.5 px-3 font-mono font-semibold text-slate-800 dark:text-slate-200">
-                            @{s.username}
-                          </td>
-                          <td className="py-1.5 px-3 text-slate-700 dark:text-slate-300">{s.fullName}</td>
-                          <td className="py-1.5 px-3 font-mono text-slate-500">
-                            {s.password ? '••••••••' : 'password123'}
-                          </td>
-                        </tr>
-                      ))}
+                      {parsedStudents.map((s, idx) => {
+                        const result = importResult?.rows.find((r) => r.row === idx + 1);
+                        const isSkipped = result?.status === 'SKIPPED';
+                        if (showOnlySkipped && importResult && !isSkipped) return null;
+
+                        return (
+                          <tr
+                            key={idx}
+                            className={
+                              isSkipped
+                                ? 'bg-rose-50/70 dark:bg-rose-950/30'
+                                : 'hover:bg-slate-50 dark:hover:bg-slate-800/40'
+                            }
+                          >
+                            <td className="py-1.5 px-3 text-slate-400">{idx + 1}</td>
+                            <td className="py-1.5 px-3 font-mono font-semibold text-slate-800 dark:text-slate-200">
+                              @{s.username}
+                            </td>
+                            <td className="py-1.5 px-3 text-slate-700 dark:text-slate-300">{s.fullName}</td>
+                            <td className="py-1.5 px-3 whitespace-pre-wrap break-all text-slate-700 dark:text-slate-300">
+                              {s.email === '' ? (isVi ? 'Thiếu email — sẽ bị bỏ qua' : 'Missing email — will be skipped') : s.email}
+                            </td>
+                            {importResult && (
+                              <td className="py-1.5 px-3">
+                                {isSkipped ? (
+                                  <span className="inline-flex items-start gap-1 text-rose-700 dark:text-rose-300 font-semibold">
+                                    <AlertCircle className="w-3.5 h-3.5 shrink-0 mt-0.5 text-rose-500" />
+                                    <span>{skipReasonLabel(result?.reason ?? null)}</span>
+                                  </span>
+                                ) : result ? (
+                                  <span className="inline-flex items-start gap-1 text-emerald-700 dark:text-emerald-300 font-semibold">
+                                    <CheckCircle2 className="w-3.5 h-3.5 shrink-0 mt-0.5 text-emerald-500" />
+                                    <span>
+                                      {result.passwordStatus === 'NOT_SENT'
+                                        ? isVi
+                                          ? 'Đã tạo — chưa gửi được email'
+                                          : 'Created — email not sent'
+                                        : isVi
+                                        ? 'Đã tạo — đã gửi link'
+                                        : 'Created — link sent'}
+                                    </span>
+                                  </span>
+                                ) : (
+                                  <span className="text-slate-400">—</span>
+                                )}
+                              </td>
+                            )}
+                          </tr>
+                        );
+                      })}
                     </tbody>
                   </table>
                 </div>
@@ -1226,7 +1520,7 @@ export const UserManagementPage: React.FC<UserManagementPageProps> = ({
               <button
                 type="button"
                 onClick={handleExecuteImport}
-                disabled={isImporting || parsedStudents.length === 0}
+                disabled={isImporting || parsedStudents.length === 0 || importResult !== null}
                 className="inline-flex items-center gap-1.5 px-4 py-2 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-semibold shadow-md shadow-emerald-500/20 transition-all disabled:opacity-50 cursor-pointer"
               >
                 {isImporting ? (

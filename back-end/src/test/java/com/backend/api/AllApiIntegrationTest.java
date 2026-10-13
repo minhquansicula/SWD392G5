@@ -1,5 +1,6 @@
 package com.backend.api;
 
+import com.backend.module.auth.core.EmailNormalizer;
 import com.backend.module.auth.core.entity.User;
 import com.backend.module.auth.core.enums.Role;
 import com.backend.module.auth.core.repository.UserRepository;
@@ -121,24 +122,65 @@ class AllApiIntegrationTest extends EntitySchemaApiTestSupport {
                 .andExpect(jsonPath("$.data.role").value("LECTURER"))
                 .andExpect(jsonPath("$.data.passwordHash").doesNotExist());
         mvc.perform(post("/api/auth/login").contentType(MediaType.APPLICATION_JSON)
-                        .content(json.writeValueAsString(Map.of("username", "owner", "password", "wrong"))))
+                         .content(json.writeValueAsString(Map.of("username", "owner@example.com", "password", "wrong"))))
                 .andExpect(status().isUnauthorized()).andExpect(jsonPath("$.error").value("INVALID_CREDENTIALS"));
         mvc.perform(post("/api/auth/login").contentType(MediaType.APPLICATION_JSON).content("{}"))
                 .andExpect(status().isBadRequest()).andExpect(jsonPath("$.validationErrors.username").exists());
     }
 
     @Test
-    void adminUserCrudAndBatchRollback() throws Exception {
+    void adminUserCrudAndBatchPartialCommitWithoutOverwrite() throws Exception {
         String id = id(call("POST", "/api/admin/users", admin, userBody("newstudent")), 201);
+        assertEmailPair(UUID.fromString(id), "newstudent@example.com");
         call("GET", "/api/admin/users?role=STUDENT&page=0&size=10&sort=fullName,asc", admin, null)
                 .andExpect(status().isOk()).andExpect(jsonPath("$.data.totalElements").value(3));
-        call("PUT", "/api/admin/users/" + id, admin, Map.of("fullName", "Updated", "email", "updated@example.com"))
-                .andExpect(status().isOk()).andExpect(jsonPath("$.data.fullName").value("Updated"));
+        call("PUT", "/api/admin/users/" + id, admin, Map.of("fullName", "Updated", "email", " Updated@EXAMPLE.COM "))
+                .andExpect(status().isOk()).andExpect(jsonPath("$.data.fullName").value("Updated"))
+                .andExpect(jsonPath("$.data.email").value(" Updated@EXAMPLE.COM "));
+        assertEmailPair(UUID.fromString(id), " Updated@EXAMPLE.COM ");
+        call("PUT", "/api/admin/users/" + id, admin, Map.of("fullName", "Must not change", "email", ""))
+                .andExpect(status().isBadRequest()).andExpect(jsonPath("$.error").value("VALIDATION_FAILED"));
+        assertThat(users.findById(UUID.fromString(id)).orElseThrow().getFullName()).isEqualTo("Updated");
+        assertEmailPair(UUID.fromString(id), " Updated@EXAMPLE.COM ");
+        call("PUT", "/api/admin/users/" + id, admin, Map.of("fullName", "Updated Again"))
+                .andExpect(status().isOk()).andExpect(jsonPath("$.data.fullName").value("Updated Again"));
+        assertEmailPair(UUID.fromString(id), " Updated@EXAMPLE.COM ");
+        Map<String, Object> nullEmail = new HashMap<>();
+        nullEmail.put("email", null);
+        call("PUT", "/api/admin/users/" + id, admin, nullEmail).andExpect(status().isOk());
+        assertEmailPair(UUID.fromString(id), " Updated@EXAMPLE.COM ");
         call("POST", "/api/admin/users/batch", admin, List.of(userBody("batchA"), userBody("batchB")))
-                .andExpect(status().isCreated()).andExpect(jsonPath("$.data.length()").value(2));
-        call("POST", "/api/admin/users/batch", admin, List.of(userBody("rolledBack"), userBody("batchA")))
-                .andExpect(status().isConflict());
-        assertThat(users.existsByUsername("rolledBack")).isFalse();
+                .andExpect(status().isCreated()).andExpect(jsonPath("$.data.created").value(2));
+        User existing = users.findByUsername("batchA").orElseThrow();
+        Map<String, Object> before = jdbc.queryForMap("SELECT * FROM users WHERE id = ?", existing.getId());
+        long beforeBatchCount = users.count();
+        assertEmailPair(existing.getId(), "batchA@example.com");
+        assertEmailPair(users.findByUsername("batchB").orElseThrow().getId(), "batchB@example.com");
+        Map<String, Object> duplicate = new HashMap<>(userBody("batchA"));
+        duplicate.put("fullName", "Must not overwrite");
+        duplicate.put("email", "replacement@example.com");
+        Map<String, Object> missingEmail = new HashMap<>(userBody("missingEmail"));
+        missingEmail.remove("email");
+        List<Map<String, Object>> requests = List.of(
+                userBody("survives"), duplicate, missingEmail, userBody("afterFailure"));
+        String response = call("POST", "/api/admin/users/batch", admin, requests)
+                .andExpect(status().isCreated()).andExpect(jsonPath("$.success").value(true))
+                .andExpect(jsonPath("$.data.created").value(2))
+                .andExpect(jsonPath("$.data.rows[0].user.username").value("survives"))
+                .andExpect(jsonPath("$.data.rows[1].reason").value("USERNAME_EXISTS"))
+                .andExpect(jsonPath("$.data.rows[2].reason").value("MISSING_REQUIRED"))
+                .andExpect(jsonPath("$.data.rows[3].user.username").value("afterFailure"))
+                .andReturn().getResponse().getContentAsString();
+        List<String> createdNames = JsonPath.read(response, "$.data.rows[*].user.username");
+        assertThat(createdNames).containsExactly("survives", "afterFailure");
+        assertThat(requests.size() - createdNames.size()).isEqualTo(2);
+        assertThat(users.existsByUsername("missingEmail")).isFalse();
+        assertEmailPair(users.findByUsername("survives").orElseThrow().getId(), "survives@example.com");
+        assertEmailPair(users.findByUsername("afterFailure").orElseThrow().getId(), "afterFailure@example.com");
+        assertThat(jdbc.queryForMap("SELECT * FROM users WHERE id = ?", existing.getId())).isEqualTo(before);
+        assertThat(jdbc.queryForObject(
+                "SELECT count(*) FROM users WHERE username = 'batchA'", Integer.class)).isEqualTo(1);
+        assertThat(users.count()).isEqualTo(beforeBatchCount + 2);
         call("DELETE", "/api/admin/users/" + id, admin, null).andExpect(status().isOk()).andExpect(jsonPath("$.data").doesNotExist());
         call("DELETE", "/api/admin/users/" + id, admin, null).andExpect(status().isNotFound());
     }
@@ -290,11 +332,12 @@ class AllApiIntegrationTest extends EntitySchemaApiTestSupport {
     private UUID seed(String name, Role role) {
         return users.saveAndFlush(User.builder().username(name).fullName(name).role(role)
                 .passwordHash(passwords.encode(PASSWORD)).email(name + "@example.com")
+                .emailNormalized(EmailNormalizer.normalize(name + "@example.com"))
                 .studentCode(role == Role.STUDENT ? "CODE-" + name : null).build()).getId();
     }
     private String login(String name) throws Exception {
         String body = mvc.perform(post("/api/auth/login").contentType(MediaType.APPLICATION_JSON)
-                .content(json.writeValueAsString(Map.of("username", name, "password", PASSWORD))))
+                .content(json.writeValueAsString(Map.of("username", name + "@example.com", "password", PASSWORD))))
                 .andExpect(status().isOk()).andReturn().getResponse().getContentAsString();
         return JsonPath.read(body, "$.data.token");
     }
@@ -307,7 +350,13 @@ class AllApiIntegrationTest extends EntitySchemaApiTestSupport {
         return JsonPath.read(result.andExpect(status().is(statusCode)).andReturn().getResponse().getContentAsString(), "$.data.id");
     }
     private Map<String, Object> userBody(String name) {
-        return Map.of("username", name, "password", PASSWORD, "fullName", name, "role", "STUDENT");
+        return Map.of("username", name, "password", PASSWORD, "fullName", name,
+                "role", "STUDENT", "email", name + "@example.com");
+    }
+    private void assertEmailPair(UUID id, String raw) {
+        assertThat(jdbc.queryForObject("SELECT email FROM users WHERE id = ?", String.class, id)).isEqualTo(raw);
+        assertThat(jdbc.queryForObject("SELECT email_normalized FROM users WHERE id = ?", String.class, id))
+                .isEqualTo(EmailNormalizer.normalize(raw));
     }
     private String course() throws Exception {
         String id = id(call("POST", "/api/admin/courses", admin, Map.of("courseCode", "SWD392", "courseName", "Design")), 201);

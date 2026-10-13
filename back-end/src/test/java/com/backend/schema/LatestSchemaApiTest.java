@@ -1,5 +1,6 @@
 package com.backend.schema;
 
+import com.backend.module.auth.core.EmailNormalizer;
 import com.backend.support.LatestSchemaSpringTest;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.jayway.jsonpath.JsonPath;
@@ -55,22 +56,34 @@ class LatestSchemaApiTest extends LatestSchemaSpringTest {
                 .with(user("admin").roles("ADMIN"))).andExpect(status().isOk())
                 .andExpect(jsonPath("$.data.content[?(@.id=='" + id + "')].studentCode").value(org.hamcrest.Matchers.hasItem("SE100")));
         mvc.perform(put("/api/admin/users/" + id).with(user("admin").roles("ADMIN"))
-                .contentType(MediaType.APPLICATION_JSON).content("{\"email\":\"updated@example.com\",\"studentCode\":\"SE101\"}"))
+                .contentType(MediaType.APPLICATION_JSON).content("{\"email\":\" Updated@EXAMPLE.COM \",\"studentCode\":\"SE101\"}"))
                 .andExpect(status().isOk()).andExpect(jsonPath("$.data.studentCode").value("SE101"))
-                .andExpect(jsonPath("$.data.email").value("updated@example.com"));
+                .andExpect(jsonPath("$.data.email").value(" Updated@EXAMPLE.COM "));
+        assertEmailPair(id, " Updated@EXAMPLE.COM ");
         String response = mvc.perform(post("/api/auth/login").contentType(MediaType.APPLICATION_JSON)
-                .content("{\"username\":\"newstudent\",\"password\":\"password123\"}"))
+                .content("{\"username\":\" Updated@EXAMPLE.COM \",\"password\":\"password123\"}"))
                 .andExpect(status().isOk()).andExpect(jsonPath("$.data.user.studentCode").value("SE101"))
                 .andExpect(jsonPath("$.data.user.createdAt").exists())
                 .andExpect(jsonPath("$.data.user.passwordHash").doesNotExist())
                 .andReturn().getResponse().getContentAsString();
         String token = JsonPath.read(response, "$.data.token");
         mvc.perform(get("/api/auth/me").header("Authorization", "Bearer " + token))
-                .andExpect(status().isOk()).andExpect(jsonPath("$.data.email").value("updated@example.com"));
+                .andExpect(status().isOk()).andExpect(jsonPath("$.data.email").value(" Updated@EXAMPLE.COM "));
         mvc.perform(put("/api/admin/users/" + id).with(user("admin").roles("ADMIN"))
                 .contentType(MediaType.APPLICATION_JSON).content("{\"studentCode\":\"\",\"email\":\"\"}"))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.error").value("VALIDATION_FAILED"));
+        assertThat(jdbc.queryForObject("SELECT student_code FROM users WHERE id = ?", String.class, id)).isEqualTo("SE101");
+        assertEmailPair(id, " Updated@EXAMPLE.COM ");
+        mvc.perform(put("/api/admin/users/" + id).with(user("admin").roles("ADMIN"))
+                .contentType(MediaType.APPLICATION_JSON).content("{\"studentCode\":\"\"}"))
                 .andExpect(status().isOk());
         assertThat(jdbc.queryForObject("SELECT student_code FROM users WHERE id = ?", String.class, id)).isNull();
+        assertEmailPair(id, " Updated@EXAMPLE.COM ");
+        mvc.perform(put("/api/admin/users/" + id).with(user("admin").roles("ADMIN"))
+                .contentType(MediaType.APPLICATION_JSON).content("{\"fullName\":\"Updated Name\",\"email\":null}"))
+                .andExpect(status().isOk()).andExpect(jsonPath("$.data.fullName").value("Updated Name"));
+        assertEmailPair(id, " Updated@EXAMPLE.COM ");
         mvc.perform(delete("/api/admin/users/" + id).with(user("admin").roles("ADMIN"))).andExpect(status().isOk());
         mvc.perform(delete("/api/admin/users/" + id).with(user("admin").roles("ADMIN"))).andExpect(status().isNotFound());
     }
@@ -96,6 +109,10 @@ class LatestSchemaApiTest extends LatestSchemaSpringTest {
         body = payload("new", "SE001");
         body.put("email", "not-an-email");
         postUser(body).andExpect(status().isBadRequest());
+        body = payload("new", "SE001");
+        body.remove("email");
+        postUser(body).andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.error").value("VALIDATION_FAILED"));
         mvc.perform(get("/api/admin/users").param("role", "INVALID").with(user("admin").roles("ADMIN")))
                 .andExpect(status().isBadRequest()).andExpect(jsonPath("$.error").value("INVALID_ROLE"));
         mvc.perform(get("/api/admin/users").param("sort", "passwordHash,asc").with(user("admin").roles("ADMIN")))
@@ -106,20 +123,47 @@ class LatestSchemaApiTest extends LatestSchemaSpringTest {
     }
 
     @Test
-    void batchRollbackCoversInvalidLaterEntryNullAndDuplicateCode() throws Exception {
-        mvc.perform(post("/api/admin/users/batch").with(user("admin").roles("ADMIN"))
-                .contentType(MediaType.APPLICATION_JSON).content(json.writeValueAsString(List.of(payload("batch1", "B1"), payload("batch2", "B1")))))
-                .andExpect(status().isConflict());
-        assertThat(jdbc.queryForObject("SELECT count(*) FROM users WHERE username LIKE 'batch%'", Integer.class)).isZero();
-        mvc.perform(post("/api/admin/users/batch").with(user("admin").roles("ADMIN"))
-                .contentType(MediaType.APPLICATION_JSON).content("[null]"))
-                .andExpect(status().isBadRequest());
-        Map<String, Object> invalid = payload("batch2", "B2");
-        invalid.put("password", "short");
-        mvc.perform(post("/api/admin/users/batch").with(user("admin").roles("ADMIN"))
-                .contentType(MediaType.APPLICATION_JSON).content(json.writeValueAsString(List.of(payload("batch1", "B1"), invalid))))
-                .andExpect(status().isBadRequest());
-        assertThat(jdbc.queryForObject("SELECT count(*) FROM users WHERE username LIKE 'batch%'", Integer.class)).isZero();
+    void batchCommitsValidRowsSkipsInvalidAndDuplicatesWithoutOverwrite() throws Exception {
+        UUID existingId = createUser("existing", "B1");
+        Map<String, Object> before = jdbc.queryForMap("SELECT * FROM users WHERE id = ?", existingId);
+        Map<String, Object> first = payload("batch1", "B2");
+        first.put("email", " Batch1@EXAMPLE.COM ");
+        Map<String, Object> invalid = payload("batch3", "B3");
+        invalid.put("fullName", " ");
+        Map<String, Object> missingEmail = payload("batch4", "B4");
+        missingEmail.remove("email");
+        Map<String, Object> overwrite = payload("existing", "REPLACEMENT");
+        overwrite.put("fullName", "Must not overwrite");
+        overwrite.put("email", "replacement@example.com");
+        List<Map<String, Object>> requests = Arrays.asList(
+                first, payload("batch2", "B1"), invalid, null,
+                missingEmail, overwrite, payload("batch5", "B5"));
+        String response = mvc.perform(post("/api/admin/users/batch").with(user("admin").roles("ADMIN"))
+                .contentType(MediaType.APPLICATION_JSON).content(json.writeValueAsString(requests)))
+                .andExpect(status().isCreated()).andExpect(jsonPath("$.success").value(true))
+                .andExpect(jsonPath("$.data.created").value(2))
+                .andExpect(jsonPath("$.data.rows[0].user.username").value("batch1"))
+                .andExpect(jsonPath("$.data.rows[0].user.email").value(" Batch1@EXAMPLE.COM "))
+                .andExpect(jsonPath("$.data.rows[1].reason").value("STUDENT_CODE_EXISTS"))
+                .andExpect(jsonPath("$.data.rows[2].reason").value("MISSING_REQUIRED"))
+                .andExpect(jsonPath("$.data.rows[3].reason").value("INVALID_DATA"))
+                .andExpect(jsonPath("$.data.rows[4].reason").value("MISSING_REQUIRED"))
+                .andExpect(jsonPath("$.data.rows[5].reason").value("USERNAME_EXISTS"))
+                .andExpect(jsonPath("$.data.rows[6].user.username").value("batch5"))
+                .andReturn().getResponse().getContentAsString();
+        List<String> createdNames = JsonPath.read(response, "$.data.rows[*].user.username");
+        assertThat(createdNames).containsExactly("batch1", "batch5");
+        assertThat(requests.size() - createdNames.size()).isEqualTo(5);
+        assertThat(jdbc.queryForList(
+                "SELECT username FROM users WHERE username LIKE 'batch%' ORDER BY username", String.class))
+                .containsExactly("batch1", "batch5");
+        assertThat(jdbc.queryForMap("SELECT * FROM users WHERE id = ?", existingId)).isEqualTo(before);
+        assertThat(jdbc.queryForObject(
+                "SELECT count(*) FROM users WHERE username = 'existing'", Integer.class)).isEqualTo(1);
+        assertEmailPair(jdbc.queryForObject("SELECT id FROM users WHERE username = 'batch1'", UUID.class),
+                " Batch1@EXAMPLE.COM ");
+        assertEmailPair(jdbc.queryForObject("SELECT id FROM users WHERE username = 'batch5'", UUID.class),
+                "batch5@example.com");
         mvc.perform(post("/api/admin/users/batch").with(user("admin").roles("ADMIN"))
                 .contentType(MediaType.APPLICATION_JSON).content("[]")).andExpect(status().isBadRequest());
     }
@@ -262,7 +306,7 @@ class LatestSchemaApiTest extends LatestSchemaSpringTest {
         result.put("fullName", "Full Name");
         result.put("role", "STUDENT");
         result.put("studentCode", code);
-        result.put("email", "student@example.com");
+        result.put("email", username.trim() + "@example.com");
         return result;
     }
 
@@ -274,8 +318,17 @@ class LatestSchemaApiTest extends LatestSchemaSpringTest {
     private UUID createUser(String username, String code) throws Exception {
         String response = postUser(payload(username, code)).andExpect(status().isCreated())
                 .andExpect(jsonPath("$.data.studentCode").value(code)).andExpect(jsonPath("$.data.createdAt").exists())
+                .andExpect(jsonPath("$.data.email").value(username.trim() + "@example.com"))
                 .andReturn().getResponse().getContentAsString();
-        return UUID.fromString(JsonPath.read(response, "$.data.id"));
+        UUID id = UUID.fromString(JsonPath.read(response, "$.data.id"));
+        assertEmailPair(id, username.trim() + "@example.com");
+        return id;
+    }
+
+    private void assertEmailPair(UUID id, String raw) {
+        assertThat(jdbc.queryForObject("SELECT email FROM users WHERE id = ?", String.class, id)).isEqualTo(raw);
+        assertThat(jdbc.queryForObject("SELECT email_normalized FROM users WHERE id = ?", String.class, id))
+                .isEqualTo(EmailNormalizer.normalize(raw));
     }
 
     private UUID insertUser(String name, String role) {

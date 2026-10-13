@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import { AlertCircle, Loader2, RefreshCw } from 'lucide-react';
 import {
   ModuleType,
   ExamSubView,
@@ -15,15 +16,31 @@ import { CourseManagementPage } from './components/admin/CourseManagementPage';
 import { QuestionBankPage } from './components/questions/QuestionBankPage';
 import { AuthModal } from './components/auth/AuthModal';
 import { AuthLandingPage } from './components/auth/AuthLandingPage';
+import { SetPasswordPage } from './components/auth/SetPasswordPage';
 import {
-  getCurrentSession,
+  verifyCurrentSession,
   clearSession,
 } from './services/authService';
 
+// One-time token from an emailed link: /#/set-password?token=...
+function readPasswordLinkToken(): string | null {
+  try {
+    const match = window.location.hash.match(/^#\/set-password\?token=([^&]+)/);
+    return match ? decodeURIComponent(match[1]) : null;
+  } catch {
+    return null;
+  }
+}
+
 export default function App() {
   // Authentication & Current User Session
-  const [currentUser, setCurrentUser] = useState<UserAccount | null>(() => getCurrentSession());
+  const [currentUser, setCurrentUser] = useState<UserAccount | null>(null);
+  const [isSessionLoading, setIsSessionLoading] = useState(true);
+  const [sessionError, setSessionError] = useState('');
+  const [sessionAttempt, setSessionAttempt] = useState(0);
   const [isAuthModalOpen, setIsAuthModalOpen] = useState(false);
+
+  const [passwordLinkToken, setPasswordLinkToken] = useState<string | null>(readPasswordLinkToken);
 
   // Navigation & View state
   const [activeModule, setActiveModule] = useState<ModuleType>('exams');
@@ -63,6 +80,7 @@ export default function App() {
 
   // Sync userRole with currentUser & guard admin routes
   useEffect(() => {
+    if (!currentUser && isSessionLoading) return;
     if (currentUser) {
       setUserRole(currentUser.role === 'STUDENT' ? 'student' : 'faculty');
       if (currentUser.role !== 'ADMIN' && activeModule === 'admin') {
@@ -73,7 +91,7 @@ export default function App() {
       setActiveModule('exams');
       setExamSubView('list');
     }
-  }, [currentUser, activeModule]);
+  }, [currentUser, activeModule, isSessionLoading]);
 
   // Apply dark mode class to root HTML element & persist
   useEffect(() => {
@@ -99,20 +117,102 @@ export default function App() {
     setExamSubView('list');
   };
 
-  // Refresh current user session from storage (e.g. after Admin role updates)
+  // Recheck identity and permissions after login or account changes.
   const handleRefreshCurrentUser = () => {
-    const session = getCurrentSession();
-    setCurrentUser(session);
+    setCurrentUser(null);
+    setSessionError('');
+    setIsSessionLoading(true);
+    setSessionAttempt((attempt) => attempt + 1);
   };
+
+  useEffect(() => {
+    let cancelled = false;
+    verifyCurrentSession()
+      .then((user) => { if (!cancelled) setCurrentUser(user); })
+      .catch((error: Error) => { if (!cancelled) setSessionError(error.message); })
+      .finally(() => { if (!cancelled) setIsSessionLoading(false); });
+    return () => { cancelled = true; };
+  }, [sessionAttempt]);
+
+  useEffect(() => {
+    const onUnauthorized = () => {
+      setCurrentUser(null);
+      setSessionError('');
+      setIsSessionLoading(false);
+      setIsAuthModalOpen(false);
+    };
+    window.addEventListener('auth:unauthorized', onUnauthorized);
+    return () => window.removeEventListener('auth:unauthorized', onUnauthorized);
+  }, []);
+
+  // A link pasted into an already open tab only changes the hash, so the page does not reload.
+  useEffect(() => {
+    const onHashChange = () => {
+      const token = readPasswordLinkToken();
+      if (token) setPasswordLinkToken(token);
+    };
+    window.addEventListener('hashchange', onHashChange);
+    return () => window.removeEventListener('hashchange', onHashChange);
+  }, []);
+
+  // Leave the set-password page and drop the token from the URL.
+  // A changed password requires a fresh login; an unusable link leaves any current session alone.
+  const handlePasswordLinkDone = (passwordChanged: boolean) => {
+    try {
+      window.history.replaceState(null, '', window.location.pathname + window.location.search);
+    } catch {}
+    if (passwordChanged) {
+      clearSession();
+      setCurrentUser(null);
+    }
+    setPasswordLinkToken(null);
+  };
+
+  if (passwordLinkToken) {
+    return (
+      <SetPasswordPage
+        key={passwordLinkToken}
+        token={passwordLinkToken}
+        language={language}
+        onDone={handlePasswordLinkDone}
+      />
+    );
+  }
+
+  if (isSessionLoading || sessionError) {
+    return (
+      <main className="min-h-screen flex flex-col items-center justify-center gap-4 bg-slate-50 dark:bg-slate-950 text-slate-900 dark:text-slate-100 px-6 font-sans transition-colors duration-200">
+        {sessionError ? (
+          <div role="alert" className="max-w-md p-3 rounded-xl bg-rose-50 dark:bg-rose-950/40 border border-rose-200 dark:border-rose-800 text-rose-700 dark:text-rose-300 text-xs flex items-center gap-2">
+            <AlertCircle className="w-4 h-4 shrink-0 text-rose-500" />
+            <span>{sessionError}</span>
+          </div>
+        ) : (
+          <div role="status" className="flex flex-col items-center justify-center gap-2 text-sm text-slate-400">
+            <Loader2 className="w-6 h-6 animate-spin text-indigo-500" />
+            <span>{language === 'vi' ? 'Đang xác nhận phiên...' : 'Verifying session...'}</span>
+          </div>
+        )}
+        {sessionError && (
+          <button
+            type="button"
+            onClick={handleRefreshCurrentUser}
+            className="inline-flex items-center gap-1.5 px-4 py-2 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-semibold shadow-md shadow-indigo-500/20 transition-all cursor-pointer"
+          >
+            <RefreshCw className="w-3.5 h-3.5" />
+            {language === 'vi' ? 'Thử lại' : 'Retry'}
+          </button>
+        )}
+      </main>
+    );
+  }
 
   // Dedicated Authentication Landing Page with moving gradient animation
   if (!currentUser) {
     return (
       <div className={isDarkMode ? 'dark' : ''}>
         <AuthLandingPage
-          onLoginSuccess={(user) => {
-            setCurrentUser(user);
-          }}
+          onLoginSuccess={handleRefreshCurrentUser}
           language={language}
           setLanguage={setLanguage}
           isDarkMode={isDarkMode}
@@ -186,7 +286,6 @@ export default function App() {
             <UserManagementPage
               language={language}
               currentUserId={currentUser?.id}
-              onRefreshCurrentUser={handleRefreshCurrentUser}
               onNavigateToCourses={() => setActiveModule('courses')}
             />
           )}
@@ -224,9 +323,7 @@ export default function App() {
         isOpen={isAuthModalOpen}
         onClose={() => setIsAuthModalOpen(false)}
         language={language}
-        onSuccess={(user) => {
-          setCurrentUser(user);
-        }}
+        onSuccess={handleRefreshCurrentUser}
       />
     </div>
   );

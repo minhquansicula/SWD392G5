@@ -9,6 +9,7 @@ import {
   AlertCircle,
   CheckCircle2,
   ArrowRight,
+  ArrowLeft,
   ShieldCheck,
   Languages,
   Sun,
@@ -19,7 +20,7 @@ import {
   Zap,
 } from 'lucide-react';
 import { UserAccount } from '../../types';
-import { loginUser } from '../../services/authService';
+import { loginUser, requestPasswordReset } from '../../services/authService';
 import { Language, translations } from '../../utils/i18n';
 
 interface AuthLandingPageProps {
@@ -45,6 +46,9 @@ export const AuthLandingPage: React.FC<AuthLandingPageProps> = ({
   const [loginPassword, setLoginPassword] = useState('');
   const [showLoginPassword, setShowLoginPassword] = useState(false);
 
+  // Forgot password mode (same card, email only)
+  const [isForgotMode, setIsForgotMode] = useState(false);
+
   // Feedback states
   const [isLoading, setIsLoading] = useState(false);
   const [errorMessage, setErrorMessage] = useState('');
@@ -57,7 +61,7 @@ export const AuthLandingPage: React.FC<AuthLandingPageProps> = ({
     setSuccessMessage('');
 
     if (!loginIdentifier.trim()) {
-      setErrorMessage(isVi ? 'Vui lòng nhập tên tài khoản' : 'Please enter your username');
+      setErrorMessage(isVi ? 'Vui lòng nhập email' : 'Please enter your email');
       return;
     }
     if (!loginPassword) {
@@ -77,6 +81,39 @@ export const AuthLandingPage: React.FC<AuthLandingPageProps> = ({
     } finally {
       setIsLoading(false);
     }
+  };
+
+  // Ask the backend to mail a reset link
+  const handleForgotSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setErrorMessage('');
+    setSuccessMessage('');
+
+    if (!loginIdentifier.trim()) {
+      setErrorMessage(isVi ? 'Vui lòng nhập email' : 'Please enter your email');
+      return;
+    }
+
+    setIsLoading(true);
+    try {
+      await requestPasswordReset(loginIdentifier);
+      // Same message whether or not the email exists.
+      setSuccessMessage(
+        isVi
+          ? 'Nếu email thuộc về một tài khoản, link đặt lại mật khẩu đã được gửi. Hãy kiểm tra hộp thư (cả mục Spam); link có hạn 72 giờ. Mỗi tài khoản chỉ nhận một email trong 15 phút.'
+          : 'If the email belongs to an account, a reset link has been sent. Check your inbox (and Spam); the link is valid for 72 hours. Each account gets at most one email per 15 minutes.'
+      );
+    } catch (err: any) {
+      setErrorMessage(err.message || (isVi ? 'Không thể gửi yêu cầu' : 'Request failed'));
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  const switchMode = (forgot: boolean) => {
+    setIsForgotMode(forgot);
+    setErrorMessage('');
+    setSuccessMessage('');
   };
 
   return (
@@ -250,18 +287,28 @@ export const AuthLandingPage: React.FC<AuthLandingPageProps> = ({
                 </span>
               </div>
               <h2 className="text-xl font-bold text-white tracking-tight">
-                {isVi ? 'Đăng nhập vào Hệ thống' : 'Sign in to your account'}
+                {isForgotMode
+                  ? isVi
+                    ? 'Quên mật khẩu'
+                    : 'Forgot password'
+                  : isVi
+                  ? 'Đăng nhập vào Hệ thống'
+                  : 'Sign in to your account'}
               </h2>
               <p className="text-xs text-slate-400 mt-1">
-                {isVi
-                  ? 'Vui lòng nhập tài khoản do Quản trị viên (Admin) cấp để tiếp tục.'
-                  : 'Please enter credentials provisioned by your system administrator.'}
+                {isForgotMode
+                  ? isVi
+                    ? 'Nhập email của tài khoản. Chúng tôi sẽ gửi link để bạn đặt lại mật khẩu.'
+                    : 'Enter your account email. We will send a link to reset your password.'
+                  : isVi
+                  ? 'Đăng nhập bằng email đã được Quản trị viên gán cho tài khoản.'
+                  : 'Sign in with the email assigned to your account by the administrator.'}
               </p>
             </div>
 
             {/* Error / Success Feedback */}
             {errorMessage && (
-              <div className="mb-4 p-3 rounded-xl bg-rose-500/15 border border-rose-500/30 text-rose-300 text-xs flex items-center gap-2 animate-in fade-in duration-150">
+              <div id="landing-login-error" role="alert" className="mb-4 p-3 rounded-xl bg-rose-500/15 border border-rose-500/30 text-rose-300 text-xs flex items-center gap-2 animate-in fade-in duration-150">
                 <AlertCircle className="w-4 h-4 shrink-0 text-rose-400" />
                 <span>{errorMessage}</span>
               </div>
@@ -274,29 +321,92 @@ export const AuthLandingPage: React.FC<AuthLandingPageProps> = ({
               </div>
             )}
 
+            {/* FORGOT PASSWORD FORM */}
+            {isForgotMode && (
+              <form onSubmit={handleForgotSubmit} className="space-y-4" aria-busy={isLoading}>
+                <div>
+                  <label htmlFor="landing-forgot-email" className="block text-xs font-semibold text-slate-300 mb-1.5">
+                    Email
+                  </label>
+                  <div className="relative">
+                    <div className="absolute inset-y-0 left-0 pl-3.5 flex items-center pointer-events-none text-slate-500">
+                      <User className="w-4 h-4" />
+                    </div>
+                    <input
+                      id="landing-forgot-email"
+                      name="username"
+                      type="text"
+                      inputMode="email"
+                      autoComplete="username"
+                      autoCapitalize="none"
+                      spellCheck={false}
+                      aria-describedby={errorMessage ? 'landing-login-error' : undefined}
+                      required
+                      value={loginIdentifier}
+                      onChange={(e) => setLoginIdentifier(e.target.value)}
+                      placeholder="name@example.com"
+                      className="w-full pl-10 pr-3.5 py-2.5 text-sm rounded-xl border border-white/15 bg-white/5 text-white placeholder-slate-500 focus:outline-hidden focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 transition-colors"
+                    />
+                  </div>
+                </div>
+
+                <button
+                  type="submit"
+                  disabled={isLoading}
+                  className="w-full py-3 px-4 rounded-xl bg-gradient-to-r from-indigo-600 via-indigo-700 to-violet-600 hover:from-indigo-500 hover:to-violet-500 active:scale-[0.99] text-white text-sm font-bold shadow-lg shadow-indigo-600/30 transition-all flex items-center justify-center gap-2 cursor-pointer disabled:opacity-50 mt-2"
+                >
+                  {isLoading ? (
+                    <span>{isVi ? 'Đang gửi...' : 'Sending...'}</span>
+                  ) : (
+                    <>
+                      <span>{isVi ? 'Gửi link đặt lại mật khẩu' : 'Send reset link'}</span>
+                      <ArrowRight className="w-4 h-4" />
+                    </>
+                  )}
+                </button>
+
+                <button
+                  type="button"
+                  onClick={() => switchMode(false)}
+                  className="w-full flex items-center justify-center gap-1.5 text-xs font-semibold text-indigo-300 hover:text-white transition-colors cursor-pointer"
+                >
+                  <ArrowLeft className="w-3.5 h-3.5" />
+                  <span>{isVi ? 'Quay lại đăng nhập' : 'Back to sign in'}</span>
+                </button>
+              </form>
+            )}
+
             {/* LOGIN FORM */}
-            <form onSubmit={handleLoginSubmit} className="space-y-4">
+            {!isForgotMode && (
+            <form onSubmit={handleLoginSubmit} className="space-y-4" aria-busy={isLoading}>
               <div>
-                <label className="block text-xs font-semibold text-slate-300 mb-1.5">
-                  {isVi ? 'Tên đăng nhập' : 'Username'}
+                <label htmlFor="landing-login-email" className="block text-xs font-semibold text-slate-300 mb-1.5">
+                  Email
                 </label>
                 <div className="relative">
                   <div className="absolute inset-y-0 left-0 pl-3.5 flex items-center pointer-events-none text-slate-500">
                     <User className="w-4 h-4" />
                   </div>
                   <input
+                    id="landing-login-email"
+                    name="username"
                     type="text"
+                    inputMode="email"
+                    autoComplete="username"
+                    autoCapitalize="none"
+                    spellCheck={false}
+                    aria-describedby={errorMessage ? 'landing-login-error' : undefined}
                     required
                     value={loginIdentifier}
                     onChange={(e) => setLoginIdentifier(e.target.value)}
-                    placeholder={isVi ? 'Ví dụ: admin, lecturer1, student1' : 'Enter username'}
+                    placeholder="name@example.com"
                     className="w-full pl-10 pr-3.5 py-2.5 text-sm rounded-xl border border-white/15 bg-white/5 text-white placeholder-slate-500 focus:outline-hidden focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 transition-colors"
                   />
                 </div>
               </div>
 
               <div>
-                <label className="block text-xs font-semibold text-slate-300 mb-1.5">
+                <label htmlFor="landing-login-password" className="block text-xs font-semibold text-slate-300 mb-1.5">
                   {isVi ? 'Mật khẩu' : 'Password'}
                 </label>
                 <div className="relative">
@@ -304,6 +414,9 @@ export const AuthLandingPage: React.FC<AuthLandingPageProps> = ({
                     <Lock className="w-4 h-4" />
                   </div>
                   <input
+                    id="landing-login-password"
+                    name="password"
+                    autoComplete="current-password"
                     type={showLoginPassword ? 'text' : 'password'}
                     required
                     value={loginPassword}
@@ -317,6 +430,15 @@ export const AuthLandingPage: React.FC<AuthLandingPageProps> = ({
                     className="absolute inset-y-0 right-0 pr-3.5 flex items-center text-slate-400 hover:text-white cursor-pointer"
                   >
                     {showLoginPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                  </button>
+                </div>
+                <div className="mt-1.5 text-right">
+                  <button
+                    type="button"
+                    onClick={() => switchMode(true)}
+                    className="text-xs font-semibold text-indigo-300 hover:text-white transition-colors cursor-pointer"
+                  >
+                    {isVi ? 'Quên mật khẩu?' : 'Forgot password?'}
                   </button>
                 </div>
               </div>
@@ -336,6 +458,7 @@ export const AuthLandingPage: React.FC<AuthLandingPageProps> = ({
                 )}
               </button>
             </form>
+            )}
 
             {/* Note about admin account provisioning */}
             <div className="mt-5 pt-4 border-t border-white/10 text-center">

@@ -1,5 +1,6 @@
 package com.backend.module.auth.core.entity;
 
+import com.backend.module.auth.core.enums.PasswordMailStatus;
 import com.backend.module.auth.core.enums.Role;
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
@@ -9,6 +10,7 @@ import jakarta.persistence.GeneratedValue;
 import jakarta.persistence.GenerationType;
 import jakarta.persistence.Id;
 import jakarta.persistence.Table;
+import jakarta.validation.constraints.Email;
 import jakarta.validation.constraints.NotNull;
 import jakarta.validation.constraints.Size;
 import lombok.*;
@@ -16,6 +18,7 @@ import org.hibernate.annotations.ColumnDefault;
 
 import java.util.UUID;
 import java.time.LocalDateTime;
+import java.time.OffsetDateTime;
 import jakarta.persistence.PrePersist;
 
 @Getter
@@ -61,9 +64,29 @@ public class User {
     @Column(name = "student_code", length = 50, unique = true)
     private String studentCode;
 
-    @Size(max = 255)
-    @Column(name = "email", length = 255)
+    @Column(name = "email", columnDefinition = "text")
     private String email;
+
+    @Email
+    @Column(name = "email_normalized", columnDefinition = "text")
+    private String emailNormalized;
+
+    // Null until the owner sets a password through an emailed link (or an admin resets it).
+    @Column(name = "password_set_at")
+    private OffsetDateTime passwordSetAt;
+
+    // SHA-256 hex of the one-time link token; the raw token is never stored.
+    @Size(max = 64)
+    @Column(name = "password_token_hash", length = 64, unique = true)
+    private String passwordTokenHash;
+
+    @Column(name = "password_token_expires_at")
+    private OffsetDateTime passwordTokenExpiresAt;
+
+    // Outcome of mailing the latest link; null when no mail has been attempted.
+    @Enumerated(EnumType.STRING)
+    @Column(name = "password_mail_status", length = 20)
+    private PasswordMailStatus passwordMailStatus;
 
     @PrePersist
     void onCreate() {
