@@ -10,15 +10,18 @@ import com.backend.module.auth.core.enums.Role;
 import com.backend.module.auth.core.repository.UserRepository;
 import com.backend.module.auth.core.service.AuthServiceImpl;
 import com.backend.security.jwt.JwtTokenProvider;
+import jakarta.validation.Validation;
+import jakarta.validation.ValidatorFactory;
+import org.junit.jupiter.api.AfterAll;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
-import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.security.crypto.password.PasswordEncoder;
 
 import java.util.Map;
+import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
 
@@ -28,6 +31,13 @@ import static org.mockito.Mockito.*;
 
 @ExtendWith(MockitoExtension.class)
 class AuthServiceTest {
+    private static final ValidatorFactory FACTORY =
+            Validation.buildDefaultValidatorFactory();
+
+    @AfterAll
+    static void closeFactory() {
+        FACTORY.close();
+    }
 
     @Mock
     private UserRepository userRepository;
@@ -38,27 +48,30 @@ class AuthServiceTest {
     @Mock
     private JwtTokenProvider jwtTokenProvider;
 
-    @InjectMocks
     private AuthServiceImpl authService;
 
     private User mockUser;
 
     @BeforeEach
     void setUp() {
+        authService = new AuthServiceImpl(
+                userRepository, passwordEncoder, jwtTokenProvider, FACTORY.getValidator());
         mockUser = User.builder()
                 .id(UUID.randomUUID())
                 .username("lecturer1")
                 .passwordHash("hashed_pwd")
                 .fullName("Nguyen Van A")
                 .role(Role.LECTURER)
+                .email(" Lecturer1@EXAMPLE.COM ")
+                .emailNormalized("lecturer1@example.com")
                 .build();
     }
 
     @Test
     void login_Success() {
-        LoginRequest request = new LoginRequest("lecturer1", "password123");
+        LoginRequest request = new LoginRequest(" Lecturer1@EXAMPLE.COM ", "password123");
 
-        when(userRepository.findByUsername("lecturer1")).thenReturn(Optional.of(mockUser));
+        when(userRepository.findTop2ByEmailNormalized("lecturer1@example.com")).thenReturn(List.of(mockUser));
         when(passwordEncoder.matches("password123", "hashed_pwd")).thenReturn(true);
         when(jwtTokenProvider.generateToken(eq("lecturer1"), eq("LECTURER"), any(Map.class)))
                 .thenReturn("mock_jwt_token");
@@ -70,25 +83,34 @@ class AuthServiceTest {
         assertEquals("Bearer", response.getTokenType());
         assertEquals("lecturer1", response.getUser().getUsername());
         assertEquals("LECTURER", response.getUser().getRole());
+        assertEquals(" Lecturer1@EXAMPLE.COM ", request.getUsername());
+        verify(userRepository, never()).findByUsername(anyString());
     }
 
     @Test
     void login_WrongPassword_ThrowsInvalidCredentialsException() {
-        LoginRequest request = new LoginRequest("lecturer1", "wrong_password");
+        LoginRequest request = new LoginRequest("lecturer1@example.com", "wrong_password");
 
-        when(userRepository.findByUsername("lecturer1")).thenReturn(Optional.of(mockUser));
+        when(userRepository.findTop2ByEmailNormalized("lecturer1@example.com")).thenReturn(List.of(mockUser));
         when(passwordEncoder.matches("wrong_password", "hashed_pwd")).thenReturn(false);
 
-        assertThrows(InvalidCredentialsException.class, () -> authService.login(request));
+        InvalidCredentialsException failure =
+                assertThrows(InvalidCredentialsException.class, () -> authService.login(request));
+        assertEquals("Email or password is incorrect", failure.getMessage());
+        verifyNoInteractions(jwtTokenProvider);
     }
 
     @Test
     void login_UserNotFound_ThrowsInvalidCredentialsException() {
-        LoginRequest request = new LoginRequest("non_existent", "password123");
+        LoginRequest request = new LoginRequest("missing@example.com", "password123");
 
-        when(userRepository.findByUsername("non_existent")).thenReturn(Optional.empty());
+        when(userRepository.findTop2ByEmailNormalized("missing@example.com")).thenReturn(List.of());
 
-        assertThrows(InvalidCredentialsException.class, () -> authService.login(request));
+        InvalidCredentialsException failure =
+                assertThrows(InvalidCredentialsException.class, () -> authService.login(request));
+        assertEquals("Email or password is incorrect", failure.getMessage());
+        verify(userRepository, never()).findByUsername(anyString());
+        verifyNoInteractions(passwordEncoder, jwtTokenProvider);
     }
 
     @Test

@@ -1,5 +1,6 @@
 package com.backend.module.auth.core.controller;
 
+import com.backend.module.auth.api.dto.BatchCreateResult;
 import com.backend.module.auth.api.dto.CreateUserRequest;
 import com.backend.module.auth.api.dto.UpdateUserRequest;
 import com.backend.module.auth.api.dto.UserDto;
@@ -52,13 +53,24 @@ public class AdminUserController {
                 .body(ApiResponse.ok("Create new User successfully", createdUser));
     }
 
-    @Operation(summary = "Batch create Users", description = "Create multiple users in one transaction, e.g. from Excel")
+    @Operation(summary = "Batch create Users",
+            description = "Create valid users independently; skip invalid or business-duplicate entries; "
+                    + "return one result per submitted row with the skip reason")
     @PostMapping("/batch")
-    public ResponseEntity<ApiResponse<java.util.List<UserDto>>> batchCreateUsers(
+    // Intentionally no aggregate @Valid: the service validates each row and reports why a row was skipped.
+    public ResponseEntity<ApiResponse<BatchCreateResult>> batchCreateUsers(
             @RequestBody java.util.List<CreateUserRequest> requests) {
-        java.util.List<UserDto> createdUsers = adminUserService.batchCreateUsers(requests);
+        BatchCreateResult result = adminUserService.batchCreateUsers(requests);
         return ResponseEntity.status(HttpStatus.CREATED)
-                .body(ApiResponse.ok("Batch created Users successfully", createdUsers));
+                .body(ApiResponse.ok("Batch created Users successfully", result));
+    }
+
+    @Operation(summary = "Send a new password link",
+            description = "Invalidates the previous link and mails a new one; check passwordStatus for the outcome")
+    @PostMapping("/{id}/password-link")
+    public ResponseEntity<ApiResponse<UserDto>> resendPasswordLink(@PathVariable UUID id) {
+        UserDto user = adminUserService.resendPasswordLink(id);
+        return ResponseEntity.ok(ApiResponse.ok("Password link processed", user));
     }
 
     @Operation(summary = "Update User information")

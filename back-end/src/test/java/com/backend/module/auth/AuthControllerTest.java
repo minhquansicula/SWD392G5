@@ -52,7 +52,7 @@ class AuthControllerTest {
 
     @Test
     void login_Success_Returns200() throws Exception {
-        LoginRequest request = new LoginRequest("admin", "password123");
+        LoginRequest request = new LoginRequest("admin@example.com", "password123");
         AuthResponse authResponse = AuthResponse.builder()
                 .token("mock_token")
                 .tokenType("Bearer")
@@ -77,16 +77,17 @@ class AuthControllerTest {
 
     @Test
     void login_InvalidCredentials_Returns401() throws Exception {
-        LoginRequest request = new LoginRequest("admin", "wrong_pwd");
+        LoginRequest request = new LoginRequest("admin@example.com", "wrong_pwd");
 
         when(authService.login(any(LoginRequest.class)))
-                .thenThrow(new InvalidCredentialsException("Username or password is incorrect"));
+                .thenThrow(new InvalidCredentialsException());
 
         mockMvc.perform(post("/api/auth/login")
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(objectMapper.writeValueAsString(request)))
                 .andExpect(status().isUnauthorized())
-                .andExpect(jsonPath("$.error").value("INVALID_CREDENTIALS"));
+                .andExpect(jsonPath("$.error").value("INVALID_CREDENTIALS"))
+                .andExpect(jsonPath("$.message").value("Email or password is incorrect"));
     }
 
     @Test
