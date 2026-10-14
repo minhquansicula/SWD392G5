@@ -17,7 +17,7 @@ function loadLogin() {
   const stored = new Map();
   let failure = null;
   const user = {
-    id: 'id', username: 'internal-user', fullName: 'User',
+    id: 'id', studentCode: 'SE170001', fullName: 'User',
     role: 'STUDENT', email: ' Stored@EXAMPLE.COM ',
   };
   const storage = {
@@ -49,18 +49,18 @@ function loadLogin() {
   };
 }
 
-test('login sends raw email in username and preserves password/internal username', async () => {
+test('login sends raw email and preserves password/student code', async () => {
   const harness = loadLogin();
   const raw = ' É+Tag@EXAMPLE.COM ';
   const user = await harness.service.loginUser(raw, ' password123 ');
   const payload = harness.calls[0].payload;
 
   assert.equal(harness.calls[0].url, '/auth/login');
-  assert.equal(payload.username, raw);
+  assert.equal(payload.email, raw);
   assert.equal(payload.password, ' password123 ');
   assert.equal(Object.keys(payload).length, 2);
-  assert.equal(Object.hasOwn(payload, 'email'), false);
-  assert.equal(user.username, 'internal-user');
+  assert.equal(Object.hasOwn(payload, 'username'), false);
+  assert.equal(user.studentCode, 'SE170001');
   assert.equal(harness.stored.get('accessToken'), 'token');
 });
 

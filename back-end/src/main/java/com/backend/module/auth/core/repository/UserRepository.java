@@ -18,16 +18,17 @@ import java.util.UUID;
 
 @Repository
 public interface UserRepository extends JpaRepository<User, UUID> {
-    Optional<User> findByUsername(String username);
     List<User> findTop2ByEmailNormalized(String emailNormalized);
+    Optional<User> findByEmailNormalized(String emailNormalized);
+    boolean existsByEmailNormalized(String emailNormalized);
     Optional<User> findByPasswordTokenHash(String passwordTokenHash);
 
     @Modifying(clearAutomatically = true, flushAutomatically = true)
     @Query("UPDATE User u SET u.passwordMailStatus = :status WHERE u.id IN :ids")
     int updatePasswordMailStatus(@Param("ids") Collection<UUID> ids, @Param("status") PasswordMailStatus status);
 
-    boolean existsByUsername(String username);
     boolean existsByStudentCode(String studentCode);
+    Optional<User> findByStudentCode(String studentCode);
     boolean existsByStudentCodeAndIdNot(String studentCode, UUID id);
     Page<User> findByRole(Role role, Pageable pageable);
 
@@ -36,7 +37,6 @@ public interface UserRepository extends JpaRepository<User, UUID> {
            "CAST(u.id AS string) LIKE LOWER(CONCAT('%', :query, '%')) OR " +
            "LOWER(COALESCE(u.studentCode, '')) LIKE LOWER(CONCAT('%', :query, '%')) OR " +
            "LOWER(u.fullName) LIKE LOWER(CONCAT('%', :query, '%')) OR " +
-           "LOWER(u.username) LIKE LOWER(CONCAT('%', :query, '%')) OR " +
            "LOWER(COALESCE(u.email, '')) LIKE LOWER(CONCAT('%', :query, '%')))")
     List<User> searchStudents(@Param("role") Role role, @Param("query") String query, Pageable pageable);
 }

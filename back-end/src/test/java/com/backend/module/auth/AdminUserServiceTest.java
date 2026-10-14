@@ -3,7 +3,6 @@ package com.backend.module.auth;
 import com.backend.module.auth.api.dto.CreateUserRequest;
 import com.backend.module.auth.api.dto.UpdateUserRequest;
 import com.backend.module.auth.api.dto.UserDto;
-import com.backend.module.auth.api.exception.UserAlreadyExistsException;
 import com.backend.module.auth.api.exception.UserNotFoundException;
 import com.backend.module.auth.core.entity.User;
 import com.backend.module.auth.core.enums.Role;
@@ -67,7 +66,7 @@ class AdminUserServiceTest {
         sampleUserId = UUID.randomUUID();
         sampleUser = User.builder()
                 .id(sampleUserId)
-                .username("SE170001")
+                .studentCode("SE170001")
                 .passwordHash("encoded_pwd")
                 .fullName("Tran Van Sinh Vien")
                 .role(Role.STUDENT)
@@ -83,7 +82,7 @@ class AdminUserServiceTest {
 
         assertNotNull(result);
         assertEquals(1, result.getTotalElements());
-        assertEquals("SE170001", result.getContent().get(0).getUsername());
+        assertEquals("SE170001", result.getContent().get(0).getStudentCode());
     }
 
     @Test
@@ -101,12 +100,12 @@ class AdminUserServiceTest {
     @Test
     void createUser_Success() {
         CreateUserRequest request = new CreateUserRequest();
-        request.setUsername("SE170002");
+        request.setStudentCode("SE170002");
         request.setFullName("Le Thi B");
         request.setRole("STUDENT");
         request.setEmail(" Alice@EXAMPLE.COM ");
 
-        when(userRepository.existsByUsername("SE170002")).thenReturn(false);
+        when(userRepository.existsByStudentCode("SE170002")).thenReturn(false);
         when(passwordEncoder.encode(anyString())).thenReturn("encoded_new_pwd");
         when(userRepository.saveAndFlush(any(User.class))).thenAnswer(invocation -> {
             User u = invocation.getArgument(0);
@@ -117,7 +116,7 @@ class AdminUserServiceTest {
         UserDto result = adminUserService.createUser(request);
 
         assertNotNull(result);
-        assertEquals("SE170002", result.getUsername());
+        assertEquals("SE170002", result.getStudentCode());
         assertEquals("Le Thi B", result.getFullName());
         assertEquals("STUDENT", result.getRole());
         assertEquals(" Alice@EXAMPLE.COM ", result.getEmail());
@@ -128,15 +127,15 @@ class AdminUserServiceTest {
     }
 
     @Test
-    void createUser_UsernameAlreadyExists_ThrowsException() {
+    void createUser_StudentCodeAlreadyExists_ThrowsException() {
         CreateUserRequest request = new CreateUserRequest();
-        request.setUsername("SE170001");
+        request.setStudentCode("SE170001");
         request.setFullName("Duplicate");
         request.setEmail("duplicate@example.com");
 
-        when(userRepository.existsByUsername("SE170001")).thenReturn(true);
+        when(userRepository.existsByStudentCode("SE170001")).thenReturn(true);
 
-        assertThrows(UserAlreadyExistsException.class, () -> adminUserService.createUser(request));
+        assertThrows(com.backend.shared.exception.AppException.class, () -> adminUserService.createUser(request));
     }
 
     @Test
@@ -153,13 +152,13 @@ class AdminUserServiceTest {
         assertNotNull(result);
         assertEquals("Tran Van Sinh Vien Updated", sampleUser.getFullName());
         assertEquals(Role.LECTURER, sampleUser.getRole());
-        assertNull(sampleUser.getEmail());
+        assertNull(sampleUser.getStudentCode());
         assertNull(sampleUser.getEmailNormalized());
     }
 
     @Test
     void deleteUser_Success() {
-        when(userRepository.existsById(sampleUserId)).thenReturn(true);
+        when(userRepository.findById(sampleUserId)).thenReturn(Optional.of(sampleUser));
         doNothing().when(userRepository).deleteById(sampleUserId);
 
         assertDoesNotThrow(() -> adminUserService.deleteUser(sampleUserId));
@@ -169,8 +168,21 @@ class AdminUserServiceTest {
     @Test
     void deleteUser_NotFound_ThrowsException() {
         UUID nonExistentId = UUID.randomUUID();
-        when(userRepository.existsById(nonExistentId)).thenReturn(false);
+        when(userRepository.findById(nonExistentId)).thenReturn(Optional.empty());
 
         assertThrows(UserNotFoundException.class, () -> adminUserService.deleteUser(nonExistentId));
+    }
+
+    @Test
+    void systemAdminCannotBeDemotedOrDeleted() {
+        sampleUser.setRole(Role.ADMIN);
+        sampleUser.setSystemAdmin(true);
+        sampleUser.setStudentCode(null);
+        when(userRepository.findById(sampleUserId)).thenReturn(Optional.of(sampleUser));
+
+        assertThrows(com.backend.shared.exception.AppException.class, () -> adminUserService.updateUser(
+                sampleUserId, UpdateUserRequest.builder().role("STUDENT").studentCode("SE999999").build()));
+        assertThrows(com.backend.shared.exception.AppException.class, () -> adminUserService.deleteUser(sampleUserId));
+        verify(userRepository, never()).deleteById(sampleUserId);
     }
 }

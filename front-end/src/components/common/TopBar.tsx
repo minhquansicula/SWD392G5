@@ -285,7 +285,7 @@ export const TopBar: React.FC<TopBarProps> = ({
             >
               {/* Avatar circle with gradient */}
               <div className="w-8 h-8 rounded-full bg-gradient-to-tr from-indigo-600 to-purple-600 text-white font-bold flex items-center justify-center text-xs shadow-2xs shrink-0 ring-2 ring-white dark:ring-slate-900">
-                {(currentUser.fullName || currentUser.username || 'User')
+                {(currentUser.fullName || currentUser.email || 'User')
                   .slice(0, 2)
                   .toUpperCase()}
               </div>
@@ -293,7 +293,7 @@ export const TopBar: React.FC<TopBarProps> = ({
               {/* User text (hidden on small mobile) */}
               <div className="hidden sm:block text-left max-w-32 lg:max-w-40 truncate">
                 <p className="text-xs font-bold text-slate-900 dark:text-white truncate leading-tight">
-                  {currentUser.fullName || currentUser.username}
+                  {currentUser.fullName || currentUser.email}
                 </p>
                 <div className="flex items-center gap-1.5 mt-0.5">
                   <span
@@ -317,10 +317,10 @@ export const TopBar: React.FC<TopBarProps> = ({
               <div className="absolute right-0 mt-2 w-64 rounded-2xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 shadow-xl py-2 z-50 animate-in fade-in zoom-in-95 duration-150">
                 <div className="px-4 py-3 border-b border-slate-100 dark:border-slate-800">
                   <p className="text-xs font-bold text-slate-900 dark:text-white truncate">
-                    {currentUser.fullName || currentUser.username}
+                    {currentUser.fullName || currentUser.email}
                   </p>
                   <p className="text-[11px] text-slate-500 dark:text-slate-400 font-mono truncate mt-0.5">
-                    {currentUser.email || `@${currentUser.username}`}
+                    {currentUser.email}
                   </p>
                   <div className="mt-2">
                     <span

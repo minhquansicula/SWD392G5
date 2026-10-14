@@ -16,14 +16,13 @@ class AuthProvider extends ChangeNotifier {
   Future<bool> login({
     required String email,
     required String password,
-    String? username,
     String role = 'STUDENT',
   }) async {
     _isLoading = true;
     _errorMessage = null;
     notifyListeners();
 
-    final inputIdentifier = (username ?? email).trim();
+    final inputIdentifier = email.trim();
     final trimmedPass = password.trim();
 
     if (inputIdentifier.isEmpty) {
@@ -45,7 +44,6 @@ class AuthProvider extends ChangeNotifier {
       final res = await ApiClient.instance.post(
         ApiEndpoints.login,
         body: {
-          'username': inputIdentifier,
           'email': inputIdentifier,
           'password': trimmedPass,
         },

@@ -120,7 +120,7 @@ class AdminEmailPostgresIntegrationTest {
 
         // Controlled test fixtures, not business account creation.
         User admin = fixture("it_admin", " Admin@EXAMPLE.INVALID ", Role.ADMIN, null);
-        User legacy = fixture("legacy@example.invalid", null, Role.STUDENT, null);
+        User legacy = fixture("legacy", "legacy@example.invalid", Role.STUDENT, "LEGACY");
         new TransactionTemplate(manager).execute(status -> {
             users.saveAndFlush(admin);
             users.saveAndFlush(legacy);
@@ -129,7 +129,7 @@ class AdminEmailPostgresIntegrationTest {
 
         String adminToken = login(" Admin@EXAMPLE.INVALID ", PASSWORD);
         assertTrue(tokens.validateToken(adminToken));
-        assertEquals("it_admin", tokens.getUsernameFromToken(adminToken));
+        assertEquals(admin.getId().toString(), tokens.getUserIdFromToken(adminToken));
         System.out.println("PASS: real BCrypt login/JWT and internal admin subject");
 
         String primaryRaw = " Primary@EXAMPLE.INVALID ";
@@ -167,11 +167,11 @@ class AdminEmailPostgresIntegrationTest {
         System.out.println("PASS: random initial password, hashed one-time link, set-password activates once");
 
         String primaryToken = login(" PRIMARY@EXAMPLE.INVALID ", PASSWORD);
-        assertEquals("it_primary", tokens.getUsernameFromToken(primaryToken));
+        assertEquals(primaryId.toString(), tokens.getUserIdFromToken(primaryToken));
         mvc.perform(get("/api/auth/me").header("Authorization", "Bearer " + primaryToken))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.data.id").value(primaryId.toString()))
-                .andExpect(jsonPath("$.data.username").value("it_primary"))
+                .andExpect(jsonPath("$.data.studentCode").value("IT_PRIMARY"))
                 .andExpect(jsonPath("$.data.passwordHash").doesNotExist());
         System.out.println("PASS: create/JPA round-trip/email-login/JWT filter/me");
 
@@ -202,15 +202,13 @@ class AdminEmailPostgresIntegrationTest {
                 .andExpect(status().isOk());
         putUpdate(adminToken, legacy.getId(), nullEmail).andExpect(status().isOk());
         User storedLegacy = users.findById(legacy.getId()).orElseThrow();
-        assertNull(storedLegacy.getEmail());
-        assertNull(storedLegacy.getEmailNormalized());
-
-        credentialsRejected("legacy@example.invalid", PASSWORD);
+        assertEquals("legacy@example.invalid", storedLegacy.getEmail());
+        assertEquals("legacy@example.invalid", storedLegacy.getEmailNormalized());
         putUpdate(adminToken, legacy.getId(), Map.of("email", " Legacy.Real@EXAMPLE.INVALID "))
                 .andExpect(status().isOk());
         String legacyToken = login("legacy.real@example.invalid", PASSWORD);
-        assertEquals("legacy@example.invalid", tokens.getUsernameFromToken(legacyToken));
-        System.out.println("PASS: legacy missing canonical has no fallback; supplied email enables login");
+        assertEquals(legacy.getId().toString(), tokens.getUserIdFromToken(legacyToken));
+        System.out.println("PASS: updating an account email changes its login address");
 
         UUID secondaryId = create(adminToken,
                 request("it_secondary", "secondary@example.invalid", "IT_SECONDARY"));
@@ -265,16 +263,12 @@ class AdminEmailPostgresIntegrationTest {
                 "it_duplicate_email", " SECONDARY@EXAMPLE.INVALID ", null);
         acrossRole.setRole("LECTURER");
         postCreate(adminToken, acrossRole).andExpect(status().isConflict());
-        assertFalse(users.existsByUsername("it_duplicate_email"));
+        assertFalse(users.existsByEmailNormalized("it_duplicate_email@example.invalid"));
         assertPair(secondaryId, "secondary@example.invalid");
         System.out.println("PASS: global canonical unique and real update transaction rollback");
 
         // Explicit repository writes bypass service pre-checks.
         // These assertions inspect actual exceptions from PostgreSQL/Hibernate.
-        User usernameCollision = fixture(
-                "it_primary", "db.username@example.invalid", Role.STUDENT, null);
-        assertDatabaseUnique(usernameCollision, "users_username_key");
-
         User codeCollision = fixture(
                 "db_code", "db.code@example.invalid", Role.STUDENT, "IT_PRIMARY");
         assertDatabaseUnique(codeCollision, "users_student_code_key");
@@ -282,15 +276,15 @@ class AdminEmailPostgresIntegrationTest {
         User emailCollision = fixture(
                 "db_email", " SECONDARY@EXAMPLE.INVALID ", Role.LECTURER, null);
         assertDatabaseUnique(emailCollision, "users_email_normalized_key");
-        System.out.println("PASS: actual DB 23505 + actual Hibernate names for all three business constraints");
+        System.out.println("PASS: actual DB 23505 for email and student code uniqueness");
 
         String existingBeforeBatch = rowSnapshot(primaryId);
         long beforeBatch = users.count();
         CreateUserRequest first = request("batch_first", " First@EXAMPLE.INVALID ", "B_FIRST");
         CreateUserRequest invalid = request("batch_invalid", "", null);
-        CreateUserRequest precheckUsername = request(
-                "it_primary", "replacement@example.invalid", "REPLACEMENT");
-        precheckUsername.setFullName("Must not overwrite");
+        CreateUserRequest precheckStudentCode = request(
+                "it_primary", "replacement@example.invalid", "IT_PRIMARY");
+        precheckStudentCode.setFullName("Must not overwrite");
         CreateUserRequest precheckCode = request(
                 "batch_code", "batch.code@example.invalid", "IT_PRIMARY");
         CreateUserRequest dbEmail = request(
@@ -303,35 +297,34 @@ class AdminEmailPostgresIntegrationTest {
                         .header("Authorization", "Bearer " + adminToken)
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(json.writeValueAsString(List.of(
-                                first, invalid, precheckUsername,
+                                first, invalid, precheckStudentCode,
                                 precheckCode, dbEmail, last))))
                 .andExpect(status().isCreated())
                 .andExpect(jsonPath("$.data.total").value(6))
                 .andExpect(jsonPath("$.data.created").value(2))
                 .andExpect(jsonPath("$.data.skipped").value(4))
-                .andExpect(jsonPath("$.data.rows[0].user.username").value("batch_first"))
+                .andExpect(jsonPath("$.data.rows[0].user.studentCode").value("B_FIRST"))
                 .andExpect(jsonPath("$.data.rows[0].user.passwordStatus").value("PENDING"))
                 .andExpect(jsonPath("$.data.rows[1].reason").value("MISSING_REQUIRED"))
-                .andExpect(jsonPath("$.data.rows[2].reason").value("USERNAME_EXISTS"))
+                .andExpect(jsonPath("$.data.rows[2].reason").value("STUDENT_CODE_EXISTS"))
                 .andExpect(jsonPath("$.data.rows[3].reason").value("STUDENT_CODE_EXISTS"))
                 // No service pre-check for email: this reason comes from the real DB constraint.
                 .andExpect(jsonPath("$.data.rows[4].reason").value("EMAIL_EXISTS"))
                 .andExpect(jsonPath("$.data.rows[4].row").value(5))
-                .andExpect(jsonPath("$.data.rows[5].user.username").value("batch_last"));
+                .andExpect(jsonPath("$.data.rows[5].user.studentCode").value("B_LAST"));
         assertEquals(mailsBeforeBatch + 2, MAILED.size());
         assertEquals("First@EXAMPLE.INVALID", MAILED.get(mailsBeforeBatch).to());
         assertEquals(PasswordMailStatus.SENT,
-                users.findByUsername("batch_first").orElseThrow().getPasswordMailStatus());
+                users.findByStudentCode("B_FIRST").orElseThrow().getPasswordMailStatus());
         assertEquals(PasswordMailStatus.SENT,
-                users.findByUsername("batch_last").orElseThrow().getPasswordMailStatus());
+                users.findByStudentCode("B_LAST").orElseThrow().getPasswordMailStatus());
 
         // No test-wide transaction: these reads observe actual committed rows.
         assertEquals(beforeBatch + 2, users.count());
-        assertTrue(users.existsByUsername("batch_first"));
-        assertTrue(users.existsByUsername("batch_last"));
-        assertFalse(users.existsByUsername("batch_invalid"));
-        assertFalse(users.existsByUsername("batch_code"));
-        assertFalse(users.existsByUsername("batch_email"));
+        assertTrue(users.existsByStudentCode("B_FIRST"));
+        assertTrue(users.existsByStudentCode("B_LAST"));
+        assertFalse(users.existsByEmailNormalized("batch_invalid@example.invalid"));
+        assertFalse(users.existsByEmailNormalized("batch.code@example.invalid"));
         assertEquals(existingBeforeBatch, rowSnapshot(primaryId));
         System.out.println("PASS: batch valid rows committed independently; invalid/pre-check/DB-duplicate rows skipped");
 
@@ -349,7 +342,7 @@ class AdminEmailPostgresIntegrationTest {
         mvc.perform(post("/api/auth/login")
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(json.writeValueAsString(
-                                Map.of("username", "it_primary", "password", PASSWORD))))
+                                Map.of("email", "it_primary", "password", PASSWORD))))
                 .andExpect(status().isBadRequest());
         credentialsRejected("missing@example.invalid", PASSWORD);
         credentialsRejected("secondary@example.invalid", "wrong");
@@ -361,16 +354,16 @@ class AdminEmailPostgresIntegrationTest {
         System.out.println("PASS: all auth integration steps; Flyway history unchanged");
     }
 
-    private User fixture(String username, String rawEmail, Role role, String code) {
-        return User.builder().username(username).fullName(username).role(role)
+    private User fixture(String name, String rawEmail, Role role, String code) {
+        return User.builder().fullName(name).role(role)
                 .studentCode(code).passwordHash(encoder.encode(PASSWORD))
                 .passwordSetAt(java.time.OffsetDateTime.now())
                 .email(rawEmail).emailNormalized(EmailNormalizer.normalize(rawEmail))
                 .build();
     }
 
-    private CreateUserRequest request(String username, String rawEmail, String code) {
-        return CreateUserRequest.builder().username(username).fullName(username)
+    private CreateUserRequest request(String name, String rawEmail, String code) {
+        return CreateUserRequest.builder().fullName(name)
                 .role("STUDENT").studentCode(code).email(rawEmail).build();
     }
 
@@ -427,7 +420,7 @@ class AdminEmailPostgresIntegrationTest {
         String body = mvc.perform(post("/api/auth/login")
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(json.writeValueAsString(
-                                Map.of("username", rawEmail, "password", password))))
+                                Map.of("email", rawEmail, "password", password))))
                 .andExpect(status().isOk()).andReturn().getResponse().getContentAsString();
         return json.readTree(body).path("data").path("token").asText();
     }
@@ -436,7 +429,7 @@ class AdminEmailPostgresIntegrationTest {
         mvc.perform(post("/api/auth/login")
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(json.writeValueAsString(
-                                Map.of("username", email, "password", password))))
+                                Map.of("email", email, "password", password))))
                 .andExpect(status().isUnauthorized())
                 .andExpect(jsonPath("$.error").value("INVALID_CREDENTIALS"))
                 .andExpect(jsonPath("$.message").value("Email or password is incorrect"));
@@ -481,8 +474,9 @@ class AdminEmailPostgresIntegrationTest {
         assertEquals("23505", actual.getSQLState());
         assertEquals(expectedName, actual.getConstraintName());
         assertEquals(before, users.count());
-        assertFalse(users.existsByUsername(collision.getUsername())
-                && !"users_username_key".equals(expectedName));
+        if (!"users_email_normalized_key".equals(expectedName)) {
+            assertFalse(users.existsByEmailNormalized(collision.getEmailNormalized()));
+        }
     }
 
     @Configuration(proxyBeanMethods = false)

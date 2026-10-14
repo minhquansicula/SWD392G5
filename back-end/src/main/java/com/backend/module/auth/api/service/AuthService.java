@@ -6,5 +6,5 @@ import com.backend.module.auth.api.dto.UserDto;
 
 public interface AuthService {
     AuthResponse login(LoginRequest request);
-    UserDto getCurrentUser(String username);
+    UserDto getCurrentUser(String userId);
 }

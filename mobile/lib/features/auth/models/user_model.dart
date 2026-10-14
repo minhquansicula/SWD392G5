@@ -21,15 +21,12 @@ class UserModel {
     this.token,
   });
 
-  /// Getter username for backward compatibility
-  String get username => email;
-
   factory UserModel.fromJson(Map<String, dynamic> json, {String? token}) {
     return UserModel(
       id: json['id']?.toString() ?? '',
-      email: json['email']?.toString() ?? json['username']?.toString() ?? '',
+      email: json['email']?.toString() ?? '',
       fullName: json['fullName'] ?? json['full_name'] ?? 'Sinh viên FPT',
-      userCode: json['studentCode'] ?? json['userCode'] ?? json['user_code'] ?? 'SE170245',
+      userCode: json['studentCode']?.toString() ?? '',
       role: json['role']?.toString() ?? 'STUDENT',
       department: json['department'] ?? 'Kỹ thuật Phần mềm (FIT Dept)',
       semester: json['semester'] ?? 'Fall 2026',

@@ -59,30 +59,30 @@ public class JwtTokenProvider {
      * Tạo JWT token từ Authentication object của Spring Security.
      */
     public String generateToken(Authentication authentication) {
-        String username;
+        String userId;
         if (authentication.getPrincipal() instanceof UserDetails userDetails) {
-            username = userDetails.getUsername();
+            userId = userDetails.getUsername();
         } else {
-            username = authentication.getName();
+            userId = authentication.getName();
         }
 
         String roles = authentication.getAuthorities().stream()
                 .map(GrantedAuthority::getAuthority)
                 .collect(Collectors.joining(","));
 
-        return generateToken(username, roles, Collections.emptyMap());
+        return generateToken(userId, roles, Collections.emptyMap());
     }
 
     /**
-     * Tạo JWT token từ username và roles kèm extra claims tuỳ chọn.
+     * Tạo JWT token từ UUID của user và roles kèm extra claims tuỳ chọn.
      */
-    public String generateToken(String username, String roles, Map<String, Object> extraClaims) {
+    public String generateToken(String userId, String roles, Map<String, Object> extraClaims) {
         Date now = new Date();
         Date expiryDate = new Date(now.getTime() + jwtExpirationMs);
 
         return Jwts.builder()
                 .claims(extraClaims)
-                .subject(username)
+                .subject(userId)
                 .claim("role", roles)
                 .issuedAt(now)
                 .expiration(expiryDate)
@@ -91,9 +91,9 @@ public class JwtTokenProvider {
     }
 
     /**
-     * Trích xuất username từ JWT token.
+     * Trích xuất UUID của user từ JWT token.
      */
-    public String getUsernameFromToken(String token) {
+    public String getUserIdFromToken(String token) {
         Claims claims = getClaimsFromToken(token);
         return claims.getSubject();
     }

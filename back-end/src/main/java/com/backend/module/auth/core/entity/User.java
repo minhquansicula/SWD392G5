@@ -37,11 +37,6 @@ public class User {
 
     @Size(max = 255)
     @NotNull
-    @Column(name = "username", nullable = false, unique = true)
-    private String username;
-
-    @Size(max = 255)
-    @NotNull
     @Column(name = "password_hash", nullable = false)
     private String passwordHash;
 
@@ -55,6 +50,10 @@ public class User {
     @Column(name = "role", nullable = false, length = 50)
     private Role role;
 
+    @Builder.Default
+    @Column(name = "is_system_admin", nullable = false)
+    private boolean systemAdmin = false;
+
     // PostgreSQL timestamp WITHOUT time zone, unlike the examination timestamps.
     @ColumnDefault("CURRENT_TIMESTAMP")
     @Column(name = "created_at")
@@ -64,11 +63,13 @@ public class User {
     @Column(name = "student_code", length = 50, unique = true)
     private String studentCode;
 
-    @Column(name = "email", columnDefinition = "text")
+    @NotNull
+    @Column(name = "email", nullable = false, columnDefinition = "text")
     private String email;
 
     @Email
-    @Column(name = "email_normalized", columnDefinition = "text")
+    @NotNull
+    @Column(name = "email_normalized", nullable = false, columnDefinition = "text")
     private String emailNormalized;
 
     // Null until the owner sets a password through an emailed link (or an admin resets it).

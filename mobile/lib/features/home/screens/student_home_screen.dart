@@ -115,7 +115,7 @@ class StudentHomeScreen extends StatelessWidget {
               ),
               const SizedBox(height: 2),
               Text(
-                '${user?.userCode ?? 'SE170245'} • ${user?.department ?? 'Kỹ thuật Phần mềm'}',
+                '${user?.userCode ?? ''} • ${user?.department ?? 'Kỹ thuật Phần mềm'}',
                 style: AppTextStyles.bodySm.copyWith(color: AppColors.textMuted),
                 maxLines: 1,
                 overflow: TextOverflow.ellipsis,

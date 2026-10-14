@@ -28,7 +28,7 @@ public class AuthController {
     private final PasswordSetupService passwordSetupService;
 
     @Operation(summary = "Login",
-            description = "Login with email in the username field and password; JWT subject remains the internal username")
+            description = "Login with email and password; JWT subject is the stable user ID")
     @PostMapping("/login")
     public ResponseEntity<ApiResponse<AuthResponse>> login(@Valid @RequestBody LoginRequest request) {
         AuthResponse response = authService.login(request);

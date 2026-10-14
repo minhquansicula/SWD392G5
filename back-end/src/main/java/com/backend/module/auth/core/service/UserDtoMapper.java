@@ -11,8 +11,8 @@ final class UserDtoMapper {
     private UserDtoMapper() { }
 
     static UserDto toDto(User user) {
-        return UserDto.builder().id(user.getId()).username(user.getUsername()).fullName(user.getFullName())
-                .role(user.getRole().name()).studentCode(user.getStudentCode()).email(user.getEmail())
+        return UserDto.builder().id(user.getId()).fullName(user.getFullName())
+                .role(user.getRole().name()).systemAdmin(user.isSystemAdmin()).studentCode(user.getStudentCode()).email(user.getEmail())
                 .passwordStatus(passwordStatus(user)).createdAt(user.getCreatedAt()).build();
     }
 

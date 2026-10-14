@@ -12,12 +12,13 @@ let sessionGeneration = 0;
 // DTO interface mapping from backend
 export interface BackendUserDto {
   id: string;
-  username: string;
   fullName: string;
   role: string;
+  systemAdmin?: boolean;
   isActive?: boolean;
   createdAt?: string;
   email?: string | null;
+  studentCode?: string | null;
   passwordStatus?: PasswordStatus | null;
 }
 
@@ -26,14 +27,13 @@ export type ImportSkipReason =
   | 'INVALID_EMAIL'
   | 'INVALID_DATA'
   | 'DUPLICATE_IN_FILE'
-  | 'USERNAME_EXISTS'
   | 'EMAIL_EXISTS'
   | 'STUDENT_CODE_EXISTS';
 
 // One entry per submitted row, in file order
 export interface ImportRowResult {
   row: number;
-  username: string;
+  studentCode: string;
   email: string;
   status: 'CREATED' | 'SKIPPED';
   reason: ImportSkipReason | null;
@@ -55,7 +55,6 @@ export interface AuthResponseData {
 // Vietnamese text for the error codes of the admin user API (field "error" of the response)
 const ADMIN_USER_ERRORS: Record<string, string> = {
   VALIDATION_FAILED: 'Dữ liệu không hợp lệ. Kiểm tra các trường bắt buộc, độ dài và định dạng email.',
-  USER_ALREADY_EXISTS: 'Username đã tồn tại.',
   STUDENT_CODE_EXISTS: 'Mã sinh viên đã tồn tại.',
   DATA_INTEGRITY_CONFLICT: 'Email đã được dùng bởi tài khoản khác (hoặc dữ liệu bị trùng với tài khoản đã có).',
   USER_NOT_FOUND: 'Không tìm thấy tài khoản.',
@@ -75,10 +74,11 @@ function adminUserErrorMessage(err: any): string | null {
 export function mapBackendUserToAccount(u: BackendUserDto): UserAccount {
   return {
     id: u.id,
-    username: u.username,
     fullName: u.fullName,
     role: (u.role || 'STUDENT').toUpperCase() as UserRole,
+    systemAdmin: u.systemAdmin ?? false,
     email: u.email ?? '',
+    studentCode: u.studentCode ?? null,
     ...(u.passwordStatus ? { passwordStatus: u.passwordStatus } : {}),
     createdAt: u.createdAt || new Date().toISOString(),
   };
@@ -95,7 +95,7 @@ export async function loginUser(email: string, password: string): Promise<UserAc
       message: string;
       data: AuthResponseData;
     }>('/auth/login', {
-      username: email,
+      email,
       password,
     });
 
@@ -134,7 +134,7 @@ export async function verifyCurrentSession(): Promise<UserAccount | null> {
     // A late response must not restore a logged-out or replaced session.
     if (generation !== sessionGeneration || localStorage.getItem(TOKEN_KEY) !== token) return null;
     const dto = response.data?.data;
-    if (!dto?.id || !dto.username || !['ADMIN', 'LECTURER', 'STUDENT'].includes(dto.role)) {
+    if (!dto?.id || !dto.email || !['ADMIN', 'LECTURER', 'STUDENT'].includes(dto.role)) {
       throw new Error('Thông tin phiên từ máy chủ không hợp lệ.');
     }
     const user = mapBackendUserToAccount(dto);
@@ -193,7 +193,7 @@ export async function getRegisteredUsers(role?: string): Promise<UserAccount[]> 
  */
 export async function createUserByAdmin(data: {
   fullName: string;
-  username: string;
+  studentCode?: string;
   role: UserRole;
   email: string;
 }): Promise<UserAccount> {
@@ -204,7 +204,7 @@ export async function createUserByAdmin(data: {
       data: BackendUserDto;
     }>('/admin/users', {
       fullName: data.fullName.trim(),
-      username: data.username.trim(),
+      studentCode: data.role === 'STUDENT' ? data.studentCode?.trim() : null,
       role: data.role,
       email: data.email,
     });
@@ -291,24 +291,8 @@ export async function requestPasswordReset(email: string): Promise<void> {
   }
 }
 
-export async function updateUserRole(userId: string, newRole: UserRole): Promise<{ id: string; role: UserRole }> {
-  try {
-    await apiClient.put(`/admin/users/${userId}`, {
-      role: newRole,
-    });
-
-    // If user changed their own role, update current active session too
-    const activeSession = getCurrentSession();
-    if (activeSession && activeSession.id === userId) {
-      saveSession({ ...activeSession, role: newRole });
-    }
-
-    return { id: userId, role: newRole };
-  } catch (err: any) {
-    throw new Error(
-      err.response?.data?.message || 'Không thể cập nhật quyền người dùng.'
-    );
-  }
+export async function updateUserRole(userId: string, newRole: UserRole): Promise<UserAccount> {
+  return updateUserAccount(userId, { role: newRole });
 }
 
 /**
@@ -317,13 +301,14 @@ export async function updateUserRole(userId: string, newRole: UserRole): Promise
  */
 export async function updateUserAccount(
   userId: string,
-  data: { fullName?: string; role?: UserRole; email?: string | null }
+  data: { fullName?: string; role?: UserRole; email?: string | null; studentCode?: string | null }
 ): Promise<UserAccount> {
   try {
-    const payload: { fullName?: string; role?: string; email?: string | null } = {};
+    const payload: { fullName?: string; role?: string; email?: string | null; studentCode?: string | null } = {};
     if (data.fullName !== undefined) payload.fullName = data.fullName.trim();
     if (data.role !== undefined) payload.role = data.role;
     if (data.email !== undefined) payload.email = data.email;
+    if (data.studentCode !== undefined) payload.studentCode = data.studentCode;
 
     const response = await apiClient.put<{
       success: boolean;
@@ -340,6 +325,7 @@ export async function updateUserAccount(
         fullName: updated.fullName,
         role: updated.role,
         email: updated.email,
+        studentCode: updated.studentCode,
       });
     }
 
@@ -354,11 +340,11 @@ export async function updateUserAccount(
  * The backend answers one result per row; created students are mailed a password link.
  */
 export async function importStudentsBatch(
-  students: { username: string; fullName: string; email: string }[]
+  students: { studentCode: string; fullName: string; email: string }[]
 ): Promise<{ success: number; failed: number; rows: ImportRowResult[]; created: UserAccount[] }> {
   try {
     const payload = students.map((s) => ({
-      username: s.username.trim(),
+      studentCode: s.studentCode.trim(),
       fullName: s.fullName.trim(),
       role: 'STUDENT',
       email: s.email,
@@ -373,7 +359,7 @@ export async function importStudentsBatch(
         skipped: number;
         rows: {
           row: number;
-          username: string | null;
+          studentCode: string | null;
           email: string | null;
           status: 'CREATED' | 'SKIPPED';
           reason: ImportSkipReason | null;
@@ -392,7 +378,7 @@ export async function importStudentsBatch(
       failed: students.length - created.length,
       rows: resultRows.map((r) => ({
         row: r.row,
-        username: r.username ?? '',
+        studentCode: r.studentCode ?? '',
         email: r.email ?? '',
         status: r.status,
         reason: r.reason ?? null,
@@ -442,14 +428,15 @@ export function getCurrentSession(): UserAccount | null {
       const parsed = JSON.parse(raw);
       const userObj = parsed?.user || parsed;
       if (userObj && typeof userObj.id === 'string' && userObj.id
-          && typeof userObj.username === 'string' && userObj.username
+          && typeof userObj.email === 'string' && userObj.email
           && ['ADMIN', 'LECTURER', 'STUDENT'].includes(userObj.role)) {
         return {
           id: userObj.id || 'usr-admin',
-          username: userObj.username || 'admin',
           email: typeof userObj.email === 'string' ? userObj.email : '',
-          fullName: userObj.fullName || userObj.name || userObj.username || 'Người dùng',
+          studentCode: typeof userObj.studentCode === 'string' ? userObj.studentCode : null,
+          fullName: userObj.fullName || userObj.name || userObj.email || 'Người dùng',
           role: (userObj.role || 'STUDENT').toUpperCase() as UserRole,
+          systemAdmin: userObj.systemAdmin === true,
           createdAt: userObj.createdAt || new Date().toISOString(),
         };
       }

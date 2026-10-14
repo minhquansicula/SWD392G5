@@ -136,7 +136,6 @@ export const CourseManagementPage: React.FC<CourseManagementPageProps> = ({
     return availableLecturers.filter(
       (l) =>
         l.fullName?.toLowerCase().includes(q) ||
-        l.username?.toLowerCase().includes(q) ||
         (l.email && l.email.toLowerCase().includes(q))
     );
   }, [availableLecturers, lecturerSearchQuery]);
@@ -1049,8 +1048,8 @@ export const CourseManagementPage: React.FC<CourseManagementPageProps> = ({
                         onChange={(e) => setLecturerSearchQuery(e.target.value)}
                         placeholder={
                           isVi
-                            ? 'Tìm kiếm theo tên, email, tài khoản...'
-                            : 'Search by name, email, username...'
+                            ? 'Tìm kiếm theo tên hoặc email...'
+                            : 'Search by name or email...'
                         }
                         className="w-full pl-9 pr-8 py-2 text-xs rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50/50 dark:bg-slate-800/60 text-slate-900 dark:text-white placeholder-slate-400 focus:outline-hidden focus:ring-2 focus:ring-purple-500"
                       />
@@ -1170,7 +1169,7 @@ export const CourseManagementPage: React.FC<CourseManagementPageProps> = ({
                                   {lec.fullName}
                                 </p>
                                 <div className="flex items-center gap-1.5 text-[11px] text-slate-400 truncate">
-                                  <span className="font-mono">@{lec.username}</span>
+                                  <span className="font-mono">{lec.email}</span>
                                   {lec.email && (
                                     <>
                                       <span>•</span>
@@ -1243,7 +1242,7 @@ export const CourseManagementPage: React.FC<CourseManagementPageProps> = ({
                                 {lecturer.fullName}
                               </p>
                               <p className="text-[11px] text-slate-400 font-mono truncate">
-                                @{lecturer.username}
+                                {lecturer.email}
                               </p>
                             </div>
                           </div>

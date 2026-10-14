@@ -46,12 +46,12 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
                                     @NonNull FilterChain filterChain)
             throws ServletException, IOException {
         boolean acceptedToken = false;
-        String username = null;
+        String userId = null;
 
         try {
             String jwt = getJwtFromRequest(request);
             if (StringUtils.hasText(jwt) && tokenProvider.validateToken(jwt)) {
-                username = tokenProvider.getUsernameFromToken(jwt);
+                userId = tokenProvider.getUserIdFromToken(jwt);
                 acceptedToken = true;
             }
         } catch (Exception ex) {
@@ -86,7 +86,7 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
 
         UserDetails userDetails;
         try {
-            userDetails = service.loadUserByUsername(username);
+            userDetails = service.loadUserByUsername(userId);
         } catch (Exception ex) {
             log.error("JWT user lookup failed ({})", ex.getClass().getName());
             reject(request, response, lookupFailureStatus(ex));

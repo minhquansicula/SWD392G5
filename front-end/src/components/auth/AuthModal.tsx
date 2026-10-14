@@ -132,10 +132,10 @@ export const AuthModal: React.FC<AuthModalProps> = ({
               </div>
               <input
                 id="modal-login-email"
-                name="username"
+                name="email"
                 type="text"
                 inputMode="email"
-                autoComplete="username"
+                autoComplete="email"
                 autoCapitalize="none"
                 spellCheck={false}
                 aria-describedby={errorMessage ? 'modal-login-error' : undefined}

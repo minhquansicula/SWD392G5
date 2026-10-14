@@ -8,10 +8,11 @@ export type PasswordStatus = 'ACTIVATED' | 'PENDING' | 'EXPIRED' | 'NOT_SENT';
 
 export interface UserAccount {
   id: string;
-  username: string;
   email: string;
+  studentCode: string | null;
   fullName: string;
   role: UserRole;
+  systemAdmin?: boolean;
   password?: string;
   passwordStatus?: PasswordStatus;
   createdAt: string;

@@ -55,7 +55,7 @@ class QuestionServiceTest {
 
         sampleUser = UserDto.builder()
                 .id(UUID.randomUUID())
-                .username("lecturer1")
+                .email("lecturer1")
                 .fullName("Lecturer One")
                 .role("LECTURER")
                 .build();

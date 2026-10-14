@@ -58,21 +58,22 @@ class EmailLoginHttpTest {
     @Test
     void rawEmailIsNormalizedButPayloadPasswordAndJwtSubjectStayUnchanged()
             throws Exception {
+        User account = account();
         when(users.findTop2ByEmailNormalized("lect@example.com"))
-                .thenReturn(List.of(account()));
+                .thenReturn(List.of(account));
         when(passwords.matches(" password123 ", "hash")).thenReturn(true);
-        when(tokens.generateToken(eq("lecturer1"), eq("LECTURER"), anyMap()))
+        when(tokens.generateToken(eq(account.getId().toString()), eq("LECTURER"), anyMap()))
                 .thenReturn("test-token");
 
         LoginRequest request = new LoginRequest(
                 " \tLect@EXAMPLE.COM\r\n ", " password123 ");
         login(request).andExpect(status().isOk())
                 .andExpect(jsonPath("$.data.token").value("test-token"))
-                .andExpect(jsonPath("$.data.user.username").value("lecturer1"));
-        assertEquals(" \tLect@EXAMPLE.COM\r\n ", request.getUsername());
+                .andExpect(jsonPath("$.data.user.email").value(" Lect@EXAMPLE.COM "));
+        assertEquals(" \tLect@EXAMPLE.COM\r\n ", request.getEmail());
         assertEquals(" password123 ", request.getPassword());
-        verify(tokens).generateToken("lecturer1", "LECTURER", Map.of());
-        verify(users, never()).findByUsername(anyString());
+        verify(tokens).generateToken(account.getId().toString(), "LECTURER", Map.of());
+        verify(users, never()).findByEmailNormalized(anyString());
     }
 
     @Test
@@ -94,7 +95,7 @@ class EmailLoginHttpTest {
                 .thenReturn(List.of());
 
         credentialsRejected(new LoginRequest("legacy@example.com", "password123"));
-        verify(users, never()).findByUsername(anyString());
+        verify(users, never()).findByEmailNormalized(anyString());
         verifyNoInteractions(passwords, tokens);
     }
 
@@ -104,7 +105,7 @@ class EmailLoginHttpTest {
                 .thenReturn(List.of(account(), account()));
 
         credentialsRejected(new LoginRequest("lect@example.com", "password123"));
-        verify(users, never()).findByUsername(anyString());
+        verify(users, never()).findByEmailNormalized(anyString());
         verifyNoInteractions(passwords, tokens);
     }
 
@@ -165,7 +166,7 @@ class EmailLoginHttpTest {
     }
 
     private User account() {
-        return User.builder().id(UUID.randomUUID()).username("lecturer1")
+        return User.builder().id(UUID.randomUUID())
                 .passwordHash("hash").fullName("Lecturer")
                 .role(Role.LECTURER)
                 .email(" Lect@EXAMPLE.COM ")

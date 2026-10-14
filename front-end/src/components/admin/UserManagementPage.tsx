@@ -45,7 +45,7 @@ interface UserManagementPageProps {
 }
 
 interface ParsedStudentRow {
-  username: string;
+  studentCode: string;
   fullName: string;
   email: string;
 }
@@ -67,7 +67,7 @@ export const UserManagementPage: React.FC<UserManagementPageProps> = ({
   // Modal create user state
   const [isCreateModalOpen, setIsCreateModalOpen] = useState(false);
   const [newFullName, setNewFullName] = useState('');
-  const [newUsername, setNewUsername] = useState('');
+  const [newStudentCode, setNewStudentCode] = useState('');
   const [newEmail, setNewEmail] = useState('');
   const [newRole, setNewRole] = useState<UserRole>('STUDENT');
   const [createError, setCreateError] = useState('');
@@ -79,6 +79,7 @@ export const UserManagementPage: React.FC<UserManagementPageProps> = ({
   const [editFullName, setEditFullName] = useState('');
   const [editRole, setEditRole] = useState<UserRole>('STUDENT');
   const [editEmail, setEditEmail] = useState('');
+  const [editStudentCode, setEditStudentCode] = useState('');
   const [editEmailDirty, setEditEmailDirty] = useState(false);
   const [editError, setEditError] = useState('');
   const [isEditSubmitting, setIsEditSubmitting] = useState(false);
@@ -162,13 +163,11 @@ export const UserManagementPage: React.FC<UserManagementPageProps> = ({
   const skipReasonLabel = (reason: ImportSkipReason | null) => {
     switch (reason) {
       case 'MISSING_REQUIRED':
-        return isVi ? 'Thiếu username, họ tên hoặc email' : 'Missing username, full name or email';
+        return isVi ? 'Thiếu MSSV, họ tên hoặc email' : 'Missing student code, full name or email';
       case 'INVALID_EMAIL':
         return isVi ? 'Email sai định dạng' : 'Invalid email format';
       case 'DUPLICATE_IN_FILE':
-        return isVi ? 'Trùng username hoặc email với dòng phía trên trong file' : 'Same username or email as an earlier row in the file';
-      case 'USERNAME_EXISTS':
-        return isVi ? 'Username đã tồn tại trong hệ thống' : 'Username already exists';
+        return isVi ? 'Trùng MSSV hoặc email với dòng phía trên trong file' : 'Same student code or email as an earlier row in the file';
       case 'EMAIL_EXISTS':
         return isVi ? 'Email đã được dùng bởi tài khoản khác' : 'Email is already used by another account';
       case 'STUDENT_CODE_EXISTS':
@@ -202,10 +201,10 @@ export const UserManagementPage: React.FC<UserManagementPageProps> = ({
   // Filter users based on search and role
   const filteredUsers = useMemo(() => {
     return users.filter((u) => {
-      const name = u.fullName || (u as any).name || u.username || '';
+      const name = u.fullName || u.email;
       const matchesSearch =
         name.toLowerCase().includes(searchQuery.toLowerCase()) ||
-        u.username.toLowerCase().includes(searchQuery.toLowerCase()) ||
+        (u.studentCode || '').toLowerCase().includes(searchQuery.toLowerCase()) ||
         (u.email || '').toLowerCase().includes(searchQuery.toLowerCase());
 
       const matchesRole =
@@ -244,9 +243,13 @@ export const UserManagementPage: React.FC<UserManagementPageProps> = ({
     }
 
     try {
-      await updateUserRole(userId, newRoleValue);
+      if (newRoleValue === 'STUDENT' && !targetUser?.studentCode) {
+        if (targetUser) handleOpenEdit(targetUser, 'STUDENT');
+        return;
+      }
+      const updated = await updateUserRole(userId, newRoleValue);
       setUsers((prev) =>
-        prev.map((u) => (u.id === userId ? { ...u, role: newRoleValue } : u))
+        prev.map((u) => (u.id === userId ? updated : u))
       );
       showToast(
         isVi
@@ -259,7 +262,7 @@ export const UserManagementPage: React.FC<UserManagementPageProps> = ({
   };
 
   // Open edit modal (Prevent self-editing)
-  const handleOpenEdit = (user: UserAccount) => {
+  const handleOpenEdit = (user: UserAccount, role: UserRole = user.role) => {
     if (isSelfUser(user)) {
       showToast(
         isVi
@@ -271,9 +274,10 @@ export const UserManagementPage: React.FC<UserManagementPageProps> = ({
     }
 
     setEditingUser(user);
-    setEditFullName(user.fullName || user.username);
-    setEditRole(user.role);
+    setEditFullName(user.fullName || user.email);
+    setEditRole(role);
     setEditEmail(user.email);
+    setEditStudentCode(user.studentCode || '');
     setEditEmailDirty(false);
     setEditError('');
     setIsEditModalOpen(true);
@@ -289,12 +293,17 @@ export const UserManagementPage: React.FC<UserManagementPageProps> = ({
       setEditError(isVi ? 'Họ và tên không được để trống' : 'Full name is required');
       return;
     }
+    if (editRole === 'STUDENT' && !editStudentCode.trim()) {
+      setEditError(isVi ? 'Sinh viên phải có MSSV' : 'Student code is required');
+      return;
+    }
 
     setIsEditSubmitting(true);
     try {
       const updated = await updateUserAccount(editingUser.id, {
         fullName: editFullName.trim(),
         role: editRole,
+        studentCode: editRole === 'STUDENT' ? editStudentCode.trim() : null,
         ...(editEmailDirty ? { email: editEmail } : {}),
       });
 
@@ -305,6 +314,7 @@ export const UserManagementPage: React.FC<UserManagementPageProps> = ({
               fullName: updated.fullName,
               role: updated.role,
               email: updated.email,
+              studentCode: updated.studentCode,
               passwordStatus: updated.passwordStatus,
             }
           : u))
@@ -314,11 +324,11 @@ export const UserManagementPage: React.FC<UserManagementPageProps> = ({
       showToast(
         linkRevoked
           ? isVi
-            ? `Đã cập nhật @${editingUser.username}. Email đã đổi nên link cũ bị vô hiệu — hãy bấm gửi lại link đặt mật khẩu.`
-            : `Updated @${editingUser.username}. The email changed, so the old link is void — resend the password link.`
+            ? `Đã cập nhật ${editingUser.email}. Email đã đổi nên link cũ bị vô hiệu — hãy bấm gửi lại link đặt mật khẩu.`
+            : `Updated ${editingUser.email}. The old password link is void — resend it.`
           : isVi
-          ? `Đã cập nhật tài khoản @${editingUser.username} thành công`
-          : `Account @${editingUser.username} updated successfully`
+          ? `Đã cập nhật tài khoản ${editingUser.email} thành công`
+          : `Account ${editingUser.email} updated successfully`
       );
     } catch (err: any) {
       setEditError(err.message || (isVi ? 'Cập nhật tài khoản thất bại' : 'Update failed'));
@@ -329,14 +339,10 @@ export const UserManagementPage: React.FC<UserManagementPageProps> = ({
 
   // Trigger Custom Modal Confirmation for Deletion
   const handleRequestDelete = (user: UserAccount) => {
-    if (user.username === 'admin') {
-      showToast(
-        isVi ? 'Không thể xóa tài khoản Quản trị viên hệ thống mặc định!' : 'Cannot delete default system Admin!',
-        'error'
-      );
+    if (user.systemAdmin) {
+      showToast(isVi ? 'Không thể xóa Admin mặc định' : 'Cannot delete the default admin', 'error');
       return;
     }
-
     if (isSelfUser(user)) {
       showToast(
         isVi ? 'Quy tắc nghiệp vụ: Bạn không thể tự xóa tài khoản của chính mình!' : 'You cannot delete your own account!',
@@ -358,7 +364,7 @@ export const UserManagementPage: React.FC<UserManagementPageProps> = ({
       await deleteUser(userToDelete.id);
       setUsers((prev) => prev.filter((u) => u.id !== userToDelete.id));
       showToast(
-        isVi ? `Đã xóa vĩnh viễn tài khoản @${userToDelete.username}` : `Deleted user @${userToDelete.username}`
+        isVi ? `Đã xóa vĩnh viễn tài khoản ${userToDelete.email}` : `Deleted user ${userToDelete.email}`
       );
       setIsDeleteModalOpen(false);
       setUserToDelete(null);
@@ -374,7 +380,7 @@ export const UserManagementPage: React.FC<UserManagementPageProps> = ({
     e.preventDefault();
     setCreateError('');
 
-    if (!newFullName.trim() || !newUsername.trim() || newEmail === '') {
+    if (!newFullName.trim() || !newEmail.trim() || (newRole === 'STUDENT' && !newStudentCode.trim())) {
       setCreateError(isVi ? 'Vui lòng điền đầy đủ các mục bắt buộc' : 'Please fill all required fields');
       return;
     }
@@ -383,7 +389,7 @@ export const UserManagementPage: React.FC<UserManagementPageProps> = ({
     try {
       const created = await createUserByAdmin({
         fullName: newFullName.trim(),
-        username: newUsername.trim(),
+        studentCode: newRole === 'STUDENT' ? newStudentCode.trim() : undefined,
         role: newRole,
         email: newEmail,
       });
@@ -391,22 +397,22 @@ export const UserManagementPage: React.FC<UserManagementPageProps> = ({
       setUsers((prev) => [created, ...prev]);
       setIsCreateModalOpen(false);
       setNewFullName('');
-      setNewUsername('');
+      setNewStudentCode('');
       setNewEmail('');
       setNewRole('STUDENT');
 
       if (created.passwordStatus === 'NOT_SENT') {
         showToast(
           isVi
-            ? `Đã tạo @${created.username} nhưng chưa gửi được email đặt mật khẩu. Hãy bấm "Gửi lại link".`
-            : `Created @${created.username}, but the password email could not be sent. Use "Resend link".`,
+            ? `Đã tạo ${created.email} nhưng chưa gửi được email đặt mật khẩu. Hãy bấm "Gửi lại link".`
+            : `Created ${created.email}, but the password email could not be sent. Use "Resend link".`,
           'error'
         );
       } else {
         showToast(
           isVi
-            ? `Đã tạo @${created.username} (${created.role}) và gửi link đặt mật khẩu tới email`
-            : `Created @${created.username} (${created.role}) and emailed a password link`
+            ? `Đã tạo ${created.email} (${created.role}) và gửi link đặt mật khẩu`
+            : `Created ${created.email} (${created.role}) and emailed a password link`
         );
       }
     } catch (err: any) {
@@ -420,17 +426,17 @@ export const UserManagementPage: React.FC<UserManagementPageProps> = ({
   const handleDownloadTemplate = () => {
     const templateData = [
       {
-        'Mã sinh viên / Username': 'SE170001',
+        'Mã sinh viên': 'SE170001',
         'Họ và tên': 'Nguyễn Văn Minh',
         'Email': 'minh@example.com',
       },
       {
-        'Mã sinh viên / Username': 'SE170002',
+        'Mã sinh viên': 'SE170002',
         'Họ và tên': 'Trần Phương Thảo',
         'Email': 'thao@example.com',
       },
       {
-        'Mã sinh viên / Username': 'SE170003',
+        'Mã sinh viên': 'SE170003',
         'Họ và tên': 'Lê Hoàng Long',
         'Email': 'long@example.com',
       },
@@ -460,7 +466,8 @@ export const UserManagementPage: React.FC<UserManagementPageProps> = ({
         const sheetName = workbook.SheetNames[0];
         const worksheet = workbook.Sheets[sheetName];
         const json: any[] = XLSX.utils.sheet_to_json(worksheet, {
-          raw: true,
+          // Use displayed cell text so formatted numeric student codes keep leading zeros.
+          raw: false,
           defval: '',
           blankrows: false,
         });
@@ -474,13 +481,11 @@ export const UserManagementPage: React.FC<UserManagementPageProps> = ({
         const parsed: ParsedStudentRow[] = [];
         for (const row of json) {
           // Keep all nonblank records; the backend owns row validation.
-          const username =
-            row['Mã sinh viên / Username'] ??
-            row['Username'] ??
-            row['username'] ??
+          const studentCode =
             row['Mã sinh viên'] ??
             row['MSSV'] ??
-            row['Tài khoản'] ??
+            row['Student Code'] ??
+            row['studentCode'] ??
             '';
           const fullName =
             row['Họ và tên'] ??
@@ -492,7 +497,7 @@ export const UserManagementPage: React.FC<UserManagementPageProps> = ({
           const email = row['Email'] ?? row['email'] ?? row['E-mail'] ?? '';
 
           parsed.push({
-            username: String(username).trim().toLowerCase(),
+            studentCode: String(studentCode).trim(),
             fullName: String(fullName).trim(),
             email: String(email),
           });
@@ -501,8 +506,8 @@ export const UserManagementPage: React.FC<UserManagementPageProps> = ({
         if (parsed.length === 0) {
           setImportError(
             isVi
-              ? 'Không tìm thấy dữ liệu. Cột cần có: Username (hoặc Mã sinh viên), Họ và tên, Email.'
-              : 'No records found. Expected columns: Username, Full Name, Email.'
+              ? 'Không tìm thấy dữ liệu. Cột cần có: Mã sinh viên, Họ và tên, Email.'
+              : 'No records found. Expected columns: Student Code, Full Name, Email.'
           );
           setParsedStudents([]);
         } else {
@@ -523,7 +528,7 @@ export const UserManagementPage: React.FC<UserManagementPageProps> = ({
     const skipped = importResult.rows
       .filter((r) => r.status === 'SKIPPED')
       .map((r) => ({
-        'Mã sinh viên / Username': parsedStudents[r.row - 1]?.username ?? r.username,
+        'Mã sinh viên': parsedStudents[r.row - 1]?.studentCode ?? r.studentCode,
         'Họ và tên': parsedStudents[r.row - 1]?.fullName ?? '',
         'Email': parsedStudents[r.row - 1]?.email ?? r.email,
         'Lý do': skipReasonLabel(r.reason),
@@ -719,8 +724,8 @@ export const UserManagementPage: React.FC<UserManagementPageProps> = ({
             onChange={(e) => setSearchQuery(e.target.value)}
             placeholder={
               isVi
-                ? 'Tìm kiếm theo tên, email hoặc username (@)...'
-                : 'Search by name, email or username (@)...'
+                ? 'Tìm kiếm theo tên, email hoặc MSSV...'
+                : 'Search by name, email or student code...'
             }
             className="w-full pl-9 pr-4 py-2 text-sm rounded-xl border border-slate-200 dark:border-slate-800 bg-slate-50/50 dark:bg-slate-800/60 text-slate-900 dark:text-white placeholder-slate-400 focus:outline-hidden focus:ring-2 focus:ring-indigo-500"
           />
@@ -817,7 +822,7 @@ export const UserManagementPage: React.FC<UserManagementPageProps> = ({
               ) : (
                 filteredUsers.map((user) => {
                   const isCurrent = isSelfUser(user);
-                  const isDefaultAdmin = user.username === 'admin';
+                  const isDefaultAdmin = user.systemAdmin === true;
                   const statusInfo = passwordStatusInfo(user.passwordStatus);
 
                   return (
@@ -829,12 +834,12 @@ export const UserManagementPage: React.FC<UserManagementPageProps> = ({
                       <td className="py-3.5 px-4 sm:px-6">
                         <div className="flex items-center gap-3">
                           <div className="w-10 h-10 rounded-xl bg-gradient-to-tr from-indigo-500 to-purple-600 text-white font-bold flex items-center justify-center text-sm shadow-xs shrink-0">
-                            {(user.fullName || (user as any).name || user.username || 'User').slice(0, 2).toUpperCase()}
+                            {(user.fullName || user.email).slice(0, 2).toUpperCase()}
                           </div>
                           <div>
                             <div className="flex items-center gap-2">
                               <span className="font-semibold text-slate-900 dark:text-white">
-                                {user.fullName || (user as any).name || user.username}
+                                {user.fullName || user.email}
                               </span>
                               {isCurrent && (
                                 <span className="text-[10px] px-1.5 py-0.5 rounded-sm bg-indigo-100 dark:bg-indigo-950 text-indigo-700 dark:text-indigo-300 font-bold border border-indigo-200 dark:border-indigo-800">
@@ -842,9 +847,7 @@ export const UserManagementPage: React.FC<UserManagementPageProps> = ({
                                 </span>
                               )}
                             </div>
-                            <span className="text-xs text-slate-500 dark:text-slate-400 font-mono">
-                              @{user.username}
-                            </span>
+                            {user.studentCode && <span className="text-xs text-slate-500 dark:text-slate-400 font-mono">MSSV: {user.studentCode}</span>}
                             <p className="text-xs text-slate-500 dark:text-slate-400 whitespace-pre-wrap break-all">
                               {user.email || (isVi ? 'Chưa có email' : 'No email assigned')}
                             </p>
@@ -863,7 +866,7 @@ export const UserManagementPage: React.FC<UserManagementPageProps> = ({
                       <td className="py-3.5 px-4">
                         <div className="inline-flex items-center">
                           <select
-                            aria-label={isVi ? `Vai trò của ${user.username}` : `Role for ${user.username}`}
+                            aria-label={isVi ? `Vai trò của ${user.email}` : `Role for ${user.email}`}
                             value={user.role}
                             onChange={(e) => handleRoleChange(user.id, e.target.value as UserRole)}
                             disabled={isDefaultAdmin || isCurrent}
@@ -922,7 +925,7 @@ export const UserManagementPage: React.FC<UserManagementPageProps> = ({
                                 ? 'Gửi lại link đặt mật khẩu'
                                 : 'Resend password link'
                             }
-                            aria-label={isVi ? `Gửi link đặt mật khẩu cho ${user.username}` : `Send password link to ${user.username}`}
+                            aria-label={isVi ? `Gửi link đặt mật khẩu cho ${user.email}` : `Send password link to ${user.email}`}
                             className={`p-2 rounded-xl transition-colors ${
                               !user.email
                                 ? 'opacity-30 cursor-not-allowed text-slate-400'
@@ -1038,20 +1041,20 @@ export const UserManagementPage: React.FC<UserManagementPageProps> = ({
                 />
               </div>
 
-              <div>
-                <label htmlFor="create-user-username" className="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1">
-                  {isVi ? 'Tên đăng nhập' : 'Username'} *
+              {newRole === 'STUDENT' && <div>
+                <label htmlFor="create-user-student-code" className="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1">
+                  {isVi ? 'Mã sinh viên' : 'Student Code'} *
                 </label>
                 <input
-                  id="create-user-username"
+                  id="create-user-student-code"
                   type="text"
                   required
-                  value={newUsername}
-                  onChange={(e) => setNewUsername(e.target.value)}
-                  placeholder="nguyenvana"
+                  value={newStudentCode}
+                  onChange={(e) => setNewStudentCode(e.target.value)}
+                  placeholder="SE170001"
                   className="w-full px-3 py-2 text-sm rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50/50 dark:bg-slate-800/60 text-slate-900 dark:text-white focus:outline-hidden focus:ring-2 focus:ring-indigo-500"
                 />
-              </div>
+              </div>}
 
               <div>
                 <label htmlFor="create-user-email" className="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1">Email *</label>
@@ -1178,8 +1181,8 @@ export const UserManagementPage: React.FC<UserManagementPageProps> = ({
             </div>
             <p className="text-xs text-slate-500 dark:text-slate-400 mb-4">
               {isVi
-                ? `Cập nhật thông tin cho tài khoản @${editingUser.username}`
-                : `Update profile details for @${editingUser.username}`}
+                ? `Cập nhật thông tin cho tài khoản ${editingUser.email}`
+                : `Update profile details for ${editingUser.email}`}
             </p>
 
             {editError && (
@@ -1191,20 +1194,14 @@ export const UserManagementPage: React.FC<UserManagementPageProps> = ({
 
             <form onSubmit={handleEditSubmit} aria-busy={isEditSubmitting}>
               <fieldset disabled={isEditSubmitting} className="space-y-4">
-              <div>
-                <label className="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1">
-                  {isVi ? 'Tên đăng nhập (Username)' : 'Username'}
+              {editRole === 'STUDENT' && <div>
+                <label htmlFor="edit-user-student-code" className="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1">
+                  {isVi ? 'Mã sinh viên' : 'Student Code'} *
                 </label>
-                <input
-                  type="text"
-                  disabled
-                  value={editingUser.username}
-                  className="w-full px-3 py-2 text-sm rounded-xl border border-slate-200 dark:border-slate-800 bg-slate-100 dark:bg-slate-800/80 text-slate-500 cursor-not-allowed font-mono"
-                />
-                <span className="text-[10px] text-slate-400 mt-1 block">
-                  {isVi ? 'Tên đăng nhập được dùng làm mã định danh và không thể thay đổi.' : 'Username is a unique ID and cannot be changed.'}
-                </span>
-              </div>
+                <input id="edit-user-student-code" type="text" required value={editStudentCode}
+                  onChange={(e) => setEditStudentCode(e.target.value)}
+                  className="w-full px-3 py-2 text-sm rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50/50 dark:bg-slate-800/60 text-slate-900 dark:text-white focus:outline-hidden focus:ring-2 focus:ring-indigo-500" />
+              </div>}
 
               <div>
                 <label htmlFor="edit-user-full-name" className="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1">
@@ -1251,18 +1248,12 @@ export const UserManagementPage: React.FC<UserManagementPageProps> = ({
                   id="edit-user-role"
                   value={editRole}
                   onChange={(e) => setEditRole(e.target.value as UserRole)}
-                  disabled={editingUser.username === 'admin'}
                   className="w-full px-3 py-2 text-sm rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50/50 dark:bg-slate-800/60 text-slate-900 dark:text-white focus:outline-hidden focus:ring-2 focus:ring-indigo-500 disabled:opacity-60"
                 >
                   <option value="ADMIN">🛡️ {isVi ? 'Quản trị viên (Admin)' : 'Admin'}</option>
                   <option value="LECTURER">🎓 {isVi ? 'Giảng viên (Lecturer)' : 'Lecturer'}</option>
                   <option value="STUDENT">👨‍🎓 {isVi ? 'Sinh viên (Student)' : 'Student'}</option>
                 </select>
-                {editingUser.username === 'admin' && (
-                  <span className="text-[10px] text-amber-500 mt-1 block">
-                    {isVi ? 'Tài khoản admin mặc định không thể hạ quyền.' : 'Default admin cannot change role.'}
-                  </span>
-                )}
               </div>
 
               <div className="flex items-center justify-end gap-2 pt-2">
@@ -1354,8 +1345,8 @@ export const UserManagementPage: React.FC<UserManagementPageProps> = ({
                     </p>
                     <p className="text-[11px] text-slate-500 dark:text-slate-400">
                       {isVi
-                        ? 'Cột bắt buộc: Username, Họ và tên, Email. Nhập email dưới dạng văn bản; không tự tạo email từ username.'
-                        : 'Required columns: Username, Full Name, Email. Store email as text; do not derive it from username.'}
+                        ? 'Cột bắt buộc: Mã sinh viên, Họ và tên, Email.'
+                        : 'Required columns: Student Code, Full Name, Email.'}
                     </p>
                   </div>
                 </div>
@@ -1445,7 +1436,7 @@ export const UserManagementPage: React.FC<UserManagementPageProps> = ({
                     <thead className="sticky top-0 bg-slate-100 dark:bg-slate-800 border-b border-slate-200 dark:border-slate-700 font-bold text-slate-600 dark:text-slate-300">
                       <tr>
                         <th className="py-2 px-3">#</th>
-                        <th className="py-2 px-3">Username (MSSV)</th>
+                        <th className="py-2 px-3">MSSV</th>
                         <th className="py-2 px-3">{isVi ? 'Họ và tên' : 'Full Name'}</th>
                         <th className="py-2 px-3">Email</th>
                         {importResult && <th className="py-2 px-3">{isVi ? 'Kết quả' : 'Result'}</th>}
@@ -1468,7 +1459,7 @@ export const UserManagementPage: React.FC<UserManagementPageProps> = ({
                           >
                             <td className="py-1.5 px-3 text-slate-400">{idx + 1}</td>
                             <td className="py-1.5 px-3 font-mono font-semibold text-slate-800 dark:text-slate-200">
-                              @{s.username}
+                              {s.studentCode}
                             </td>
                             <td className="py-1.5 px-3 text-slate-700 dark:text-slate-300">{s.fullName}</td>
                             <td className="py-1.5 px-3 whitespace-pre-wrap break-all text-slate-700 dark:text-slate-300">
@@ -1593,14 +1584,14 @@ export const UserManagementPage: React.FC<UserManagementPageProps> = ({
             <div className="p-3.5 rounded-2xl bg-slate-50 dark:bg-slate-800/60 border border-slate-200 dark:border-slate-800 mb-6">
               <div className="flex items-center gap-3">
                 <div className="w-10 h-10 rounded-xl bg-gradient-to-tr from-rose-500 to-red-600 text-white font-bold flex items-center justify-center text-sm shadow-xs shrink-0">
-                  {(userToDelete.fullName || userToDelete.username).slice(0, 2).toUpperCase()}
+                  {(userToDelete.fullName || userToDelete.email).slice(0, 2).toUpperCase()}
                 </div>
                 <div className="min-w-0 flex-1">
                   <p className="text-sm font-bold text-slate-900 dark:text-white truncate">
-                    {userToDelete.fullName || userToDelete.username}
+                    {userToDelete.fullName || userToDelete.email}
                   </p>
                   <p className="text-xs text-slate-500 dark:text-slate-400 font-mono truncate">
-                    @{userToDelete.username}
+                    {userToDelete.studentCode || userToDelete.email}
                   </p>
                 </div>
                 <span

@@ -34,7 +34,6 @@ public class CourseServiceImpl implements CourseService {
                 ? c.getLecturerAssignments().stream().map(CourseLecturer::getLecturer)
                 .map(u -> UserDto.builder()
                         .id(u.getId())
-                        .username(u.getUsername())
                         .fullName(u.getFullName())
                         .studentCode(u.getStudentCode()).email(u.getEmail()).createdAt(u.getCreatedAt())
                         .role(u.getRole() != null ? u.getRole().name() : "LECTURER")
@@ -119,7 +118,6 @@ public class CourseServiceImpl implements CourseService {
         return course.getLecturerAssignments().stream().map(CourseLecturer::getLecturer)
                 .map(u -> UserDto.builder()
                         .id(u.getId())
-                        .username(u.getUsername())
                         .fullName(u.getFullName())
                         .studentCode(u.getStudentCode()).email(u.getEmail()).createdAt(u.getCreatedAt())
                         .role(u.getRole() != null ? u.getRole().name() : "LECTURER")
@@ -146,7 +144,7 @@ public class CourseServiceImpl implements CourseService {
                     .orElseThrow(() -> new AppException("User not found with id: " + lecturerId, HttpStatus.NOT_FOUND, "USER_NOT_FOUND"));
 
             if (user.getRole() != Role.LECTURER) {
-                throw new AppException("User @" + user.getUsername() + " is not a Lecturer. Only lecturers can be assigned to courses.",
+                throw new AppException("User " + user.getId() + " is not a Lecturer. Only lecturers can be assigned to courses.",
                         HttpStatus.BAD_REQUEST, "INVALID_ROLE");
             }
 

@@ -54,7 +54,7 @@ class AdminUserControllerTest {
     void getUsers_Returns200() throws Exception {
         UserDto userDto = UserDto.builder()
                 .id(UUID.randomUUID())
-                .username("lecturer1")
+                .email("lecturer1")
                 .fullName("Lecturer A")
                 .role("LECTURER")
                 .build();
@@ -64,13 +64,13 @@ class AdminUserControllerTest {
         mockMvc.perform(get("/api/admin/users"))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.success").value(true))
-                .andExpect(jsonPath("$.data.content[0].username").value("lecturer1"));
+                .andExpect(jsonPath("$.data.content[0].email").value("lecturer1"));
     }
 
     @Test
     void createUser_Returns201Created() throws Exception {
         CreateUserRequest request = CreateUserRequest.builder()
-                .username("SE170002")
+                .studentCode("SE170002")
                 .fullName("Le Thi B")
                 .role("STUDENT")
                 .email(" Alice@EXAMPLE.COM ")
@@ -78,7 +78,7 @@ class AdminUserControllerTest {
 
         UserDto createdDto = UserDto.builder()
                 .id(UUID.randomUUID())
-                .username("SE170002")
+                .studentCode("SE170002")
                 .fullName("Le Thi B")
                 .role("STUDENT")
                 .build();
@@ -90,7 +90,7 @@ class AdminUserControllerTest {
                         .content(objectMapper.writeValueAsString(request)))
                 .andExpect(status().isCreated())
                 .andExpect(jsonPath("$.success").value(true))
-                .andExpect(jsonPath("$.data.username").value("SE170002"));
+                .andExpect(jsonPath("$.data.studentCode").value("SE170002"));
         verify(adminUserService).createUser(argThat(dto ->
                 "STUDENT".equals(dto.getRole()) && " Alice@EXAMPLE.COM ".equals(dto.getEmail())));
     }
@@ -108,13 +108,13 @@ class AdminUserControllerTest {
     @Test
     void getUserById_Returns200() throws Exception {
         UUID id = UUID.randomUUID();
-        UserDto userDto = UserDto.builder().id(id).username("user1").fullName("User One").role("STUDENT").build();
+        UserDto userDto = UserDto.builder().id(id).studentCode("user1").fullName("User One").role("STUDENT").build();
         when(adminUserService.getUserById(id)).thenReturn(userDto);
 
         mockMvc.perform(get("/api/admin/users/" + id))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.success").value(true))
-                .andExpect(jsonPath("$.data.username").value("user1"));
+                .andExpect(jsonPath("$.data.studentCode").value("user1"));
     }
 
     @Test

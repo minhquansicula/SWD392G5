@@ -32,7 +32,7 @@ class _VivaRoomScreenState extends State<VivaRoomScreen> {
     super.initState();
     WidgetsBinding.instance.addPostFrameCallback((_) {
       final authProvider = context.read<AuthProvider>();
-      final studentId = authProvider.currentUser?.userCode ?? 'SE170245';
+      final studentId = authProvider.currentUser?.userCode ?? '';
       
       // Báo Spring Boot Backend chuyển trạng thái ca thi sang IN_PROGRESS
       context.read<ExamProvider>().startExamOnBackend(widget.exam.id);

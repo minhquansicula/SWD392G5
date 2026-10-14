@@ -88,13 +88,13 @@ class JwtAuthenticationFilterTest {
         }
         verify(chain, times(3)).doFilter(any(), any());
         verifyNoInteractions(provider, users);
-        verify(tokens, never()).getUsernameFromToken(any());
+        verify(tokens, never()).getUserIdFromToken(any());
     }
 
     @Test
     void tokenParsingExceptionPreservesContextAndContinues() throws Exception {
         when(tokens.validateToken("valid-token")).thenReturn(true);
-        when(tokens.getUsernameFromToken("valid-token"))
+        when(tokens.getUserIdFromToken("valid-token"))
                 .thenThrow(new IllegalArgumentException("parse failure"));
         SecurityContext previous = existingContext();
         MockHttpServletResponse response = new MockHttpServletResponse();
@@ -300,7 +300,7 @@ class JwtAuthenticationFilterTest {
 
     private void acceptedToken() {
         when(tokens.validateToken("valid-token")).thenReturn(true);
-        when(tokens.getUsernameFromToken("valid-token")).thenReturn("student");
+        when(tokens.getUserIdFromToken("valid-token")).thenReturn("student");
     }
 
     private void successfulLookup() {

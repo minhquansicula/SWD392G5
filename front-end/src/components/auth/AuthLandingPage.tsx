@@ -334,10 +334,10 @@ export const AuthLandingPage: React.FC<AuthLandingPageProps> = ({
                     </div>
                     <input
                       id="landing-forgot-email"
-                      name="username"
+                      name="email"
                       type="text"
                       inputMode="email"
-                      autoComplete="username"
+                      autoComplete="email"
                       autoCapitalize="none"
                       spellCheck={false}
                       aria-describedby={errorMessage ? 'landing-login-error' : undefined}
@@ -389,10 +389,10 @@ export const AuthLandingPage: React.FC<AuthLandingPageProps> = ({
                   </div>
                   <input
                     id="landing-login-email"
-                    name="username"
+                    name="email"
                     type="text"
                     inputMode="email"
-                    autoComplete="username"
+                    autoComplete="email"
                     autoCapitalize="none"
                     spellCheck={false}
                     aria-describedby={errorMessage ? 'landing-login-error' : undefined}
