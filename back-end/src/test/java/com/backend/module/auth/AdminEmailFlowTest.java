@@ -84,8 +84,9 @@ class AdminEmailFlowTest {
         successfulWrites();
         CreateUserRequest request = request("new", " \tA.B+Tag@EXAMPLE.COM\r\n ");
         request.setRole("LECTURER");
+        request.setStudentCode(null);
         postCreate(request).andExpect(status().isCreated())
-                .andExpect(jsonPath("$.data.username").value("new"))
+                .andExpect(jsonPath("$.data.studentCode").doesNotExist())
                 .andExpect(jsonPath("$.data.email").value(request.getEmail()));
         assertEquals(" \tA.B+Tag@EXAMPLE.COM\r\n ", request.getEmail());
         verify(users).saveAndFlush(argThat(user -> request.getEmail().equals(user.getEmail())
@@ -105,7 +106,7 @@ class AdminEmailFlowTest {
                 assertEquals(raw, request.getEmail());
             }
         }
-        postCreate(Map.of("username", "new", "password", "password123",
+        postCreate(Map.of("studentCode", "new", "password", "password123",
                 "fullName", "New", "role", "STUDENT")).andExpect(status().isBadRequest());
         verifyNoInteractions(users, passwords);
     }
@@ -168,8 +169,8 @@ class AdminEmailFlowTest {
     @Test
     void legacyNullUntouchedAndNullUpdatesDoNotBackfillAndInvalidUpdateIsImmutable() throws Exception {
         UUID id = UUID.randomUUID();
-        User legacy = User.builder().id(id).username("legacy").passwordHash("hash")
-                .fullName("Old").role(Role.STUDENT).build();
+        User legacy = User.builder().id(id).passwordHash("hash")
+                .fullName("Old").role(Role.LECTURER).build();
         when(users.findById(id)).thenReturn(Optional.of(legacy));
         when(users.saveAndFlush(any(User.class))).thenReturn(legacy);
         putUpdate(id, Map.of("fullName", "Updated")).andExpect(status().isOk());
@@ -208,44 +209,44 @@ class AdminEmailFlowTest {
         postBatch(List.of(request("first", " First@EXAMPLE.COM "), invalid, request("last", "last@example.com")))
                 .andExpect(status().isCreated()).andExpect(jsonPath("$.data.created").value(2))
                 .andExpect(jsonPath("$.data.skipped").value(1))
-                .andExpect(jsonPath("$.data.rows[0].user.username").value("first"))
+                .andExpect(jsonPath("$.data.rows[0].user.studentCode").value("first"))
                 .andExpect(jsonPath("$.data.rows[1].status").value("SKIPPED"))
                 .andExpect(jsonPath("$.data.rows[1].reason").value("INVALID_DATA"))
-                .andExpect(jsonPath("$.data.rows[2].user.username").value("last"));
+                .andExpect(jsonPath("$.data.rows[2].user.studentCode").value("last"));
         var order = inOrder(users, transactions);
-        order.verify(users).saveAndFlush(argThat(user -> "first".equals(user.getUsername())));
+        order.verify(users).saveAndFlush(argThat(user -> "first".equals(user.getStudentCode())));
         order.verify(transactions).commit(any(TransactionStatus.class));
-        order.verify(users).existsByUsername("last");
-        order.verify(users).saveAndFlush(argThat(user -> "last".equals(user.getUsername())));
+        order.verify(users).existsByStudentCode("last");
+        order.verify(users).saveAndFlush(argThat(user -> "last".equals(user.getStudentCode())));
         order.verify(transactions).commit(any(TransactionStatus.class));
         // The invalid row is rejected before any transaction or query.
         verify(transactions, times(2)).getTransaction(any(TransactionDefinition.class));
         verify(transactions, times(2)).commit(any(TransactionStatus.class));
         verify(transactions, never()).rollback(any(TransactionStatus.class));
-        verify(users, never()).existsByUsername("invalid");
+        verify(users, never()).existsByStudentCode("invalid");
     }
 
     @Test
     void allThreeBusinessUniqueConstraintsAreSkippedOutsideCompletedRowTransaction() throws Exception {
-        Map<String, String> reasons = Map.of("users_username_key", "USERNAME_EXISTS",
-                "users_student_code_key", "STUDENT_CODE_EXISTS", "users_email_normalized_key", "EMAIL_EXISTS");
+        Map<String, String> reasons = Map.of("users_student_code_key", "STUDENT_CODE_EXISTS",
+                "users_email_normalized_key", "EMAIL_EXISTS");
         for (String name : reasons.keySet()) {
             reset(users, passwords, transactions);
             rowTransactions();
             stubPasswordEncoding();
             doAnswer(call -> {
                 User user = call.getArgument(0);
-                if ("collision".equals(user.getUsername())) throw integrity("23505", name);
+                if ("collision".equals(user.getStudentCode())) throw integrity("23505", name);
                 return user;
             }).when(users).saveAndFlush(any(User.class));
             postBatch(List.of(request("collision", "collision@example.com"), request("last", "last@example.com")))
                     .andExpect(status().isCreated()).andExpect(jsonPath("$.data.created").value(1))
                     .andExpect(jsonPath("$.data.rows[0].reason").value(reasons.get(name)))
-                    .andExpect(jsonPath("$.data.rows[1].user.username").value("last"));
+                    .andExpect(jsonPath("$.data.rows[1].user.studentCode").value("last"));
             var order = inOrder(users, transactions);
-            order.verify(users).saveAndFlush(argThat(user -> "collision".equals(user.getUsername())));
+            order.verify(users).saveAndFlush(argThat(user -> "collision".equals(user.getStudentCode())));
             order.verify(transactions).rollback(any(TransactionStatus.class));
-            order.verify(users).existsByUsername("last");
+            order.verify(users).existsByStudentCode("last");
             verify(transactions).commit(any(TransactionStatus.class));
             verify(transactions).rollback(any(TransactionStatus.class));
         }
@@ -269,7 +270,7 @@ class AdminEmailFlowTest {
             stubPasswordEncoding();
             doAnswer(call -> {
                 User user = call.getArgument(0);
-                if ("broken".equals(user.getUsername())) throw failure;
+                if ("broken".equals(user.getStudentCode())) throw failure;
                 return user;
             }).when(users).saveAndFlush(any(User.class));
             assertSame(failure, assertThrows(DataIntegrityViolationException.class,
@@ -278,7 +279,7 @@ class AdminEmailFlowTest {
             var order = inOrder(transactions);
             order.verify(transactions).commit(any(TransactionStatus.class));
             order.verify(transactions).rollback(any(TransactionStatus.class));
-            verify(users, never()).existsByUsername("notReached");
+            verify(users, never()).existsByStudentCode("notReached");
         }
     }
 
@@ -303,7 +304,7 @@ class AdminEmailFlowTest {
         stubPasswordEncoding();
         doAnswer(call -> {
             User user = call.getArgument(0);
-            if ("broken".equals(user.getUsername())) throw new IllegalStateException("systemic");
+            if ("broken".equals(user.getStudentCode())) throw new IllegalStateException("systemic");
             return user;
         }).when(users).saveAndFlush(any(User.class));
         assertThrows(IllegalStateException.class, () -> service.batchCreateUsers(List.of(
@@ -312,7 +313,7 @@ class AdminEmailFlowTest {
         var order = inOrder(transactions);
         order.verify(transactions).commit(any(TransactionStatus.class));
         order.verify(transactions).rollback(any(TransactionStatus.class));
-        verify(users, never()).existsByUsername("notReached");
+        verify(users, never()).existsByStudentCode("notReached");
     }
 
     @Test
@@ -320,19 +321,19 @@ class AdminEmailFlowTest {
         rowTransactions();
         stubPasswordEncoding();
         Map<String, User> persisted = new HashMap<>();
-        when(users.existsByUsername(anyString())).thenAnswer(call -> persisted.containsKey(call.getArgument(0)));
+        when(users.existsByStudentCode(anyString())).thenAnswer(call -> persisted.containsKey(call.getArgument(0)));
         doAnswer(call -> {
             User user = call.getArgument(0);
-            assertFalse(persisted.containsKey(user.getUsername()));
-            persisted.put(user.getUsername(), user);
+            assertFalse(persisted.containsKey(user.getStudentCode()));
+            persisted.put(user.getStudentCode(), user);
             return user;
         }).when(users).saveAndFlush(any(User.class));
         postBatch(List.of(request("same", "first@example.com"), request("same", "replacement@example.com"),
                 request("last", "last@example.com")))
                 .andExpect(status().isCreated()).andExpect(jsonPath("$.data.created").value(2))
-                .andExpect(jsonPath("$.data.rows[0].user.username").value("same"))
+                .andExpect(jsonPath("$.data.rows[0].user.studentCode").value("same"))
                 .andExpect(jsonPath("$.data.rows[1].reason").value("DUPLICATE_IN_FILE"))
-                .andExpect(jsonPath("$.data.rows[2].user.username").value("last"));
+                .andExpect(jsonPath("$.data.rows[2].user.studentCode").value("last"));
         assertEquals(2, persisted.size());
         assertEquals("first@example.com", persisted.get("same").getEmail());
         assertEquals("first@example.com", persisted.get("same").getEmailNormalized());
@@ -345,21 +346,21 @@ class AdminEmailFlowTest {
     void inFileDuplicateIsJudgedAgainstCreatedRowsOnly() throws Exception {
         rowTransactions();
         successfulWrites();
-        when(users.existsByUsername(anyString())).thenAnswer(call -> "taken".equals(call.getArgument(0)));
+        when(users.existsByStudentCode(anyString())).thenAnswer(call -> "taken".equals(call.getArgument(0)));
         // Row 1 is skipped (username exists), so its email must stay available to row 2.
         postBatch(List.of(request("taken", "shared@example.com"), request("second", " SHARED@example.com "),
                 request("third", "shared@example.com"), request("second", "other@example.com"),
                 request("fifth", "other@example.com")))
                 .andExpect(status().isCreated())
                 .andExpect(jsonPath("$.data.created").value(2))
-                .andExpect(jsonPath("$.data.rows[0].reason").value("USERNAME_EXISTS"))
+                .andExpect(jsonPath("$.data.rows[0].reason").value("STUDENT_CODE_EXISTS"))
                 .andExpect(jsonPath("$.data.rows[1].status").value("CREATED"))
-                .andExpect(jsonPath("$.data.rows[1].user.username").value("second"))
+                .andExpect(jsonPath("$.data.rows[1].user.studentCode").value("second"))
                 .andExpect(jsonPath("$.data.rows[2].reason").value("DUPLICATE_IN_FILE"))
                 // Row 4 repeats a created username; its unused email must not block row 5.
                 .andExpect(jsonPath("$.data.rows[3].reason").value("DUPLICATE_IN_FILE"))
                 .andExpect(jsonPath("$.data.rows[4].status").value("CREATED"))
-                .andExpect(jsonPath("$.data.rows[4].user.username").value("fifth"));
+                .andExpect(jsonPath("$.data.rows[4].user.studentCode").value("fifth"));
         verify(users, times(2)).saveAndFlush(any(User.class));
         assertEquals(2, mailed.size());
     }
@@ -382,7 +383,7 @@ class AdminEmailFlowTest {
     void batchReportsEveryRowWithItsReasonAndMailsOnlyCreatedRows() throws Exception {
         rowTransactions();
         successfulWrites();
-        when(users.existsByUsername(anyString())).thenAnswer(call -> "taken".equals(call.getArgument(0)));
+        when(users.existsByStudentCode(anyString())).thenAnswer(call -> "taken".equals(call.getArgument(0)));
         postBatch(List.of(request("first", "first@example.com"), request("blank", " "),
                 request("bad", "not-an-email"), request("taken", "taken@example.com"),
                 request("other", " FIRST@example.com ")))
@@ -396,9 +397,9 @@ class AdminEmailFlowTest {
                 .andExpect(jsonPath("$.data.rows[0].user.passwordStatus").value("PENDING"))
                 .andExpect(jsonPath("$.data.rows[1].reason").value("MISSING_REQUIRED"))
                 .andExpect(jsonPath("$.data.rows[2].reason").value("INVALID_EMAIL"))
-                .andExpect(jsonPath("$.data.rows[2].username").value("bad"))
+                .andExpect(jsonPath("$.data.rows[2].studentCode").value("bad"))
                 .andExpect(jsonPath("$.data.rows[2].email").value("not-an-email"))
-                .andExpect(jsonPath("$.data.rows[3].reason").value("USERNAME_EXISTS"))
+                .andExpect(jsonPath("$.data.rows[3].reason").value("STUDENT_CODE_EXISTS"))
                 .andExpect(jsonPath("$.data.rows[4].row").value(5))
                 .andExpect(jsonPath("$.data.rows[4].reason").value("DUPLICATE_IN_FILE"));
         assertEquals(1, mailed.size());
@@ -418,7 +419,7 @@ class AdminEmailFlowTest {
             user.setId(UUID.randomUUID());
             return user;
         });
-        postCreate(Map.of("username", "new", "password", "chosen-by-admin", "fullName", "New",
+        postCreate(Map.of("password", "chosen-by-admin", "fullName", "New",
                 "role", "LECTURER", "email", " New@EXAMPLE.COM "))
                 .andExpect(status().isCreated())
                 .andExpect(jsonPath("$.data.passwordStatus").value("PENDING"))
@@ -452,7 +453,7 @@ class AdminEmailFlowTest {
             return user;
         });
         postCreate(request("new", "new@example.com")).andExpect(status().isCreated())
-                .andExpect(jsonPath("$.data.username").value("new"))
+                .andExpect(jsonPath("$.data.studentCode").value("new"))
                 .andExpect(jsonPath("$.data.passwordStatus").value("NOT_SENT"));
         verify(users).updatePasswordMailStatus(Set.of(id), PasswordMailStatus.FAILED);
         verify(transactions, never()).rollback(any());
@@ -461,7 +462,7 @@ class AdminEmailFlowTest {
     @Test
     void resendReplacesTheLinkAndRequiresAnEmail() throws Exception {
         UUID id = UUID.randomUUID();
-        User pending = User.builder().id(id).username("pending").passwordHash("hash").fullName("Pending")
+        User pending = User.builder().id(id).email("pending").passwordHash("hash").fullName("Pending")
                 .role(Role.STUDENT).email("pending@example.com").emailNormalized("pending@example.com")
                 .passwordTokenHash("old").passwordTokenExpiresAt(OffsetDateTime.now().minusHours(1))
                 .passwordMailStatus(PasswordMailStatus.SENT).build();
@@ -476,7 +477,7 @@ class AdminEmailFlowTest {
         assertTrue(mailed.get(0).activation());
 
         UUID legacyId = UUID.randomUUID();
-        when(users.findById(legacyId)).thenReturn(Optional.of(User.builder().id(legacyId).username("legacy")
+        when(users.findById(legacyId)).thenReturn(Optional.of(User.builder().id(legacyId).email("legacy")
                 .passwordHash("hash").fullName("Legacy").role(Role.STUDENT).build()));
         mvc.perform(post("/api/admin/users/" + legacyId + "/password-link")).andExpect(status().isConflict())
                 .andExpect(jsonPath("$.error").value("USER_HAS_NO_EMAIL"));
@@ -500,7 +501,7 @@ class AdminEmailFlowTest {
     @Test
     void changingEmailInvalidatesAnOutstandingLink() {
         UUID id = UUID.randomUUID();
-        User pending = User.builder().id(id).username("pending").passwordHash("hash").fullName("Pending")
+        User pending = User.builder().id(id).studentCode("PENDING").passwordHash("hash").fullName("Pending")
                 .role(Role.STUDENT).email("old@example.com").emailNormalized("old@example.com")
                 .passwordTokenHash("old").passwordTokenExpiresAt(OffsetDateTime.now().plusHours(1))
                 .passwordMailStatus(PasswordMailStatus.SENT).build();
@@ -559,7 +560,7 @@ class AdminEmailFlowTest {
     }
 
     private CreateUserRequest request(String username, String email) {
-        return CreateUserRequest.builder().username(username)
+        return CreateUserRequest.builder().studentCode(username)
                 .fullName("Full Name").role("STUDENT").email(email).build();
     }
 

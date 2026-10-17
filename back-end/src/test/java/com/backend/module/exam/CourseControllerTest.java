@@ -124,7 +124,7 @@ class CourseControllerTest {
         UUID id = UUID.randomUUID();
         com.backend.module.auth.api.dto.UserDto lecturer = com.backend.module.auth.api.dto.UserDto.builder()
                 .id(UUID.randomUUID())
-                .username("lecturer1")
+                .email("lecturer1")
                 .fullName("Dr. Lecturer")
                 .role("LECTURER")
                 .build();
@@ -134,7 +134,7 @@ class CourseControllerTest {
         mockMvc.perform(get("/api/courses/" + id + "/lecturers"))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.success").value(true))
-                .andExpect(jsonPath("$.data[0].username").value("lecturer1"));
+                .andExpect(jsonPath("$.data[0].email").value("lecturer1"));
     }
 
     @Test

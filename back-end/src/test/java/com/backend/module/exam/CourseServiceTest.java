@@ -53,7 +53,7 @@ class CourseServiceTest {
 
         sampleLecturer = User.builder()
                 .id(UUID.randomUUID())
-                .username("lecturer1")
+                .email("lecturer1")
                 .fullName("Dr. Lecturer")
                 .role(Role.LECTURER)
                 .passwordHash("hashed")
@@ -156,7 +156,7 @@ class CourseServiceTest {
         UUID courseId = sampleCourse.getId();
         User studentUser = User.builder()
                 .id(UUID.randomUUID())
-                .username("student1")
+                .email("student1")
                 .fullName("Student User")
                 .role(Role.STUDENT)
                 .passwordHash("hashed")
@@ -179,7 +179,7 @@ class CourseServiceTest {
 
         assertNotNull(lecturers);
         assertEquals(1, lecturers.size());
-        assertEquals("lecturer1", lecturers.get(0).getUsername());
+        assertEquals("lecturer1", lecturers.get(0).getEmail());
     }
 
     @Test

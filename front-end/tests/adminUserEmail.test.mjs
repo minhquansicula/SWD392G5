@@ -3,6 +3,7 @@ import { test } from 'node:test';
 import { readFileSync } from 'node:fs';
 import vm from 'node:vm';
 import ts from 'typescript';
+import XLSX from 'xlsx';
 
 function loadService() {
   const source = readFileSync(new URL('../src/services/authService.ts', import.meta.url), 'utf8');
@@ -12,7 +13,7 @@ function loadService() {
   const calls = [];
   const stored = new Map();
   let reply = {
-    id: 'new-id', username: 'new', fullName: 'New',
+    id: 'new-id', studentCode: 'new', fullName: 'New',
     role: 'STUDENT', email: null, createdAt: '2026-10-08',
   };
   const storage = {
@@ -50,7 +51,7 @@ function loadService() {
 }
 
 // Execute the component's actual FileReader callback, not a rewritten parser.
-function parseRows(rows) {
+function fileReaderCallbackSource() {
   const source = readFileSync(new URL('../src/components/admin/UserManagementPage.tsx', import.meta.url), 'utf8');
   const ast = ts.createSourceFile('UserManagementPage.tsx', source, ts.ScriptTarget.Latest, true, ts.ScriptKind.TSX);
   const callbacks = [];
@@ -67,7 +68,11 @@ function parseRows(rows) {
   }
   visit(ast);
   assert.equal(callbacks.length, 1);
-  const output = ts.transpileModule(`module.exports = ${callbacks[0]};`, {
+  return callbacks[0];
+}
+
+function parseRows(rows) {
+  const output = ts.transpileModule(`module.exports = ${fileReaderCallbackSource()};`, {
     compilerOptions: { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2022 },
   }).outputText;
   const state = { parsed: null, error: '', readCalls: 0, sheetCalls: 0 };
@@ -91,7 +96,7 @@ function parseRows(rows) {
         sheet_to_json: (worksheet, options) => {
           state.sheetCalls++;
           assert.equal(worksheet, sheet);
-          assert.equal(options.raw, true);
+          assert.equal(options.raw, false);
           assert.equal(options.defval, '');
           assert.equal(options.blankrows, false);
           return rows;
@@ -105,20 +110,36 @@ function parseRows(rows) {
   return state;
 }
 
+function parseWorkbook(workbook) {
+  const output = ts.transpileModule(`module.exports = ${fileReaderCallbackSource()};`, {
+    compilerOptions: { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2022 },
+  }).outputText;
+  const state = { parsed: null, error: '' };
+  const bytes = XLSX.write(workbook, { type: 'buffer', bookType: 'xlsx' });
+  const module = { exports: {} };
+  vm.runInNewContext(output, {
+    module, isVi: true, console, XLSX,
+    setImportError: value => { state.error = value; },
+    setParsedStudents: value => { state.parsed = value; },
+  });
+  module.exports({ target: { result: bytes.buffer.slice(bytes.byteOffset, bytes.byteOffset + bytes.byteLength) } });
+  return state;
+}
+
 test('create sends literal Unicode/whitespace email and never a password', async () => {
   const { service, calls } = loadService();
   const raw = ' É+Tag@EXAMPLE.COM ';
   await service.createUserByAdmin({
-    username: 'new', fullName: 'New', password: 'chosen-by-admin', role: 'STUDENT', email: raw,
+    studentCode: 'new', fullName: 'New', password: 'chosen-by-admin', role: 'STUDENT', email: raw,
   });
   assert.equal(calls[0].url, '/admin/users');
   assert.equal(calls[0].payload.email, raw);
   assert.equal(Object.hasOwn(calls[0].payload, 'password'), false);
   assert.equal(service.mapBackendUserToAccount({
-    id: 'legacy', username: 'legacy', fullName: 'Legacy', role: 'STUDENT', email: null,
+    id: 'legacy', studentCode: 'legacy', fullName: 'Legacy', role: 'STUDENT', email: null,
   }).email, '');
   assert.equal(service.mapBackendUserToAccount({
-    id: 'p', username: 'p', fullName: 'P', role: 'STUDENT', email: 'p@example.com', passwordStatus: 'PENDING',
+    id: 'p', studentCode: 'p', fullName: 'P', role: 'STUDENT', email: 'p@example.com', passwordStatus: 'PENDING',
   }).passwordStatus, 'PENDING');
 });
 
@@ -139,19 +160,19 @@ test('batch sends no password and returns one result per row with its reason', a
   harness.reply({
     total: 4, created: 1, skipped: 3,
     rows: [
-      { row: 1, username: 'valid', email: ' Valid@EXAMPLE.COM ', status: 'CREATED', reason: null,
-        user: { id: 'id', username: 'valid', fullName: 'Valid', role: 'STUDENT',
+      { row: 1, studentCode: 'valid', email: ' Valid@EXAMPLE.COM ', status: 'CREATED', reason: null,
+        user: { id: 'id', studentCode: 'valid', fullName: 'Valid', role: 'STUDENT',
           email: ' Valid@EXAMPLE.COM ', passwordStatus: 'PENDING' } },
-      { row: 2, username: '', email: '', status: 'SKIPPED', reason: 'MISSING_REQUIRED', user: null },
-      { row: 3, username: 'bad', email: 'not-an-email', status: 'SKIPPED', reason: 'INVALID_EMAIL', user: null },
-      { row: 4, username: 'dup', email: 'valid@example.com', status: 'SKIPPED', reason: 'DUPLICATE_IN_FILE', user: null },
+      { row: 2, studentCode: '', email: '', status: 'SKIPPED', reason: 'MISSING_REQUIRED', user: null },
+      { row: 3, studentCode: 'bad', email: 'not-an-email', status: 'SKIPPED', reason: 'INVALID_EMAIL', user: null },
+      { row: 4, studentCode: 'dup', email: 'valid@example.com', status: 'SKIPPED', reason: 'DUPLICATE_IN_FILE', user: null },
     ],
   });
   const rows = [
-    { username: 'valid', fullName: 'Valid', email: ' Valid@EXAMPLE.COM ', password: 'from-old-file' },
-    { username: '', fullName: '', email: '' },
-    { username: 'bad', fullName: 'Bad', email: 'not-an-email' },
-    { username: 'dup', fullName: 'Dup', email: 'valid@example.com' },
+    { studentCode: 'valid', fullName: 'Valid', email: ' Valid@EXAMPLE.COM ', password: 'from-old-file' },
+    { studentCode: '', fullName: '', email: '' },
+    { studentCode: 'bad', fullName: 'Bad', email: 'not-an-email' },
+    { studentCode: 'dup', fullName: 'Dup', email: 'valid@example.com' },
   ];
   const result = await harness.service.importStudentsBatch(rows);
   const payload = harness.calls[0].payload;
@@ -166,7 +187,7 @@ test('batch sends no password and returns one result per row with its reason', a
   }
   assert.equal(result.success, 1);
   assert.equal(result.failed, 3);
-  assert.equal(result.created[0].username, 'valid');
+  assert.equal(result.created[0].studentCode, 'valid');
   assert.equal(result.rows.length, 4);
   assert.equal(result.rows[0].status, 'CREATED');
   assert.equal(result.rows[0].reason, null);
@@ -179,13 +200,13 @@ test('batch sends no password and returns one result per row with its reason', a
 
 test('actual Excel callback ignores any password column and keeps raw email and invalid records', async () => {
   const rawEmail = ' É+Tag@EXAMPLE.COM ';
-  const base = { Username: ' SE001 ', FullName: ' Name ', Email: rawEmail };
+  const base = { 'Mã sinh viên': ' SE001 ', FullName: ' Name ', Email: rawEmail };
   const rows = [
     { ...base },
     { ...base, 'Mật khẩu': 'old-template-password' },
     { ...base, Password: '' },
     { ...base, password: 'short' },
-    { Username: '', FullName: '', Email: '' },
+    { 'Mã sinh viên': '', FullName: '', Email: '' },
   ];
   const state = parseRows(rows);
   assert.equal(state.error, '');
@@ -194,8 +215,8 @@ test('actual Excel callback ignores any password column and keeps raw email and 
     assert.equal(Object.hasOwn(state.parsed[index], 'password'), false);
     assert.equal(state.parsed[index].email, index === 4 ? '' : rawEmail);
   }
-  assert.equal(state.parsed[0].username, 'se001');
-  assert.equal(state.parsed[4].username, '');
+  assert.equal(state.parsed[0].studentCode, 'SE001');
+  assert.equal(state.parsed[4].studentCode, '');
   assert.equal(state.parsed[4].fullName, '');
 
   const harness = loadService();
@@ -207,13 +228,44 @@ test('actual Excel callback ignores any password column and keeps raw email and 
   }
 });
 
+test('real XLSX import preserves formatted MSSV and sends separate email and student code', async () => {
+  const sheet = XLSX.utils.json_to_sheet([
+    { 'Mã sinh viên': 123, 'Họ và tên': 'Nguyễn Văn A', Email: 'a@example.com' },
+    { 'Mã sinh viên': 'SE170002', 'Họ và tên': 'Trần B', Email: ' b@example.com ' },
+  ]);
+  sheet.A2.z = '000000';
+  const workbook = XLSX.utils.book_new();
+  XLSX.utils.book_append_sheet(workbook, sheet, 'Students');
+  const state = parseWorkbook(workbook);
+  assert.equal(state.error, '');
+  assert.equal(state.parsed.length, 2);
+  assert.equal(state.parsed[0].studentCode, '000123');
+  assert.equal(state.parsed[0].email, 'a@example.com');
+  assert.equal(state.parsed[1].studentCode, 'SE170002');
+  assert.equal(state.parsed[1].email, ' b@example.com ');
+
+  const harness = loadService();
+  harness.reply({ total: 2, created: 2, skipped: 0, rows: [
+    { row: 1, studentCode: '000123', email: 'a@example.com', status: 'CREATED', reason: null,
+      user: { id: 'a', studentCode: '000123', fullName: 'Nguyễn Văn A', email: 'a@example.com', role: 'STUDENT' } },
+    { row: 2, studentCode: 'SE170002', email: ' b@example.com ', status: 'CREATED', reason: null,
+      user: { id: 'b', studentCode: 'SE170002', fullName: 'Trần B', email: ' b@example.com ', role: 'STUDENT' } },
+  ] });
+  const result = await harness.service.importStudentsBatch(state.parsed);
+  assert.equal(harness.calls[0].url, '/admin/users/batch');
+  assert.equal(harness.calls[0].payload[0].studentCode, '000123');
+  assert.equal(harness.calls[0].payload[0].email, 'a@example.com');
+  assert.equal(harness.calls[0].payload[1].email, ' b@example.com ');
+  assert.equal(result.success, 2);
+});
+
 test('nothing created reports every row as skipped', async () => {
   const harness = loadService();
   harness.reply({
     total: 1, created: 0, skipped: 1,
-    rows: [{ row: 1, username: 'bad', email: '', status: 'SKIPPED', reason: 'MISSING_REQUIRED', user: null }],
+    rows: [{ row: 1, studentCode: 'bad', email: '', status: 'SKIPPED', reason: 'MISSING_REQUIRED', user: null }],
   });
-  const result = await harness.service.importStudentsBatch([{ username: 'bad', fullName: 'Bad', email: '' }]);
+  const result = await harness.service.importStudentsBatch([{ studentCode: 'bad', fullName: 'Bad', email: '' }]);
   assert.equal(result.success, 0);
   assert.equal(result.failed, 1);
   assert.equal(result.created.length, 0);
@@ -224,13 +276,13 @@ test('batch infrastructure failure warns that earlier rows may already exist', a
   const harness = loadService();
   harness.fail({ response: { status: 500, data: { message: 'boom' } } });
   await assert.rejects(
-    harness.service.importStudentsBatch([{ username: 'a', fullName: 'A', email: 'a@example.com' }]),
+    harness.service.importStudentsBatch([{ studentCode: 'a', fullName: 'A', email: 'a@example.com' }]),
     /Một số dòng có thể đã được tạo/);
 });
 
 test('resend password link posts to the user and maps mail failure', async () => {
   const harness = loadService();
-  harness.reply({ id: 'u1', username: 'u1', fullName: 'U', role: 'STUDENT',
+  harness.reply({ id: 'u1', studentCode: 'u1', fullName: 'U', role: 'STUDENT',
     email: 'u@example.com', passwordStatus: 'PENDING' });
   const updated = await harness.service.resendPasswordLink('u1');
   assert.equal(harness.calls[0].url, '/admin/users/u1/password-link');
@@ -243,13 +295,13 @@ test('resend password link posts to the user and maps mail failure', async () =>
 
 test('admin user errors are shown by code in Vietnamese, else by server message, else by fallback', async () => {
   const harness = loadService();
-  const user = { username: 'new', fullName: 'New', role: 'STUDENT', email: 'new@example.com' };
+  const user = { studentCode: 'new', fullName: 'New', role: 'STUDENT', email: 'new@example.com' };
   harness.fail({ response: { status: 409, data: { error: 'DATA_INTEGRITY_CONFLICT', message: 'Data conflicts' } } });
   await assert.rejects(harness.service.createUserByAdmin(user), /Email đã được dùng bởi tài khoản khác/);
   await assert.rejects(harness.service.updateUserAccount('id', { email: 'new@example.com' }),
     /Email đã được dùng bởi tài khoản khác/);
-  harness.fail({ response: { status: 409, data: { error: 'USER_ALREADY_EXISTS', message: 'x' } } });
-  await assert.rejects(harness.service.createUserByAdmin(user), /Username đã tồn tại/);
+  harness.fail({ response: { status: 409, data: { error: 'STUDENT_CODE_EXISTS', message: 'x' } } });
+  await assert.rejects(harness.service.createUserByAdmin(user), /Mã sinh viên đã tồn tại/);
   harness.fail({ response: { status: 400, data: { error: 'VALIDATION_FAILED', message: 'Invalid user data' } } });
   await assert.rejects(harness.service.createUserByAdmin(user), /Dữ liệu không hợp lệ/);
   harness.fail({ response: { status: 418, data: { error: 'SOMETHING_NEW', message: 'Server explains' } } });
@@ -295,7 +347,7 @@ test('password link endpoints send the raw token and tell an invalid link from a
 test('stored session without email does not manufacture one', () => {
   const { service, stored } = loadService();
   stored.set('aives_auth_session', JSON.stringify({
-    id: 'legacy', username: 'legacy', fullName: 'Legacy', role: 'ADMIN',
+    id: 'legacy', studentCode: 'legacy', fullName: 'Legacy', role: 'ADMIN',
   }));
-  assert.equal(service.getCurrentSession().email, '');
+  assert.equal(service.getCurrentSession(), null);
 });

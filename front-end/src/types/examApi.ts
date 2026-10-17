@@ -8,7 +8,6 @@ export interface ApiResponse<T> {
 
 export interface ExamUserDto {
   id: string;
-  username: string;
   fullName: string;
   role: 'ADMIN' | 'LECTURER' | 'STUDENT';
   studentCode: string | null;

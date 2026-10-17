@@ -27,7 +27,7 @@ class AudioRecorderService {
   final List<int> _pcmBuffer = [];
 
   StreamSubscription? _recordingDataSubscription;
-  Timer? _mockSimulationTimer;
+  Timer? _fallbackAudioTimer;
 
   Future<bool> init() async {
     try {
@@ -119,10 +119,10 @@ class AudioRecorderService {
 
   void _startSimulatedAudioChunks() {
     _isRecording = true;
-    _mockSimulationTimer?.cancel();
+    _fallbackAudioTimer?.cancel();
 
     // Emits a simulated 150ms 16kHz PCM chunk every 150ms
-    _mockSimulationTimer = Timer.periodic(const Duration(milliseconds: AppConstants.audioChunkMs), (timer) {
+    _fallbackAudioTimer = Timer.periodic(const Duration(milliseconds: AppConstants.audioChunkMs), (timer) {
       if (!_isRecording) {
         timer.cancel();
         return;
@@ -145,8 +145,8 @@ class AudioRecorderService {
 
   Future<void> stopRecording() async {
     _isRecording = false;
-    _mockSimulationTimer?.cancel();
-    _mockSimulationTimer = null;
+    _fallbackAudioTimer?.cancel();
+    _fallbackAudioTimer = null;
 
     if (_recorder != null && _isRecorderInitialized) {
       try {

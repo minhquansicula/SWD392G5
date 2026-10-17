@@ -50,7 +50,7 @@ public class ExamScheduleServiceImpl implements ExamScheduleService {
                 throw new AppException("Student not found: " + entry.getStudentId(), NOT_FOUND, "STUDENT_NOT_FOUND");
             }
             if (!"STUDENT".equals(student.getRole())) {
-                throw new AppException("User is not a student: " + student.getUsername(), BAD_REQUEST, "NOT_A_STUDENT");
+                throw new AppException("User is not a student: " + student.getId(), BAD_REQUEST, "NOT_A_STUDENT");
             }
             if (schedules.existsByExamIdAndStudentId(examId, student.getId())) {
                 throw new AppException("Student already has a schedule in this exam", BAD_REQUEST, "STUDENT_ALREADY_SCHEDULED");
@@ -59,7 +59,7 @@ public class ExamScheduleServiceImpl implements ExamScheduleService {
             OffsetDateTime end = ExamRules.timestamp(entry.getScheduledEndTime());
             ExamRules.scheduleTime(start, end, exam);
             if (schedules.hasOverlappingSchedule(student.getId(), start, end, null)) {
-                throw new AppException("Student @" + student.getUsername() + " already has a conflicting schedule in this time range",
+                throw new AppException("Student " + student.getId() + " already has a conflicting schedule in this time range",
                         CONFLICT, "STUDENT_SCHEDULE_CONFLICT");
             }
             ExamSchedule schedule = new ExamSchedule();

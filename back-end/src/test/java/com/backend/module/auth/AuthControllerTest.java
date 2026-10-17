@@ -58,7 +58,7 @@ class AuthControllerTest {
                 .tokenType("Bearer")
                 .user(UserDto.builder()
                         .id(UUID.randomUUID())
-                        .username("admin")
+                        .email("admin")
                         .fullName("Admin User")
                         .role("ADMIN")
                         .build())
@@ -72,7 +72,7 @@ class AuthControllerTest {
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.success").value(true))
                 .andExpect(jsonPath("$.data.token").value("mock_token"))
-                .andExpect(jsonPath("$.data.user.username").value("admin"));
+                .andExpect(jsonPath("$.data.user.email").value("admin"));
     }
 
     @Test
@@ -105,7 +105,7 @@ class AuthControllerTest {
     void getCurrentUser_Authenticated_Returns200() throws Exception {
         UserDto userDto = UserDto.builder()
                 .id(UUID.randomUUID())
-                .username("lecturer1")
+                .email("lecturer1")
                 .fullName("Lecturer One")
                 .role("LECTURER")
                 .build();
@@ -118,7 +118,7 @@ class AuthControllerTest {
         mockMvc.perform(get("/api/auth/me").principal(auth))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.success").value(true))
-                .andExpect(jsonPath("$.data.username").value("lecturer1"));
+                .andExpect(jsonPath("$.data.email").value("lecturer1"));
     }
 
     @Test

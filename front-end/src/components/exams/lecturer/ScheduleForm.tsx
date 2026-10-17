@@ -107,7 +107,7 @@ function StudentSearchSelect({
               )}
             </div>
             <div className="flex items-center gap-2 text-xs text-slate-500 dark:text-slate-400 truncate">
-              <span>@{value?.username}</span>
+              <span>{value?.email}</span>
               {value?.email && <span>• {value.email}</span>}
             </div>
             <div className="text-[11px] font-mono text-slate-400 dark:text-slate-500">
@@ -143,7 +143,7 @@ function StudentSearchSelect({
             setOpen(true);
           }}
           onFocus={() => setOpen(true)}
-          placeholder={t('Nhập MSSV, Họ tên, Email hoặc Username để tìm kiếm...', 'Type student code, full name, email or username to search...')}
+          placeholder={t('Nhập MSSV, họ tên hoặc email để tìm kiếm...', 'Type student code, full name or email to search...')}
           className={`${inputClass} pl-9 pr-9`}
         />
         {loading && (
@@ -210,7 +210,7 @@ function StudentSearchSelect({
                           ) : null}
                         </div>
                         <div className="text-slate-500 dark:text-slate-400 truncate mt-0.5">
-                          <span>@{st.username}</span>
+                          <span>{st.email}</span>
                           {st.email && <span> • {st.email}</span>}
                         </div>
                       </div>

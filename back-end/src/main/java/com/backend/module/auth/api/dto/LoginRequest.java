@@ -14,7 +14,7 @@ import lombok.Setter;
 @Builder
 public class LoginRequest {
     @NotBlank(message = "Email cannot be blank")
-    private String username;
+    private String email;
 
     @NotBlank(message = "Password cannot be blank")
     private String password;

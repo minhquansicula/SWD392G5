@@ -58,7 +58,6 @@ class AuthServiceTest {
                 userRepository, passwordEncoder, jwtTokenProvider, FACTORY.getValidator());
         mockUser = User.builder()
                 .id(UUID.randomUUID())
-                .username("lecturer1")
                 .passwordHash("hashed_pwd")
                 .fullName("Nguyen Van A")
                 .role(Role.LECTURER)
@@ -73,7 +72,7 @@ class AuthServiceTest {
 
         when(userRepository.findTop2ByEmailNormalized("lecturer1@example.com")).thenReturn(List.of(mockUser));
         when(passwordEncoder.matches("password123", "hashed_pwd")).thenReturn(true);
-        when(jwtTokenProvider.generateToken(eq("lecturer1"), eq("LECTURER"), any(Map.class)))
+        when(jwtTokenProvider.generateToken(eq(mockUser.getId().toString()), eq("LECTURER"), any(Map.class)))
                 .thenReturn("mock_jwt_token");
 
         AuthResponse response = authService.login(request);
@@ -81,10 +80,10 @@ class AuthServiceTest {
         assertNotNull(response);
         assertEquals("mock_jwt_token", response.getToken());
         assertEquals("Bearer", response.getTokenType());
-        assertEquals("lecturer1", response.getUser().getUsername());
+        assertEquals(" Lecturer1@EXAMPLE.COM ", response.getUser().getEmail());
         assertEquals("LECTURER", response.getUser().getRole());
-        assertEquals(" Lecturer1@EXAMPLE.COM ", request.getUsername());
-        verify(userRepository, never()).findByUsername(anyString());
+        assertEquals(" Lecturer1@EXAMPLE.COM ", request.getEmail());
+        verify(userRepository, never()).findByEmailNormalized(anyString());
     }
 
     @Test
@@ -109,25 +108,26 @@ class AuthServiceTest {
         InvalidCredentialsException failure =
                 assertThrows(InvalidCredentialsException.class, () -> authService.login(request));
         assertEquals("Email or password is incorrect", failure.getMessage());
-        verify(userRepository, never()).findByUsername(anyString());
+        verify(userRepository, never()).findByEmailNormalized(anyString());
         verifyNoInteractions(passwordEncoder, jwtTokenProvider);
     }
 
     @Test
     void getCurrentUser_Success() {
-        when(userRepository.findByUsername("lecturer1")).thenReturn(Optional.of(mockUser));
+        when(userRepository.findById(mockUser.getId())).thenReturn(Optional.of(mockUser));
 
-        UserDto userDto = authService.getCurrentUser("lecturer1");
+        UserDto userDto = authService.getCurrentUser(mockUser.getId().toString());
 
         assertNotNull(userDto);
-        assertEquals("lecturer1", userDto.getUsername());
+        assertEquals(" Lecturer1@EXAMPLE.COM ", userDto.getEmail());
         assertEquals("Nguyen Van A", userDto.getFullName());
     }
 
     @Test
     void getCurrentUser_NotFound_ThrowsUserNotFoundException() {
-        when(userRepository.findByUsername("unknown")).thenReturn(Optional.empty());
+        UUID missing = UUID.randomUUID();
+        when(userRepository.findById(missing)).thenReturn(Optional.empty());
 
-        assertThrows(UserNotFoundException.class, () -> authService.getCurrentUser("unknown"));
+        assertThrows(UserNotFoundException.class, () -> authService.getCurrentUser(missing.toString()));
     }
 }

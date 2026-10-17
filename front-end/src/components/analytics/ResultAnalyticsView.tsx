@@ -165,8 +165,8 @@ export const ResultAnalyticsView: React.FC<ResultAnalyticsViewProps> = ({
     const gradeLetter = getGradeLetter(score);
     const isPassed = score >= 5.0;
 
-    const candName = currentSchedule.student?.fullName || currentSchedule.student?.username || (isStudent ? currentUser?.fullName : 'Thí sinh');
-    const candCode = currentSchedule.student?.studentCode || currentSchedule.student?.username || (isStudent ? currentUser?.username : 'N/A');
+    const candName = currentSchedule.student?.fullName || (isStudent ? currentUser?.fullName : 'Thí sinh');
+    const candCode = currentSchedule.student?.studentCode || (isStudent ? currentUser?.studentCode : null) || 'N/A';
 
     // Safe duration calculation
     let durationMin = 15.0;
@@ -482,7 +482,7 @@ export const ResultAnalyticsView: React.FC<ResultAnalyticsViewProps> = ({
                 <User className="h-3.5 w-3.5 text-indigo-500 shrink-0" />
                 <span className="text-slate-500 dark:text-slate-400">{isVi ? 'Thí sinh:' : 'Candidate:'}</span>
                 <strong className="text-slate-900 dark:text-white font-semibold">
-                  {currentUser?.fullName || currentUser?.username}
+                  {currentUser?.fullName || currentUser?.email}
                 </strong>
               </div>
             ) : (
@@ -498,7 +498,7 @@ export const ResultAnalyticsView: React.FC<ResultAnalyticsViewProps> = ({
                     <option value="">{isVi ? 'Chưa có thí sinh' : 'No candidates'}</option>
                   ) : (
                     schedules.map((sc) => {
-                      const name = sc.student?.fullName || sc.student?.username || 'Thí sinh';
+                      const name = sc.student?.fullName || 'Thí sinh';
                       const code = sc.student?.studentCode ? ` (${sc.student.studentCode})` : '';
                       const scoreLabel = sc.finalScore !== null && sc.finalScore !== undefined
                         ? ` - ${sc.finalScore}đ`
@@ -540,7 +540,7 @@ export const ResultAnalyticsView: React.FC<ResultAnalyticsViewProps> = ({
           <NoScoreView
             schedule={currentSchedule}
             candidateName={isStudent ? currentUser?.fullName : currentSchedule?.student?.fullName}
-            studentCode={isStudent ? currentUser?.username : currentSchedule?.student?.studentCode}
+            studentCode={isStudent ? currentUser?.studentCode : currentSchedule?.student?.studentCode}
             email={isStudent ? currentUser?.email : currentSchedule?.student?.email}
             examTitle={currentSchedule?.examTitle || currentExam?.title}
             courseCode={currentSchedule?.courseCode || currentExam?.courseCode}

@@ -127,7 +127,7 @@ class JwtSecurityChainTest {
         }
 
         verifyNoInteractions(provider, users);
-        verify(tokens, never()).getUsernameFromToken(any());
+        verify(tokens, never()).getUserIdFromToken(any());
     }
 
     @Test
@@ -137,7 +137,7 @@ class JwtSecurityChainTest {
 
         mvc.perform(route("GET /api/auth/me", "valid-token"))
                 .andExpect(status().isOk())
-                .andExpect(jsonPath("$.data.username").value("student"));
+                .andExpect(jsonPath("$.data.email").value("student"));
 
         verify(users).loadUserByUsername("student");
         verify(authService).getCurrentUser("student");
@@ -226,7 +226,7 @@ class JwtSecurityChainTest {
         mvc.perform(route("GET /api/auth/me", "valid-token")
                         .with(authentication(existing)))
                 .andExpect(status().isOk())
-                .andExpect(jsonPath("$.data.username").value("existing"));
+                .andExpect(jsonPath("$.data.email").value("existing"));
 
         verify(authService).getCurrentUser("existing");
         verify(authService, never()).getCurrentUser("student");
@@ -249,7 +249,7 @@ class JwtSecurityChainTest {
 
     private void acceptedToken() {
         when(tokens.validateToken("valid-token")).thenReturn(true);
-        when(tokens.getUsernameFromToken("valid-token")).thenReturn("student");
+        when(tokens.getUserIdFromToken("valid-token")).thenReturn("student");
     }
 
     private void successfulLookup() {
@@ -264,7 +264,7 @@ class JwtSecurityChainTest {
                 request(HttpMethod.valueOf(parts[0]), parts[1]);
         if ("POST /api/auth/login".equals(descriptor)) {
             request.contentType(MediaType.APPLICATION_JSON)
-                    .content("{\"username\":\"new-login\",\"password\":\"unused\"}");
+                    .content("{\"email\":\"new-login@example.com\",\"password\":\"unused\"}");
         }
         if (token != null) {
             request.header("Authorization", "Bearer " + token);
@@ -291,7 +291,7 @@ class JwtSecurityChainTest {
     }
 
     private static UserDto dto(String username) {
-        return UserDto.builder().username(username)
+        return UserDto.builder().email(username)
                 .fullName("Test User").role("STUDENT").build();
     }
 

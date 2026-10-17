@@ -1,3 +1,5 @@
+import '../../exam/models/exam_schedule_model.dart';
+
 class RubricCriterion {
   final String title;
   final String englishTitle;
@@ -46,7 +48,7 @@ class VivaReportModel {
   final DateTime examDate;
   final double totalScore;
   final double maxScore;
-  final String gradeRank; // Hạng Ưu tú
+  final String gradeRank;
   final bool isPassed;
   final String verifiedByLecturer;
   final List<RubricCriterion> rubricCriteria;
@@ -71,86 +73,79 @@ class VivaReportModel {
     required this.questionReports,
   });
 
-  static VivaReportModel getSampleReport() {
+  factory VivaReportModel.fromExam(ExamScheduleModel exam) {
+    final score = exam.finalScore ?? 0.0;
+    final isPass = score >= 5.0;
+    final rank = score >= 8.5
+        ? 'Hạng Giỏi (Excellence)'
+        : score >= 7.0
+            ? 'Hạng Khá (Good)'
+            : score >= 5.0
+                ? 'Đạt (Pass)'
+                : 'Không đạt (Fail)';
+
     return VivaReportModel(
-      id: 'rep-swd392-01',
-      examTitle: 'Final Viva Defense',
-      courseCode: 'SWD392',
-      courseName: 'Software Architecture',
-      examDate: DateTime(2026, 10, 24),
-      totalScore: 8.5,
+      id: exam.id,
+      examTitle: exam.examTitle,
+      courseCode: exam.courseCode,
+      courseName: exam.courseName,
+      examDate: exam.scheduledAt,
+      totalScore: score,
       maxScore: 10.0,
-      gradeRank: 'Hạng Ưu tú',
-      isPassed: true,
-      verifiedByLecturer: 'TS. Nguyễn Văn A (Đã ký duyệt)',
-      rubricCriteria: const [
-        RubricCriterion(
-          title: 'Kiến thức cốt lõi',
-          englishTitle: 'Core Knowledge',
-          score: 9.0,
-        ),
-        RubricCriterion(
-          title: 'Tư duy phản biện & giải pháp',
-          englishTitle: 'Critical Thinking',
-          score: 8.0,
-        ),
-        RubricCriterion(
-          title: 'Kỹ năng phản biện & bảo vệ luận điểm',
-          englishTitle: 'Defense Skills',
-          score: 8.5,
-        ),
-      ],
-      strengths: const [
-        'Nắm vững nguyên lý loose coupling trong microservices và giải thích rõ ràng kiến trúc Event-Driven.',
-        'Trình bày mạch lạc, tự tin khi đối đáp với các câu hỏi đào sâu từ Giám khảo AI.',
-      ],
-      improvements: const [
-        'Cần phân tích sâu hơn về chi phí duy trì tính nhất quán dữ liệu (Distributed Transactions / Saga pattern).',
-        'Cần làm rõ thêm chiến lược quản lý log tập trung trong hạ tầng phân tán.',
-      ],
-      questionReports: const [
-        QuestionReportItem(
-          questionNumber: 1,
-          title: 'Kiến trúc Microservices vs Monolith',
-          fullQuestion: 'Hãy giải thích sự khác biệt cốt lõi giữa kiến trúc Monolithic và Microservices trong việc mở rộng quy mô hệ thống (Scalability)?',
-          studentAnswer: 'Đối với kiến trúc Monolithic, khi tải lượng tăng thì toàn bộ ứng dụng phải được nhân bản đồng loạt, dẫn đến lãng phí tài nguyên. Trong khi đó, Microservices cho phép scale độc lập từng module nghiệp vụ đang bị nghẽn...',
-          score: 2.3,
-          maxScore: 2.5,
-          audioDuration: '01:45',
-          bloomLevel: 'Hiểu (Understand)',
-        ),
-        QuestionReportItem(
-          questionNumber: 2,
-          title: 'Eventual Consistency & Saga Pattern',
-          fullQuestion: 'Làm thế nào để đảm bảo tính nhất quán dữ liệu giữa các microservices khi không thể dùng ACID transaction thông thường?',
-          studentAnswer: 'Có thể áp dụng mô hình Saga Pattern bằng cách chia transaction lớn thành chuỗi các local transaction. Nếu một bước thất bại, hệ thống thực thi compensation transaction...',
-          score: 1.8,
-          maxScore: 2.5,
-          audioDuration: '02:10',
-          bloomLevel: 'Phân tích (Analyze)',
-          isFollowUp: true,
-        ),
-        QuestionReportItem(
-          questionNumber: 3,
-          title: 'API Gateway & Service Discovery',
-          fullQuestion: 'Trong hệ thống Microservices, hãy nêu vai trò của API Gateway và cách triển khai Rate Limiting?',
-          studentAnswer: 'API Gateway đóng vai trò entry point duy nhất tiếp nhận request từ client, thực hiện reverse proxy, routing và rate limiting bằng thuật toán Token Bucket...',
-          score: 2.2,
-          maxScore: 2.5,
-          audioDuration: '01:12',
-          bloomLevel: 'Vận dụng (Apply)',
-        ),
-        QuestionReportItem(
-          questionNumber: 4,
-          title: 'Bảo mật JWT & Distributed Session',
-          fullQuestion: 'Chiến lược thu hồi token JWT khi người dùng thay đổi mật khẩu hoặc đăng xuất toàn bộ thiết bị?',
-          studentAnswer: 'Sử dụng Token Blacklist lưu trên Redis với TTL bằng thời hạn còn lại của JWT, hoặc lưu token_version trên database để invalidate các token cũ...',
-          score: 2.2,
-          maxScore: 2.5,
-          audioDuration: '01:30',
-          bloomLevel: 'Vận dụng (Apply)',
-        ),
-      ],
+      gradeRank: rank,
+      isPassed: isPass,
+      verifiedByLecturer: exam.examiners.isNotEmpty ? exam.examiners.join(', ') : 'Hội đồng Giảng viên FPT',
+      rubricCriteria: const [],
+      strengths: const [],
+      improvements: const [],
+      questionReports: const [],
+    );
+  }
+
+  factory VivaReportModel.fromJson(Map<String, dynamic> json) {
+    final score = (json['totalScore'] ?? json['finalScore'] as num?)?.toDouble() ?? 0.0;
+    final max = (json['maxScore'] as num?)?.toDouble() ?? 10.0;
+    final pass = json['isPassed'] == true || score >= 5.0;
+
+    return VivaReportModel(
+      id: json['id']?.toString() ?? '',
+      examTitle: json['examTitle'] ?? json['title'] ?? 'Báo Cáo Điểm Vấn Đáp',
+      courseCode: json['courseCode'] ?? '',
+      courseName: json['courseName'] ?? '',
+      examDate: json['examDate'] != null
+          ? DateTime.tryParse(json['examDate'].toString()) ?? DateTime.now()
+          : DateTime.now(),
+      totalScore: score,
+      maxScore: max,
+      gradeRank: json['gradeRank']?.toString() ?? (score >= 8.5 ? 'Hạng Giỏi' : score >= 7.0 ? 'Hạng Khá' : score >= 5.0 ? 'Đạt' : 'Không đạt'),
+      isPassed: pass,
+      verifiedByLecturer: json['verifiedByLecturer'] ?? json['gradedBy'] ?? 'Giảng viên chấm thi',
+      rubricCriteria: (json['rubricCriteria'] as List?)
+              ?.map((c) => RubricCriterion(
+                    title: c['title'] ?? '',
+                    englishTitle: c['englishTitle'] ?? '',
+                    score: (c['score'] as num?)?.toDouble() ?? 0.0,
+                    maxScore: (c['maxScore'] as num?)?.toDouble() ?? 10.0,
+                  ))
+              .toList() ??
+          const [],
+      strengths: (json['strengths'] as List?)?.map((s) => s.toString()).toList() ?? const [],
+      improvements: (json['improvements'] as List?)?.map((s) => s.toString()).toList() ?? const [],
+      questionReports: (json['questionReports'] as List?)
+              ?.map((q) => QuestionReportItem(
+                    questionNumber: q['questionNumber'] ?? 1,
+                    title: q['title'] ?? '',
+                    fullQuestion: q['fullQuestion'] ?? '',
+                    studentAnswer: q['studentAnswer'] ?? '',
+                    score: (q['score'] as num?)?.toDouble() ?? 0.0,
+                    maxScore: (q['maxScore'] as num?)?.toDouble() ?? 2.5,
+                    audioDuration: q['audioDuration'] ?? '00:00',
+                    bloomLevel: q['bloomLevel'] ?? '',
+                    isFollowUp: q['isFollowUp'] == true,
+                  ))
+              .toList() ??
+          const [],
     );
   }
 }
+

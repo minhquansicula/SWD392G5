@@ -60,7 +60,7 @@ export function LecturerExamManagement({ currentUser, language }: Props) {
           </div>
 
           <h1 className="text-2xl sm:text-3xl font-extrabold tracking-tight">
-            {t('Xin chào', 'Welcome back')}, {currentUser.fullName || currentUser.username}! 👋
+            {t('Xin chào', 'Welcome back')}, {currentUser.fullName || currentUser.email}! 👋
           </h1>
 
           <p className="mt-2 text-sm sm:text-base text-indigo-100 dark:text-slate-300 leading-relaxed">

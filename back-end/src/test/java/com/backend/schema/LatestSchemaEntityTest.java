@@ -227,7 +227,11 @@ class LatestSchemaEntityTest extends LatestSchemaSpringTest {
     }
 
     private User user(String name, Role role) {
-        User user = User.builder().username(name + UUID.randomUUID()).fullName(name).passwordHash("hash").role(role).build();
+        String suffix = UUID.randomUUID().toString();
+        String email = name + suffix + "@example.com";
+        User user = User.builder().email(email).emailNormalized(email)
+                .studentCode(role == Role.STUDENT ? name + suffix : null)
+                .fullName(name).passwordHash("hash").role(role).build();
         em.persist(user);
         return user;
     }

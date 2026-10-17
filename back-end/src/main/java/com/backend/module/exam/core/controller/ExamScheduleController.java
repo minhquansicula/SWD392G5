@@ -22,7 +22,7 @@ import java.util.UUID;
 public class ExamScheduleController {
     private final ExamScheduleService scheduleService;
 
-    @Operation(summary = "Search students for scheduling by student code, name, username, or email")
+    @Operation(summary = "Search students for scheduling by student code, name, or email")
     @GetMapping("/api/lecturer/students")
     public ResponseEntity<ApiResponse<List<UserDto>>> searchStudents(
             @RequestParam(required = false, defaultValue = "") String query) {

@@ -11,10 +11,6 @@ import lombok.Setter;
 
 @Getter @Setter @NoArgsConstructor @AllArgsConstructor @Builder
 public class CreateUserRequest {
-    @NotBlank(message = "Username cannot be blank")
-    @Size(max = 255)
-    private String username;
-
     // No password: the account gets an unknown random one and the owner sets theirs through an emailed link.
 
     @NotBlank(message = "Full name cannot be blank")

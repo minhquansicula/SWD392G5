@@ -17,6 +17,7 @@ import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 
 import java.util.Map;
+import java.util.UUID;
 
 import static org.springframework.http.HttpStatus.BAD_REQUEST;
 
@@ -34,8 +35,7 @@ public class AuthServiceImpl implements AuthService {
         if (request == null) {
             throw new AppException("Invalid login request", BAD_REQUEST, "VALIDATION_FAILED");
         }
-        // The payload field is still called username, but it carries the email.
-        String canonical = EmailRules.canonicalOrNull(request.getUsername(), validator);
+        String canonical = EmailRules.canonicalOrNull(request.getEmail(), validator);
         if (canonical == null || !validator.validate(request).isEmpty()) {
             throw new AppException("Invalid email format", BAD_REQUEST, "VALIDATION_FAILED");
         }
@@ -50,7 +50,7 @@ public class AuthServiceImpl implements AuthService {
             throw new InvalidCredentialsException();
         }
 
-        String token = jwtTokenProvider.generateToken(user.getUsername(), user.getRole().name(), Map.of());
+        String token = jwtTokenProvider.generateToken(user.getId().toString(), user.getRole().name(), Map.of());
 
         return AuthResponse.builder()
                 .token(token)
@@ -60,9 +60,9 @@ public class AuthServiceImpl implements AuthService {
     }
 
     @Override
-    public UserDto getCurrentUser(String username) {
-        User user = userRepository.findByUsername(username)
-                .orElseThrow(() -> new UserNotFoundException(username));
+    public UserDto getCurrentUser(String userId) {
+        User user = userRepository.findById(UUID.fromString(userId))
+                .orElseThrow(() -> new UserNotFoundException(userId));
 
         return UserDtoMapper.toDto(user);
     }

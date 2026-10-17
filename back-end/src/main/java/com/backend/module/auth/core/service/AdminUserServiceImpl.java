@@ -1,7 +1,6 @@
 package com.backend.module.auth.core.service;
 
 import com.backend.module.auth.api.dto.*;
-import com.backend.module.auth.api.exception.UserAlreadyExistsException;
 import com.backend.module.auth.api.exception.UserNotFoundException;
 import com.backend.module.auth.api.service.AdminUserService;
 import com.backend.module.auth.core.EmailNormalizer;
@@ -38,7 +37,6 @@ public class AdminUserServiceImpl implements AdminUserService {
 
     /** Unique constraints whose violation only means "this account already exists". */
     private static final Map<String, BatchSkipReason> BUSINESS_UNIQUE_CONSTRAINTS = Map.of(
-            "users_username_key", BatchSkipReason.USERNAME_EXISTS,
             "users_student_code_key", BatchSkipReason.STUDENT_CODE_EXISTS,
             "users_email_normalized_key", BatchSkipReason.EMAIL_EXISTS);
 
@@ -51,7 +49,7 @@ public class AdminUserServiceImpl implements AdminUserService {
     @Override
     @Transactional(readOnly = true)
     public Page<UserDto> getUsers(String role, Pageable pageable) {
-        Set<String> sortable = Set.of("id", "username", "fullName", "role", "studentCode", "email", "createdAt");
+        Set<String> sortable = Set.of("id", "fullName", "role", "studentCode", "email", "createdAt");
         if (pageable.isUnpaged() || pageable.getPageSize() > 100
                 || pageable.getSort().stream().anyMatch(o -> !sortable.contains(o.getProperty()))) {
             throw new AppException("Use page size 1-100 and a supported user sort field", BAD_REQUEST, "VALIDATION_FAILED");
@@ -95,7 +93,7 @@ public class AdminUserServiceImpl implements AdminUserService {
             for (CreateUserRequest request : requests) {
                 RowOutcome outcome = createRow(request, rowTransaction, createdKeys);
                 BatchRowResult row = BatchRowResult.builder().row(rows.size() + 1)
-                        .username(request == null ? null : request.getUsername())
+                        .studentCode(request == null ? null : request.getStudentCode())
                         .email(request == null ? null : request.getEmail())
                         .status(outcome.created() == null
                                 ? BatchRowResult.Status.SKIPPED : BatchRowResult.Status.CREATED)
@@ -136,8 +134,11 @@ public class AdminUserServiceImpl implements AdminUserService {
             if (emailNormalized == null) throw invalidUserData();
         }
         User user = userRepository.findById(id).orElseThrow(() -> new UserNotFoundException(id.toString()));
+        if (user.isSystemAdmin() && request.getRole() != null && !"ADMIN".equals(request.getRole())) {
+            throw new AppException("System admin role cannot be changed", CONFLICT, "SYSTEM_ADMIN_PROTECTED");
+        }
         if (request.getFullName() != null) user.setFullName(request.getFullName().trim());
-        if (request.getRole() != null) user.setRole(parseRole(request.getRole()));
+        Role nextRole = request.getRole() == null ? user.getRole() : parseRole(request.getRole());
         if (request.getStudentCode() != null) {
             String studentCode = optionalText(request.getStudentCode());
             if (studentCode != null && userRepository.existsByStudentCodeAndIdNot(studentCode, id)) {
@@ -145,6 +146,9 @@ public class AdminUserServiceImpl implements AdminUserService {
             }
             user.setStudentCode(studentCode);
         }
+        if (nextRole == Role.STUDENT && optionalText(user.getStudentCode()) == null) throw invalidUserData();
+        if (nextRole != Role.STUDENT) user.setStudentCode(null);
+        user.setRole(nextRole);
         if (emailNormalized != null) {
             // A link mailed to the previous address must stop working.
             if (!emailNormalized.equals(user.getEmailNormalized())) passwordLinks.revokeLink(user);
@@ -169,7 +173,8 @@ public class AdminUserServiceImpl implements AdminUserService {
     @Override
     @Transactional
     public void deleteUser(UUID userId) {
-        if (!userRepository.existsById(userId)) throw new UserNotFoundException(userId.toString());
+        User user = userRepository.findById(userId).orElseThrow(() -> new UserNotFoundException(userId.toString()));
+        if (user.isSystemAdmin()) throw new AppException("System admin cannot be deleted", CONFLICT, "SYSTEM_ADMIN_PROTECTED");
         try {
             userRepository.deleteById(userId);
             userRepository.flush();
@@ -186,22 +191,23 @@ public class AdminUserServiceImpl implements AdminUserService {
     private BatchSkipReason validationProblem(CreateUserRequest request) {
         if (request == null) return BatchSkipReason.INVALID_DATA;
         String canonicalEmail = EmailNormalizer.normalize(request.getEmail());
-        if (optionalText(request.getUsername()) == null || optionalText(request.getFullName()) == null
-                || canonicalEmail == null || canonicalEmail.isEmpty()) {
+        if (optionalText(request.getFullName()) == null || canonicalEmail == null || canonicalEmail.isEmpty()
+                || (request.getRole() == null || "STUDENT".equals(request.getRole()))
+                && optionalText(request.getStudentCode()) == null) {
             return BatchSkipReason.MISSING_REQUIRED;
         }
+        if (request.getRole() != null && !"STUDENT".equals(request.getRole())
+                && optionalText(request.getStudentCode()) != null) return BatchSkipReason.INVALID_DATA;
         if (EmailRules.canonicalOrNull(request.getEmail(), validator) == null) return BatchSkipReason.INVALID_EMAIL;
         return validator.validate(request).isEmpty() ? null : BatchSkipReason.INVALID_DATA;
     }
 
     /** Stores a request that already passed {@link #validationProblem}. Call inside a transaction. */
     private CreatedUser insertUser(CreateUserRequest request) {
-        String username = request.getUsername().trim();
         String studentCode = optionalText(request.getStudentCode());
-        if (userRepository.existsByUsername(username)) throw new UserAlreadyExistsException(username);
         if (studentCode != null && userRepository.existsByStudentCode(studentCode)) throw studentCodeExists();
         // Nobody knows this password; the owner replaces it through the emailed link.
-        User user = User.builder().username(username)
+        User user = User.builder()
                 .passwordHash(passwordEncoder.encode(PasswordLinkService.randomSecret()))
                 .fullName(request.getFullName().trim())
                 .role(request.getRole() == null ? Role.STUDENT : parseRole(request.getRole()))
@@ -224,8 +230,6 @@ public class AdminUserServiceImpl implements AdminUserService {
             BatchSkipReason duplicate = businessUniqueViolation(ex);
             if (duplicate == null) throw ex;
             return RowOutcome.skipped(duplicate);
-        } catch (UserAlreadyExistsException ex) {
-            return RowOutcome.skipped(BatchSkipReason.USERNAME_EXISTS);
         } catch (AppException ex) {
             if (!STUDENT_CODE_EXISTS.equals(ex.getErrorCode())) throw ex;
             return RowOutcome.skipped(BatchSkipReason.STUDENT_CODE_EXISTS);
@@ -266,18 +270,19 @@ public class AdminUserServiceImpl implements AdminUserService {
         }
     }
 
-    /** Usernames and emails created so far in one batch, so an in-file duplicate is reported as such. */
+    /** Student codes and emails created so far in one batch. */
     private static final class CreatedKeys {
-        private final Set<String> usernames = new HashSet<>();
+        private final Set<String> studentCodes = new HashSet<>();
         private final Set<String> emails = new HashSet<>();
 
         boolean contains(CreateUserRequest request) {
-            return usernames.contains(request.getUsername().trim())
+            String code = request.getStudentCode() == null ? null : request.getStudentCode().trim();
+            return (code != null && studentCodes.contains(code))
                     || emails.contains(EmailNormalizer.normalize(request.getEmail()));
         }
 
         void add(User user) {
-            usernames.add(user.getUsername());
+            if (user.getStudentCode() != null) studentCodes.add(user.getStudentCode());
             emails.add(user.getEmailNormalized());
         }
     }

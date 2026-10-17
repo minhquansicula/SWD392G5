@@ -60,7 +60,7 @@ export function LecturerExamDetail({ examId, userId, userRole, language, onBack 
   const owner = userRole === 'ADMIN' || (!!exam && isExamOwner(exam, userId, userRole));
   const ready = !!detail && !loading && !error;
   const rows = detail?.schedules.filter(s => {
-    const match = `${s.student?.fullName ?? ''} ${s.student?.studentCode ?? ''} ${s.student?.username ?? ''} ${s.student?.email ?? ''} ${s.student?.id ?? ''}`.toLowerCase().includes(search.toLowerCase());
+    const match = `${s.student?.fullName ?? ''} ${s.student?.studentCode ?? ''} ${s.student?.email ?? ''} ${s.student?.id ?? ''}`.toLowerCase().includes(search.toLowerCase());
     return match && (filter === 'ALL' || s.status === filter);
   }) ?? [];
 
@@ -101,7 +101,7 @@ export function LecturerExamDetail({ examId, userId, userRole, language, onBack 
             <caption className="sr-only">{t('Danh sách lịch thi theo giờ Việt Nam', 'Student schedules in Vietnam time')}</caption>
             <thead className="border-b border-slate-200 text-xs text-slate-500 dark:border-slate-700 dark:text-slate-400"><tr>{[t('Sinh viên', 'Student'), t('Khung giờ (UTC+07)', 'Time window (UTC+07)'), t('Trạng thái', 'Status'), t('Câu hỏi / Điểm', 'Questions / Score'), t('Thao tác', 'Actions')].map(label => <th key={label} scope="col" className="px-3 py-3">{label}</th>)}</tr></thead>
             <tbody className="divide-y divide-slate-100 dark:divide-slate-800">{rows.map(s => <tr key={s.id}>
-              <td className="max-w-56 px-3 py-4"><p className="font-semibold">{s.student?.fullName ?? '—'}</p><p className="text-xs text-slate-500 dark:text-slate-400">{s.student?.studentCode ?? s.student?.username ?? '—'}</p><p className="break-all text-xs text-slate-500 dark:text-slate-400">{s.student?.email ?? '—'}</p><details className="mt-1 text-xs text-slate-500 dark:text-slate-400"><summary className="cursor-pointer">UUID</summary><p className="mt-1 break-all font-mono">{s.student?.id ?? '—'}</p></details></td>
+              <td className="max-w-56 px-3 py-4"><p className="font-semibold">{s.student?.fullName ?? '—'}</p><p className="text-xs text-slate-500 dark:text-slate-400">{s.student?.studentCode ?? '—'}</p><p className="break-all text-xs text-slate-500 dark:text-slate-400">{s.student?.email ?? '—'}</p><details className="mt-1 text-xs text-slate-500 dark:text-slate-400"><summary className="cursor-pointer">UUID</summary><p className="mt-1 break-all font-mono">{s.student?.id ?? '—'}</p></details></td>
               <td className="px-3 py-4"><p>{formatExamTime(s.scheduledStartTime, language)}</p><p className="text-slate-500 dark:text-slate-400">{formatExamTime(s.scheduledEndTime, language)}</p>{s.actualStartTime && <p className="mt-1 text-xs text-slate-500 dark:text-slate-400">{t('Thực bắt đầu', 'Actually started')}: {formatExamTime(s.actualStartTime, language)}</p>}</td>
               <td className="px-3 py-4"><ScheduleBadge status={s.status} language={language} /></td>
               <td className="px-3 py-4"><p>{s.assignedQuestionCount} {t('câu đã gán', 'assigned')}</p><p className="mt-1 font-semibold">{s.finalScore != null ? `${s.finalScore}/10` : t('Chưa có điểm', 'Not graded')}</p></td>

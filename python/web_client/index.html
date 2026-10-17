@@ -1,0 +1,528 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>AIVES Viva - AI Examiner (Real-time Audio & Mic Feedback)</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <style>
+    .pulse-ring {
+      animation: pulse-ring 1.5s cubic-bezier(0.215, 0.61, 0.355, 1) infinite;
+    }
+    @keyframes pulse-ring {
+      0% { transform: scale(0.95); box-shadow: 0 0 0 0 rgba(59, 130, 246, 0.7); }
+      70% { transform: scale(1); box-shadow: 0 0 0 18px rgba(59, 130, 246, 0); }
+      100% { transform: scale(0.95); box-shadow: 0 0 0 0 rgba(59, 130, 246, 0); }
+    }
+    .typing-cursor::after {
+      content: '▋';
+      margin-left: 2px;
+      font-size: 0.85em;
+      color: #60a5fa;
+      animation: blink 1s step-start infinite;
+    }
+    @keyframes blink { 50% { opacity: 0; } }
+    .eq-bar {
+      transition: height 0.05s ease;
+      min-height: 3px;
+    }
+  </style>
+</head>
+<body class="bg-slate-950 text-slate-100 min-h-screen flex flex-col font-sans">
+
+  <!-- Header -->
+  <header class="border-b border-slate-800 bg-slate-900/60 backdrop-blur px-6 py-4 flex items-center justify-between sticky top-0 z-50">
+    <div class="flex items-center space-x-3">
+      <div class="w-10 h-10 rounded-xl bg-blue-600 flex items-center justify-center font-bold text-lg shadow-lg shadow-blue-500/30">
+        AI
+      </div>
+      <div>
+        <h1 class="text-lg font-bold text-white tracking-wide">AIVES Viva Examiner</h1>
+        <p class="text-xs text-slate-400">Gemini 3.8 Live • Pure Audio • Real-time Speech Transcription</p>
+      </div>
+    </div>
+    <div class="flex items-center space-x-3">
+      <span id="conn-badge" class="px-3 py-1 rounded-full text-xs font-medium bg-amber-500/10 text-amber-400 border border-amber-500/20">
+        Chưa kết nối
+      </span>
+      <button id="btn-toggle" onclick="toggleExam()" class="px-5 py-2 rounded-xl text-sm font-semibold bg-blue-600 hover:bg-blue-500 text-white transition-all shadow-md hover:shadow-blue-500/25">
+        Bắt đầu Thi Vấn Đáp
+      </button>
+    </div>
+  </header>
+
+  <!-- Main Content Grid -->
+  <main class="flex-1 max-w-5xl w-full mx-auto p-6 flex flex-col space-y-6">
+
+    <!-- Avatar & AI Status Section -->
+    <div class="bg-slate-900 border border-slate-800 rounded-2xl p-6 flex flex-col items-center justify-center text-center shadow-xl relative overflow-hidden">
+      <div id="avatar-ring" class="w-24 h-24 rounded-full bg-gradient-to-tr from-blue-600 to-indigo-500 flex items-center justify-center shadow-lg shadow-blue-500/20 mb-3 transition-all">
+        <svg class="w-12 h-12 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M19 11a7 7 0 01-7 7m0 0a7 7 0 01-7-7m7 7v4m0 0H8m4 0h4m-4-8a3 3 0 01-3-3V5a3 3 0 116 0v6a3 3 0 01-3 3z"></path></svg>
+      </div>
+      <h3 id="examiner-status" class="text-lg font-semibold text-white">Giám khảo AI Sẵn sàng</h3>
+      <p id="examiner-substatus" class="text-xs text-slate-400 mt-0.5">Nhấn "Bắt đầu Thi Vấn Đáp" để kết nối micro và đối thoại trực tiếp</p>
+    </div>
+
+    <!-- Live Microphone Feedback & VU Equalizer Meter -->
+    <div class="bg-slate-900/90 border border-slate-800 rounded-2xl p-4 flex flex-col sm:flex-row items-center justify-between gap-4 shadow-lg">
+      <div class="flex items-center space-x-3 w-full sm:w-auto">
+        <div id="mic-icon-container" class="w-11 h-11 rounded-xl bg-slate-800 flex items-center justify-center text-slate-400 transition-all flex-shrink-0">
+          <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 11a7 7 0 01-7 7m0 0a7 7 0 01-7-7m7 7v4m0 0H8m4 0h4m-4-8a3 3 0 01-3-3V5a3 3 0 116 0v6a3 3 0 01-3 3z"></path></svg>
+        </div>
+        <div>
+          <div class="flex items-center space-x-2">
+            <span id="mic-status-label" class="text-xs font-semibold uppercase tracking-wider text-slate-400">Microphone: Chưa kết nối</span>
+            <span id="mic-live-tag" class="hidden px-2 py-0.5 rounded text-[10px] font-bold bg-emerald-500/20 text-emerald-400 border border-emerald-500/30 animate-pulse">STREAMING LIVE</span>
+          </div>
+          <p id="mic-substatus" class="text-xs text-slate-500">Cột sóng và âm lượng sẽ phản hồi tức thì khi bạn nói</p>
+        </div>
+      </div>
+
+      <!-- Real-time Equalizer Waveform & Stats -->
+      <div class="flex items-center space-x-4 w-full sm:w-auto justify-end">
+        <!-- 12 Equalizer Bars -->
+        <div class="flex items-end space-x-1 h-9 px-3 py-1.5 bg-slate-950/80 rounded-xl border border-slate-800" id="visualizer-bars">
+          <div class="w-1.5 bg-slate-700 rounded-full eq-bar" style="height: 10%"></div>
+          <div class="w-1.5 bg-slate-700 rounded-full eq-bar" style="height: 15%"></div>
+          <div class="w-1.5 bg-slate-700 rounded-full eq-bar" style="height: 25%"></div>
+          <div class="w-1.5 bg-slate-700 rounded-full eq-bar" style="height: 40%"></div>
+          <div class="w-1.5 bg-slate-700 rounded-full eq-bar" style="height: 60%"></div>
+          <div class="w-1.5 bg-slate-700 rounded-full eq-bar" style="height: 80%"></div>
+          <div class="w-1.5 bg-slate-700 rounded-full eq-bar" style="height: 80%"></div>
+          <div class="w-1.5 bg-slate-700 rounded-full eq-bar" style="height: 60%"></div>
+          <div class="w-1.5 bg-slate-700 rounded-full eq-bar" style="height: 40%"></div>
+          <div class="w-1.5 bg-slate-700 rounded-full eq-bar" style="height: 25%"></div>
+          <div class="w-1.5 bg-slate-700 rounded-full eq-bar" style="height: 15%"></div>
+          <div class="w-1.5 bg-slate-700 rounded-full eq-bar" style="height: 10%"></div>
+        </div>
+
+        <!-- Volume & Byte Counter -->
+        <div class="flex flex-col items-end min-w-[75px]">
+          <span id="mic-volume-text" class="text-sm font-mono font-bold text-slate-400">0%</span>
+          <span id="mic-packets-text" class="text-[10px] text-slate-500 font-mono">0 KB đã gửi</span>
+        </div>
+      </div>
+    </div>
+
+    <!-- Live Subtitle & Transcript Card -->
+    <div class="bg-slate-900 border border-slate-800 rounded-2xl p-6 flex flex-col shadow-xl min-h-[460px]">
+      
+      <div class="flex items-center justify-between border-b border-slate-800 pb-3 mb-4">
+        <div class="flex items-center space-x-2">
+          <span class="w-2.5 h-2.5 rounded-full bg-blue-500 animate-pulse"></span>
+          <span class="text-sm font-semibold text-slate-300">Biên Bản Hội Thoại Trực Tuyến</span>
+        </div>
+        <span id="session-info" class="text-xs text-slate-500">Môn: SWD392 | Thí sinh: Test</span>
+      </div>
+
+      <!-- Transcript Feed (Full Dialogue History) -->
+      <div id="transcript-feed" class="flex-1 overflow-y-auto space-y-4 pr-2 max-h-[360px]">
+        <div class="p-4 rounded-xl bg-slate-950/60 border border-slate-800/80 text-sm text-slate-400 text-center">
+          Nhấn <strong>"Bắt đầu Thi Vấn Đáp"</strong> ở góc trên bên phải để bắt đầu đối thoại với Giám khảo AI.
+        </div>
+      </div>
+
+      <!-- Student Interim Speech Live Preview (When Student is talking) -->
+      <div id="student-interim-box" class="hidden mt-3 p-3.5 rounded-xl border border-emerald-500/40 bg-emerald-950/30 text-emerald-200 text-sm shadow-md animate-pulse">
+        <div class="flex items-center space-x-2 mb-1">
+          <span class="w-2 h-2 rounded-full bg-emerald-400 animate-ping"></span>
+          <span class="text-xs font-bold uppercase tracking-wider text-emerald-400">🎤 Giám khảo đang nghe bạn nói:</span>
+        </div>
+        <p id="student-interim-text" class="font-medium italic text-emerald-100">...</p>
+      </div>
+
+      <!-- Current Examiner Live Streaming Subtitle Banner -->
+      <div class="mt-4 pt-3 border-t border-slate-800/80 bg-slate-950/60 -mx-6 -mb-6 p-4 rounded-b-2xl">
+        <div class="flex items-center justify-between mb-1.5">
+          <span id="live-speaker-badge" class="text-xs uppercase tracking-wider font-bold text-blue-400">Giám khảo đang nói:</span>
+          <span class="text-[10px] text-slate-500 uppercase tracking-widest font-mono">Live Subtitle Stream</span>
+        </div>
+        <p id="live-subtitle" class="text-sm font-medium text-slate-100 min-h-[1.5rem] italic typing-cursor">Đang chờ tín hiệu...</p>
+      </div>
+    </div>
+
+    <!-- Grading Results Container -->
+    <div id="result-card" class="hidden bg-emerald-950/30 border border-emerald-500/30 rounded-2xl p-6 shadow-2xl">
+      <div class="flex items-center justify-between border-b border-emerald-500/20 pb-3 mb-3">
+        <h2 class="text-lg font-bold text-emerald-400 flex items-center gap-2">
+          🏆 KẾT QUẢ CHẤM ĐIỂM TỰ ĐỘNG
+        </h2>
+        <span id="final-score" class="text-2xl font-black text-white px-3 py-1 rounded-xl bg-emerald-600">-- / 10.0</span>
+      </div>
+      <p id="summary-feedback" class="text-sm text-slate-300 mb-4"></p>
+      <div id="question-results" class="space-y-2 text-xs"></div>
+    </div>
+
+  </main>
+
+  <script>
+    let ws = null;
+    let isConnected = false;
+    let audioContext = null;
+    let playbackContext = null;
+    let inputAudioProcessor = null;
+    let micStream = null;
+    let analyser = null;
+    let animFrameId = null;
+    let nextPlayTime = 0;
+    let totalBytesSent = 0;
+    let activeAudioSources = [];
+
+    async function toggleExam() {
+      if (!isConnected) {
+        await startExam();
+      } else {
+        stopExam();
+      }
+    }
+
+    async function startExam() {
+      const btn = document.getElementById("btn-toggle");
+      btn.innerText = "Đang kết nối...";
+      btn.disabled = true;
+
+      try {
+        // 1. Chỉ xin quyền Microphone (Pure Audio Mode)
+        micStream = await navigator.mediaDevices.getUserMedia({
+          audio: { 
+            channelCount: 1, 
+            sampleRate: 16000, 
+            echoCancellation: true, 
+            noiseSuppression: true, 
+            autoGainControl: true 
+          },
+          video: false
+        });
+
+        // 2. Khởi tạo Audio Context 16kHz cho Mic Input
+        audioContext = new (window.AudioContext || window.webkitAudioContext)({ sampleRate: 16000 });
+        if (audioContext.state === "suspended") {
+          await audioContext.resume();
+        }
+
+        const source = audioContext.createMediaStreamSource(micStream);
+
+        // 3. Khởi tạo Analyser Node để vẽ Equalizer & đo Volume thời gian thực
+        analyser = audioContext.createAnalyser();
+        analyser.fftSize = 64;
+        analyser.smoothingTimeConstant = 0.5;
+        source.connect(analyser);
+
+        // ScriptProcessorNode để đóng gói PCM 16-bit
+        inputAudioProcessor = audioContext.createScriptProcessor(1024, 1, 1);
+        const muteGain = audioContext.createGain();
+        muteGain.gain.value = 0;
+        source.connect(inputAudioProcessor);
+        inputAudioProcessor.connect(muteGain);
+        muteGain.connect(audioContext.destination);
+
+        // 4. Khởi tạo Audio Context 24kHz chuyên phát âm thanh từ Gemini Live
+        playbackContext = new (window.AudioContext || window.webkitAudioContext)({ sampleRate: 24000 });
+        if (playbackContext.state === "suspended") {
+          await playbackContext.resume();
+        }
+        nextPlayTime = 0;
+        totalBytesSent = 0;
+        activeAudioSources = [];
+
+        // 5. Kết nối WebSocket tới Python Viva Bridge Server
+        const wsProtocol = window.location.protocol === "https:" ? "wss:" : "ws:";
+        const wsUrl = `${wsProtocol}//${window.location.host}/ws/viva/test-session`;
+        ws = new WebSocket(wsUrl);
+        ws.binaryType = "arraybuffer";
+
+        ws.onopen = () => {
+          isConnected = true;
+          document.getElementById("conn-badge").innerText = "Đang thi";
+          document.getElementById("conn-badge").className = "px-3 py-1 rounded-full text-xs font-medium bg-emerald-500/10 text-emerald-400 border border-emerald-500/20";
+          btn.innerText = "Kết thúc & Chấm điểm";
+          btn.disabled = false;
+          btn.className = "px-5 py-2 rounded-xl text-sm font-semibold bg-rose-600 hover:bg-rose-500 text-white transition-all shadow-md hover:shadow-rose-500/25";
+          
+          document.getElementById("transcript-feed").innerHTML = "";
+          document.getElementById("live-subtitle").innerText = "Đang kết nối tới Giám khảo AI...";
+          document.getElementById("examiner-status").innerText = "Giám khảo đang lắng nghe";
+          document.getElementById("examiner-substatus").innerText = "Đàm thoại hai chiều thời gian thực (Microphone đang hoạt động)";
+
+          // Kích hoạt UI hiển thị trạng thái Mic
+          document.getElementById("mic-status-label").innerText = "Microphone: Sẵn sàng";
+          document.getElementById("mic-status-label").className = "text-xs font-semibold uppercase tracking-wider text-emerald-400";
+          document.getElementById("mic-live-tag").classList.remove("hidden");
+          document.getElementById("mic-icon-container").className = "w-11 h-11 rounded-xl bg-emerald-600/20 border border-emerald-500/30 flex items-center justify-center text-emerald-400 transition-all flex-shrink-0";
+
+          // Khởi chạy vòng lặp Render Visualizer
+          startVisualizer();
+        };
+
+        // Gửi các chunk âm thanh PCM 16kHz - với downsampling nếu browser không hỗ trợ 16kHz native
+        const actualSampleRate = audioContext.sampleRate;
+        const TARGET_RATE = 16000;
+        const downsampleRatio = actualSampleRate / TARGET_RATE;
+        console.log(`[AUDIO] Actual AudioContext sampleRate: ${actualSampleRate}Hz, downsampleRatio: ${downsampleRatio.toFixed(2)}`);
+        document.getElementById("mic-substatus").innerText = `Mic: ${actualSampleRate}Hz → 16kHz Gemini Live`;
+
+        inputAudioProcessor.onaudioprocess = (e) => {
+          if (!isConnected || ws.readyState !== WebSocket.OPEN) return;
+          const inputData = e.inputBuffer.getChannelData(0);
+          
+          let samples;
+          if (downsampleRatio <= 1.01) {
+            // Đã là 16kHz (hoặc gần đúng): dùng trực tiếp
+            samples = inputData;
+          } else {
+            // Cần downsample từ 44100/48000 về 16000Hz
+            const outputLength = Math.round(inputData.length / downsampleRatio);
+            samples = new Float32Array(outputLength);
+            for (let i = 0; i < outputLength; i++) {
+              const srcIdx = Math.min(Math.round(i * downsampleRatio), inputData.length - 1);
+              samples[i] = inputData[srcIdx];
+            }
+          }
+
+          const pcm16 = new Int16Array(samples.length);
+          for (let i = 0; i < samples.length; i++) {
+            let s = Math.max(-1, Math.min(1, samples[i]));
+            pcm16[i] = s < 0 ? s * 0x8000 : s * 0x7FFF;
+          }
+          ws.send(pcm16.buffer);
+          totalBytesSent += pcm16.buffer.byteLength;
+          document.getElementById("mic-packets-text").innerText = `${(totalBytesSent / 1024).toFixed(0)} KB đã gửi`;
+        };
+
+
+        // Nhận dữ liệu từ Server
+        ws.onmessage = async (event) => {
+          // Binary Frame: Âm thanh PCM 24kHz từ Gemini
+          if (event.data instanceof ArrayBuffer) {
+            playPcmChunk(event.data, playbackContext);
+            document.getElementById("avatar-ring").classList.add("pulse-ring");
+            document.getElementById("examiner-status").innerText = "Giám khảo AI đang nói...";
+          } 
+          // Text Frame: JSON Event (Phụ đề, Ngắt lời, Kết quả thi)
+          else {
+            const data = JSON.parse(event.data);
+            handleServerEvent(data);
+          }
+        };
+
+        ws.onclose = () => {
+          stopExam();
+        };
+
+      } catch (err) {
+        alert("Lỗi khởi tạo micro: " + err.message);
+        btn.innerText = "Bắt đầu Thi Vấn Đáp";
+        btn.disabled = false;
+      }
+    }
+
+    // Vòng lặp đo Volume & Equalizer Bars phản hồi ngay lập tức khi nói
+    function startVisualizer() {
+      const bars = document.querySelectorAll("#visualizer-bars .eq-bar");
+      const bufferLength = analyser.frequencyBinCount;
+      const dataArray = new Uint8Array(bufferLength);
+
+      function render() {
+        if (!isConnected) return;
+        analyser.getByteFrequencyData(dataArray);
+
+        // Tính toán âm lượng trung bình
+        let sum = 0;
+        for (let i = 0; i < bufferLength; i++) {
+          sum += dataArray[i];
+        }
+        let avg = sum / bufferLength;
+        let percent = Math.min(100, Math.round((avg / 128) * 100));
+
+        // Cập nhật text % Volume
+        const volText = document.getElementById("mic-volume-text");
+        volText.innerText = `${percent}%`;
+
+        if (percent > 8) {
+          volText.className = "text-sm font-mono font-bold text-emerald-400";
+          document.getElementById("mic-substatus").innerText = "Đang phát hiện giọng nói của thí sinh...";
+        } else {
+          volText.className = "text-sm font-mono font-bold text-slate-400";
+          document.getElementById("mic-substatus").innerText = "Đang lắng nghe âm thanh từ microphone...";
+        }
+
+        // Cập nhật độ cao từng cột sóng
+        bars.forEach((bar, index) => {
+          const val = dataArray[index % bufferLength];
+          const heightPercent = Math.max(8, Math.min(100, (val / 255) * 100));
+          bar.style.height = `${heightPercent}%`;
+          if (heightPercent > 35) {
+            bar.className = "w-1.5 bg-gradient-to-t from-emerald-500 to-cyan-400 rounded-full eq-bar shadow-sm shadow-emerald-500/50";
+          } else {
+            bar.className = "w-1.5 bg-slate-700 rounded-full eq-bar";
+          }
+        });
+
+        animFrameId = requestAnimationFrame(render);
+      }
+      render();
+    }
+
+    // Phát âm thanh PCM 24kHz từ Gemini Live
+    function playPcmChunk(arrayBuffer, ctx) {
+      if (ctx.state === "suspended") {
+        ctx.resume();
+      }
+      const int16Array = new Int16Array(arrayBuffer);
+      const float32Array = new Float32Array(int16Array.length);
+      for (let i = 0; i < int16Array.length; i++) {
+        float32Array[i] = int16Array[i] / 32768.0;
+      }
+
+      const audioBuffer = ctx.createBuffer(1, float32Array.length, 24000);
+      audioBuffer.getChannelData(0).set(float32Array);
+
+      const source = ctx.createBufferSource();
+      source.buffer = audioBuffer;
+      source.connect(ctx.destination);
+
+      const currentTime = ctx.currentTime;
+      if (nextPlayTime < currentTime) {
+        nextPlayTime = currentTime + 0.02; // Đệm 20ms chống drop frame
+      }
+      source.start(nextPlayTime);
+      nextPlayTime += audioBuffer.duration;
+
+      activeAudioSources.push(source);
+      source.onended = () => {
+        const idx = activeAudioSources.indexOf(source);
+        if (idx !== -1) activeAudioSources.splice(idx, 1);
+        if (activeAudioSources.length === 0) {
+          document.getElementById("avatar-ring").classList.remove("pulse-ring");
+          document.getElementById("examiner-status").innerText = "Giám khảo đang lắng nghe";
+        }
+      };
+    }
+
+    // Dừng ngay lập tức âm thanh AI khi thí sinh nói chen ngang (Barge-in)
+    function stopAiPlayback() {
+      activeAudioSources.forEach(s => {
+        try { s.stop(); } catch (e) {}
+      });
+      activeAudioSources = [];
+      nextPlayTime = 0;
+      document.getElementById("avatar-ring").classList.remove("pulse-ring");
+      document.getElementById("examiner-status").innerText = "Giám khảo đang lắng nghe bạn...";
+      document.getElementById("live-subtitle").innerText = "... (Thí sinh chen ngang) ...";
+    }
+
+    function handleServerEvent(evt) {
+      // 0. Sự kiện Thí sinh chen ngang (Barge-in / Interrupted)
+      if (evt.event === "interrupted") {
+        stopAiPlayback();
+        return;
+      }
+
+      // 1. Phụ đề chạy chữ thời gian thực (stream từng từ)
+      if (evt.event === "subtitle_delta") {
+        // Khi THÍ SINH NÓI:
+        if (evt.role === "STUDENT") {
+          const interimBox = document.getElementById("student-interim-box");
+          const interimText = document.getElementById("student-interim-text");
+          
+          if (evt.is_interim) {
+            // Hiển thị trực tiếp những gì thí sinh đang phát âm
+            interimBox.classList.remove("hidden");
+            interimText.innerText = evt.text;
+          } else {
+            // Khi câu nói của thí sinh đã hoàn tất chốt câu
+            interimBox.classList.add("hidden");
+            appendTranscript("STUDENT", evt.text);
+          }
+        }
+        // Khi GIÁM KHẢO NÓI:
+        else if (evt.role === "EXAMINER") {
+          const subtitleEl = document.getElementById("live-subtitle");
+          const badge = document.getElementById("live-speaker-badge");
+          badge.innerText = "Giám khảo đang nói:";
+          badge.className = "text-xs uppercase tracking-wider font-bold text-blue-400";
+
+          if (subtitleEl.innerText === "Đang kết nối tới Giám khảo AI..." || subtitleEl.innerText === "..." || subtitleEl.innerText.includes("chen ngang")) {
+            subtitleEl.innerText = "";
+          }
+          subtitleEl.innerText += evt.text;
+        }
+      }
+      // 2. Kết thúc lượt nói của Giám khảo AI -> Lưu vào lịch sử đối thoại
+      else if (evt.event === "turn_complete") {
+        document.getElementById("avatar-ring").classList.remove("pulse-ring");
+        const subtitleEl = document.getElementById("live-subtitle");
+        const text = subtitleEl.innerText.trim();
+
+        if (text && text !== "Đang kết nối tới Giám khảo AI..." && !text.includes("chen ngang")) {
+          appendTranscript("EXAMINER", text);
+          subtitleEl.innerText = "...";
+        }
+        document.getElementById("examiner-status").innerText = "Giám khảo đang lắng nghe";
+      }
+      // 3. Kết thúc ca thi & Hiển thị kết quả chấm Rubric
+      else if (evt.event === "exam_completed") {
+        displayResults(evt.result);
+      }
+    }
+
+    function appendTranscript(role, text) {
+      const feed = document.getElementById("transcript-feed");
+      const div = document.createElement("div");
+      div.className = "p-4 rounded-xl border text-sm transition-all " + 
+        (role === "EXAMINER" 
+          ? "bg-blue-950/40 border-blue-500/20 text-blue-100 shadow-sm" 
+          : "bg-slate-900 border-emerald-500/20 text-slate-100 shadow-sm");
+      div.innerHTML = `<span class="text-xs font-bold uppercase tracking-wider ${role === 'EXAMINER' ? 'text-blue-400' : 'text-emerald-400'} block mb-1">${role === 'EXAMINER' ? '🤖 Giám khảo AI' : '👤 Thí sinh'}:</span>${text}`;
+      feed.appendChild(div);
+      feed.scrollTop = feed.scrollHeight;
+    }
+
+    function stopExam() {
+      if (animFrameId) cancelAnimationFrame(animFrameId);
+      if (ws && ws.readyState === WebSocket.OPEN) {
+        ws.send(JSON.stringify({ event: "finish_exam" }));
+      }
+      if (micStream) micStream.getTracks().forEach(t => t.stop());
+      if (audioContext) audioContext.close();
+      if (playbackContext) playbackContext.close();
+
+      isConnected = false;
+      document.getElementById("conn-badge").innerText = "Đã kết thúc";
+      document.getElementById("conn-badge").className = "px-3 py-1 rounded-full text-xs font-medium bg-slate-500/10 text-slate-400 border border-slate-500/20";
+      document.getElementById("avatar-ring").classList.remove("pulse-ring");
+      document.getElementById("examiner-status").innerText = "Ca thi kết thúc";
+      document.getElementById("examiner-substatus").innerText = "Đang tổng hợp đánh giá và tính điểm Rubric...";
+      
+      // Reset Mic UI
+      document.getElementById("mic-status-label").innerText = "Microphone: Đã tắt";
+      document.getElementById("mic-status-label").className = "text-xs font-semibold uppercase tracking-wider text-slate-500";
+      document.getElementById("mic-live-tag").classList.add("hidden");
+      document.getElementById("mic-icon-container").className = "w-11 h-11 rounded-xl bg-slate-800 flex items-center justify-center text-slate-500 transition-all flex-shrink-0";
+      document.getElementById("student-interim-box").classList.add("hidden");
+
+      const btn = document.getElementById("btn-toggle");
+      btn.innerText = "Thi lại";
+      btn.className = "px-5 py-2 rounded-xl text-sm font-semibold bg-blue-600 hover:bg-blue-500 text-white transition-all shadow-md";
+    }
+
+    function displayResults(res) {
+      const card = document.getElementById("result-card");
+      card.classList.remove("hidden");
+      document.getElementById("final-score").innerText = `${res.final_score || 0.0} / 10.0`;
+      document.getElementById("summary-feedback").innerText = res.summary_feedback || "Hoàn thành ca thi vấn đáp.";
+      document.getElementById("examiner-substatus").innerText = "Đã chấm điểm hoàn tất";
+      
+      const qrEl = document.getElementById("question-results");
+      qrEl.innerHTML = "";
+      (res.question_results || []).forEach(q => {
+        const item = document.createElement("div");
+        item.className = "p-3 rounded-lg bg-emerald-950/60 border border-emerald-500/20";
+        item.innerHTML = `<strong>Câu hỏi: ${q.question_id}</strong> (${q.ai_score}đ) - ${q.ai_feedback}`;
+        qrEl.appendChild(item);
+      });
+      card.scrollIntoView({ behavior: 'smooth' });
+    }
+  </script>
+</body>
+</html>

@@ -62,7 +62,7 @@ class PasswordLinkServiceTest {
     void setup() {
         // Forgot-password work runs inline unless a test installs its own executor.
         useExecutor(Runnable::run);
-        user = User.builder().id(UUID.randomUUID()).username("se170001").passwordHash("random-hash")
+        user = User.builder().id(UUID.randomUUID()).email("se170001").passwordHash("random-hash")
                 .fullName("Student One").role(Role.STUDENT)
                 .email(" Student@EXAMPLE.COM ").emailNormalized("student@example.com").build();
     }

@@ -270,7 +270,7 @@ class ExamModuleIntegrationTest extends PostgresSpringTest {
         createExam(2);
         SecurityContextHolder.clearContext();
         String response = mvc.perform(post("/api/auth/login").contentType(MediaType.APPLICATION_JSON)
-                .content("{\"username\":\"owner@example.com\",\"password\":\"test-password\"}"))
+                .content("{\"email\":\"owner@example.com\",\"password\":\"test-password\"}"))
                 .andExpect(status().isOk()).andReturn().getResponse().getContentAsString();
         String token = com.jayway.jsonpath.JsonPath.read(response, "$.data.token");
         mvc.perform(get("/api/exams").header("Authorization", "Bearer " + token))
@@ -286,44 +286,49 @@ class ExamModuleIntegrationTest extends PostgresSpringTest {
         ExamScheduleDto schedule = add(exam, studentId);
         SecurityContextHolder.clearContext();
         mvc.perform(get("/api/exams")).andExpect(status().isUnauthorized());
-        mvc.perform(get("/api/exams").with(user("student").roles("STUDENT"))).andExpect(status().isForbidden());
-        mvc.perform(get("/api/exams").with(user("owner").roles("LECTURER")))
+        mvc.perform(get("/api/exams").with(user(userId("student").toString()).roles("STUDENT"))).andExpect(status().isForbidden());
+        mvc.perform(get("/api/exams").with(user(userId("owner").toString()).roles("LECTURER")))
                 .andExpect(status().isOk()).andExpect(jsonPath("$.data.page.totalElements").value(1))
                 .andExpect(jsonPath("$.data.content[0].pendingStudents").value(1));
-        mvc.perform(get("/api/exams/" + exam.getId()).with(user("stranger").roles("LECTURER")))
+        mvc.perform(get("/api/exams/" + exam.getId()).with(user(userId("stranger").toString()).roles("LECTURER")))
                 .andExpect(status().isForbidden());
-        mvc.perform(get("/api/student/my-schedules").with(user("student").roles("STUDENT")))
+        mvc.perform(get("/api/student/my-schedules").with(user(userId("student").toString()).roles("STUDENT")))
                 .andExpect(status().isOk()).andExpect(jsonPath("$.data[0].student.id").value(studentId.toString()));
-        mvc.perform(get("/api/student/my-schedules").with(user("student2").roles("STUDENT")))
+        mvc.perform(get("/api/student/my-schedules").with(user(userId("student2").toString()).roles("STUDENT")))
                 .andExpect(status().isOk()).andExpect(jsonPath("$.data").isEmpty());
-        mvc.perform(get("/api/schedules/" + schedule.getId() + "/assigned-questions").with(user("student").roles("STUDENT")))
+        mvc.perform(get("/api/schedules/" + schedule.getId() + "/assigned-questions").with(user(userId("student").toString()).roles("STUDENT")))
                 .andExpect(status().isForbidden());
-        mvc.perform(post("/api/lecturer/exams").with(user("owner").roles("LECTURER"))
+        mvc.perform(post("/api/lecturer/exams").with(user(userId("owner").toString()).roles("LECTURER"))
                 .contentType(MediaType.APPLICATION_JSON).content("{}"))
                 .andExpect(status().isBadRequest()).andExpect(jsonPath("$.error").value("VALIDATION_FAILED"));
-        mvc.perform(post("/api/lecturer/exams/" + exam.getId() + "/schedules").with(user("owner").roles("LECTURER"))
+        mvc.perform(post("/api/lecturer/exams/" + exam.getId() + "/schedules").with(user(userId("owner").toString()).roles("LECTURER"))
                 .contentType(MediaType.APPLICATION_JSON).content("{\"students\":[null]}"))
                 .andExpect(status().isBadRequest());
-        mvc.perform(get("/api/exams/not-a-uuid").with(user("owner").roles("LECTURER")))
+        mvc.perform(get("/api/exams/not-a-uuid").with(user(userId("owner").toString()).roles("LECTURER")))
                 .andExpect(status().isBadRequest()).andExpect(jsonPath("$.error").value("VALIDATION_FAILED"));
-        mvc.perform(put("/api/lecturer/exams/" + exam.getId()).with(user("admin").roles("ADMIN"))
+        mvc.perform(put("/api/lecturer/exams/" + exam.getId()).with(user(userId("admin").toString()).roles("ADMIN"))
                 .contentType(MediaType.APPLICATION_JSON).content("{\"title\":\"Via admin HTTP\"}"))
                 .andExpect(status().isOk()).andExpect(jsonPath("$.data.title").value("Via admin HTTP"));
-        mvc.perform(put("/api/lecturer/exams/" + exam.getId()).with(user("owner").roles("LECTURER"))
+        mvc.perform(put("/api/lecturer/exams/" + exam.getId()).with(user(userId("owner").toString()).roles("LECTURER"))
                 .contentType(MediaType.APPLICATION_JSON).content("{\"title\":\"  \"}"))
                 .andExpect(status().isBadRequest());
-        mvc.perform(post("/api/lecturer/schedules/" + schedule.getId() + "/assign-questions").with(user("stranger").roles("LECTURER")))
+        mvc.perform(post("/api/lecturer/schedules/" + schedule.getId() + "/assign-questions").with(user(userId("stranger").toString()).roles("LECTURER")))
                 .andExpect(status().isForbidden());
     }
 
-    private UUID addUser(String username, String role) {
+    private UUID addUser(String name, String role) {
         UUID id = UUID.randomUUID();
-        jdbc.update("INSERT INTO users(id, username, password_hash, full_name, role) VALUES (?, ?, 'test-only', ?, ?)", id, username, username, role);
+        jdbc.update("INSERT INTO users(id, email, email_normalized, student_code, password_hash, full_name, role) VALUES (?, ?, ?, ?, 'test-only', ?, ?)",
+                id, name + "@example.com", name + "@example.com", "STUDENT".equals(role) ? name : null, name, role);
         return id;
     }
 
-    private void authenticate(String username, String role) {
-        SecurityContextHolder.getContext().setAuthentication(new UsernamePasswordAuthenticationToken(username, "unused",
+    private UUID userId(String name) {
+        return jdbc.queryForObject("SELECT id FROM users WHERE email_normalized = ?", UUID.class, name + "@example.com");
+    }
+
+    private void authenticate(String name, String role) {
+        SecurityContextHolder.getContext().setAuthentication(new UsernamePasswordAuthenticationToken(userId(name).toString(), "unused",
                 List.of(new SimpleGrantedAuthority("ROLE_" + role))));
     }
 

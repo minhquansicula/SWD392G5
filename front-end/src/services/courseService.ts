@@ -2,9 +2,9 @@ import apiClient from './apiClient';
 
 export interface CourseLecturer {
   id: string;
-  username: string;
   fullName: string;
   role: string;
+  email: string;
 }
 
 export interface Course {

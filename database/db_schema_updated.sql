@@ -8,13 +8,14 @@ CREATE EXTENSION IF NOT EXISTS pgcrypto; -- cần cho gen_random_uuid(), bỏ d�
 
 CREATE TABLE users (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-    username VARCHAR(255) UNIQUE NOT NULL,
+    email VARCHAR(255) UNIQUE NOT NULL,
     password_hash VARCHAR(255) NOT NULL,
     full_name VARCHAR(255) NOT NULL,
     role VARCHAR(50) NOT NULL CHECK (role IN ('ADMIN', 'LECTURER', 'STUDENT')),
 
     -- Mới: mã sinh viên, cần cho việc xuất bảng điểm theo mẫu trường.
-    student_code VARCHAR(50) UNIQUE
+    student_code VARCHAR(50) UNIQUE,
+    username VARCHAR(255)
 );
 
 CREATE TABLE courses (

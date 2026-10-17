@@ -13,7 +13,7 @@ public class BatchRowResult {
 
     // 1-based position in the submitted list.
     private int row;
-    private String username;
+    private String studentCode;
     private String email;
     private Status status;
     // Null when the row was created.

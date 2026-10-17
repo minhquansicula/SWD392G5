@@ -112,8 +112,8 @@ export const NoScoreView: React.FC<NoScoreViewProps> = ({
   const config = getStatusConfig();
   const StatusIcon = config.icon;
 
-  const displayCandidateName = candidateName || schedule?.student?.fullName || schedule?.student?.username || t('Thí sinh', 'Candidate');
-  const displayStudentCode = studentCode || schedule?.student?.studentCode || schedule?.student?.username || t('N/A', 'N/A');
+  const displayCandidateName = candidateName || schedule?.student?.fullName || t('Thí sinh', 'Candidate');
+  const displayStudentCode = studentCode || schedule?.student?.studentCode || t('N/A', 'N/A');
   const displayEmail = email || schedule?.student?.email || '';
   const displayExamTitle = examTitle || schedule?.examTitle || t('Kỳ thi vấn đáp AI', 'AI Viva Exam');
   const displayCourseCode = courseCode || schedule?.courseCode || 'AIVES';

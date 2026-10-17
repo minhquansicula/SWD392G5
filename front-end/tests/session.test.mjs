@@ -210,7 +210,7 @@ test('/me unknown role fails closed without discarding credentials', async () =>
 test('password link endpoints never carry or invalidate the current session', async () => {
   const h = harness();
   h.local.set('accessToken', 'fake-session-a');
-  h.service.saveSession({ id: 'a', username: 'a', role: 'ADMIN' });
+  h.service.saveSession({ id: 'a', email: 'a@example.test', studentCode: null, role: 'ADMIN' });
   for (const url of ['/auth/password/link', '/auth/password/set', '/auth/password/forgot']) {
     await h.api.default.post(url, { token: 'raw' });
     assert.equal(h.requests.at(-1).headers.Authorization, undefined);

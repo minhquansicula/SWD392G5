@@ -43,7 +43,7 @@ class LatestSchemaApiTest extends LatestSchemaSpringTest {
         studentId = insertUser("student", "STUDENT");
         courseId = UUID.randomUUID();
         jdbc.update("INSERT INTO courses(id, course_code, course_name) VALUES (?, 'SWD392', 'Design')", courseId);
-        mvc.perform(post("/api/admin/courses/" + courseId + "/lecturers").with(user("admin").roles("ADMIN"))
+        mvc.perform(post("/api/admin/courses/" + courseId + "/lecturers").with(user(userId("admin").toString()).roles("ADMIN"))
                 .contentType(MediaType.APPLICATION_JSON).content(json.writeValueAsString(Map.of("lecturerIds", List.of(lecturerId)))))
                 .andExpect(status().isOk());
         jdbc.update("INSERT INTO questions(course_id, content, topic, expected_answer) VALUES (?, 'Question?', 'OOP', 'Answer')", courseId);
@@ -53,15 +53,18 @@ class LatestSchemaApiTest extends LatestSchemaSpringTest {
     void userCrudAndLoginReturnNewFieldsWithoutExposingPassword() throws Exception {
         UUID id = createUser("newstudent", "SE100");
         mvc.perform(get("/api/admin/users").param("role", "STUDENT").param("sort", "studentCode,asc")
-                .with(user("admin").roles("ADMIN"))).andExpect(status().isOk())
+                .with(user(userId("admin").toString()).roles("ADMIN"))).andExpect(status().isOk())
                 .andExpect(jsonPath("$.data.content[?(@.id=='" + id + "')].studentCode").value(org.hamcrest.Matchers.hasItem("SE100")));
-        mvc.perform(put("/api/admin/users/" + id).with(user("admin").roles("ADMIN"))
+        mvc.perform(put("/api/admin/users/" + id).with(user(userId("admin").toString()).roles("ADMIN"))
                 .contentType(MediaType.APPLICATION_JSON).content("{\"email\":\" Updated@EXAMPLE.COM \",\"studentCode\":\"SE101\"}"))
                 .andExpect(status().isOk()).andExpect(jsonPath("$.data.studentCode").value("SE101"))
                 .andExpect(jsonPath("$.data.email").value(" Updated@EXAMPLE.COM "));
         assertEmailPair(id, " Updated@EXAMPLE.COM ");
+        mvc.perform(put("/api/admin/users/" + id + "/password").with(user(userId("admin").toString()).roles("ADMIN"))
+                .contentType(MediaType.APPLICATION_JSON).content("{\"newPassword\":\"password123\"}"))
+                .andExpect(status().isOk());
         String response = mvc.perform(post("/api/auth/login").contentType(MediaType.APPLICATION_JSON)
-                .content("{\"username\":\" Updated@EXAMPLE.COM \",\"password\":\"password123\"}"))
+                .content("{\"email\":\" Updated@EXAMPLE.COM \",\"password\":\"password123\"}"))
                 .andExpect(status().isOk()).andExpect(jsonPath("$.data.user.studentCode").value("SE101"))
                 .andExpect(jsonPath("$.data.user.createdAt").exists())
                 .andExpect(jsonPath("$.data.user.passwordHash").doesNotExist())
@@ -69,32 +72,32 @@ class LatestSchemaApiTest extends LatestSchemaSpringTest {
         String token = JsonPath.read(response, "$.data.token");
         mvc.perform(get("/api/auth/me").header("Authorization", "Bearer " + token))
                 .andExpect(status().isOk()).andExpect(jsonPath("$.data.email").value(" Updated@EXAMPLE.COM "));
-        mvc.perform(put("/api/admin/users/" + id).with(user("admin").roles("ADMIN"))
+        mvc.perform(put("/api/admin/users/" + id).with(user(userId("admin").toString()).roles("ADMIN"))
                 .contentType(MediaType.APPLICATION_JSON).content("{\"studentCode\":\"\",\"email\":\"\"}"))
                 .andExpect(status().isBadRequest())
                 .andExpect(jsonPath("$.error").value("VALIDATION_FAILED"));
         assertThat(jdbc.queryForObject("SELECT student_code FROM users WHERE id = ?", String.class, id)).isEqualTo("SE101");
         assertEmailPair(id, " Updated@EXAMPLE.COM ");
-        mvc.perform(put("/api/admin/users/" + id).with(user("admin").roles("ADMIN"))
+        mvc.perform(put("/api/admin/users/" + id).with(user(userId("admin").toString()).roles("ADMIN"))
                 .contentType(MediaType.APPLICATION_JSON).content("{\"studentCode\":\"\"}"))
-                .andExpect(status().isOk());
-        assertThat(jdbc.queryForObject("SELECT student_code FROM users WHERE id = ?", String.class, id)).isNull();
+                .andExpect(status().isBadRequest());
+        assertThat(jdbc.queryForObject("SELECT student_code FROM users WHERE id = ?", String.class, id)).isEqualTo("SE101");
         assertEmailPair(id, " Updated@EXAMPLE.COM ");
-        mvc.perform(put("/api/admin/users/" + id).with(user("admin").roles("ADMIN"))
+        mvc.perform(put("/api/admin/users/" + id).with(user(userId("admin").toString()).roles("ADMIN"))
                 .contentType(MediaType.APPLICATION_JSON).content("{\"fullName\":\"Updated Name\",\"email\":null}"))
                 .andExpect(status().isOk()).andExpect(jsonPath("$.data.fullName").value("Updated Name"));
         assertEmailPair(id, " Updated@EXAMPLE.COM ");
-        mvc.perform(delete("/api/admin/users/" + id).with(user("admin").roles("ADMIN"))).andExpect(status().isOk());
-        mvc.perform(delete("/api/admin/users/" + id).with(user("admin").roles("ADMIN"))).andExpect(status().isNotFound());
+        mvc.perform(delete("/api/admin/users/" + id).with(user(userId("admin").toString()).roles("ADMIN"))).andExpect(status().isOk());
+        mvc.perform(delete("/api/admin/users/" + id).with(user(userId("admin").toString()).roles("ADMIN"))).andExpect(status().isNotFound());
     }
 
     @Test
-    void duplicateStudentCodeAndTrimmedUsernameAreRejected() throws Exception {
+    void duplicateStudentCodeIsRejected() throws Exception {
         createUser("unique", "SE001");
         postUser(payload("second", "SE001")).andExpect(status().isConflict()).andExpect(jsonPath("$.error").value("STUDENT_CODE_EXISTS"));
-        postUser(payload("  unique  ", "SE002")).andExpect(status().is4xxClientError());
+        postUser(payload("second", "SE002")).andExpect(status().isCreated());
         UUID other = createUser("other", "SE003");
-        mvc.perform(put("/api/admin/users/" + other).with(user("admin").roles("ADMIN"))
+        mvc.perform(put("/api/admin/users/" + other).with(user(userId("admin").toString()).roles("ADMIN"))
                 .contentType(MediaType.APPLICATION_JSON).content("{\"studentCode\":\"SE001\"}"))
                 .andExpect(status().isConflict());
         assertThat(jdbc.queryForObject("SELECT student_code FROM users WHERE id = ?", String.class, other)).isEqualTo("SE003");
@@ -113,11 +116,11 @@ class LatestSchemaApiTest extends LatestSchemaSpringTest {
         body.remove("email");
         postUser(body).andExpect(status().isBadRequest())
                 .andExpect(jsonPath("$.error").value("VALIDATION_FAILED"));
-        mvc.perform(get("/api/admin/users").param("role", "INVALID").with(user("admin").roles("ADMIN")))
+        mvc.perform(get("/api/admin/users").param("role", "INVALID").with(user(userId("admin").toString()).roles("ADMIN")))
                 .andExpect(status().isBadRequest()).andExpect(jsonPath("$.error").value("INVALID_ROLE"));
-        mvc.perform(get("/api/admin/users").param("sort", "passwordHash,asc").with(user("admin").roles("ADMIN")))
+        mvc.perform(get("/api/admin/users").param("sort", "passwordHash,asc").with(user(userId("admin").toString()).roles("ADMIN")))
                 .andExpect(status().isBadRequest());
-        mvc.perform(put("/api/admin/users/" + studentId).with(user("admin").roles("ADMIN"))
+        mvc.perform(put("/api/admin/users/" + studentId).with(user(userId("admin").toString()).roles("ADMIN"))
                 .contentType(MediaType.APPLICATION_JSON).content("{\"fullName\":\" \"}"))
                 .andExpect(status().isBadRequest());
     }
@@ -132,56 +135,56 @@ class LatestSchemaApiTest extends LatestSchemaSpringTest {
         invalid.put("fullName", " ");
         Map<String, Object> missingEmail = payload("batch4", "B4");
         missingEmail.remove("email");
-        Map<String, Object> overwrite = payload("existing", "REPLACEMENT");
+        Map<String, Object> overwrite = payload("existing", "B1");
         overwrite.put("fullName", "Must not overwrite");
         overwrite.put("email", "replacement@example.com");
         List<Map<String, Object>> requests = Arrays.asList(
                 first, payload("batch2", "B1"), invalid, null,
                 missingEmail, overwrite, payload("batch5", "B5"));
-        String response = mvc.perform(post("/api/admin/users/batch").with(user("admin").roles("ADMIN"))
+        String response = mvc.perform(post("/api/admin/users/batch").with(user(userId("admin").toString()).roles("ADMIN"))
                 .contentType(MediaType.APPLICATION_JSON).content(json.writeValueAsString(requests)))
                 .andExpect(status().isCreated()).andExpect(jsonPath("$.success").value(true))
                 .andExpect(jsonPath("$.data.created").value(2))
-                .andExpect(jsonPath("$.data.rows[0].user.username").value("batch1"))
+                .andExpect(jsonPath("$.data.rows[0].user.studentCode").value("B2"))
                 .andExpect(jsonPath("$.data.rows[0].user.email").value(" Batch1@EXAMPLE.COM "))
                 .andExpect(jsonPath("$.data.rows[1].reason").value("STUDENT_CODE_EXISTS"))
                 .andExpect(jsonPath("$.data.rows[2].reason").value("MISSING_REQUIRED"))
                 .andExpect(jsonPath("$.data.rows[3].reason").value("INVALID_DATA"))
                 .andExpect(jsonPath("$.data.rows[4].reason").value("MISSING_REQUIRED"))
-                .andExpect(jsonPath("$.data.rows[5].reason").value("USERNAME_EXISTS"))
-                .andExpect(jsonPath("$.data.rows[6].user.username").value("batch5"))
+                .andExpect(jsonPath("$.data.rows[5].reason").value("STUDENT_CODE_EXISTS"))
+                .andExpect(jsonPath("$.data.rows[6].user.studentCode").value("B5"))
                 .andReturn().getResponse().getContentAsString();
-        List<String> createdNames = JsonPath.read(response, "$.data.rows[*].user.username");
-        assertThat(createdNames).containsExactly("batch1", "batch5");
+        List<String> createdNames = JsonPath.read(response, "$.data.rows[*].user.studentCode");
+        assertThat(createdNames).containsExactly("B2", "B5");
         assertThat(requests.size() - createdNames.size()).isEqualTo(5);
         assertThat(jdbc.queryForList(
-                "SELECT username FROM users WHERE username LIKE 'batch%' ORDER BY username", String.class))
-                .containsExactly("batch1", "batch5");
+                "SELECT student_code FROM users WHERE student_code IN ('B2','B5') ORDER BY student_code", String.class))
+                .containsExactly("B2", "B5");
         assertThat(jdbc.queryForMap("SELECT * FROM users WHERE id = ?", existingId)).isEqualTo(before);
         assertThat(jdbc.queryForObject(
-                "SELECT count(*) FROM users WHERE username = 'existing'", Integer.class)).isEqualTo(1);
-        assertEmailPair(jdbc.queryForObject("SELECT id FROM users WHERE username = 'batch1'", UUID.class),
+                "SELECT count(*) FROM users WHERE student_code = 'B1'", Integer.class)).isEqualTo(1);
+        assertEmailPair(jdbc.queryForObject("SELECT id FROM users WHERE student_code = 'B2'", UUID.class),
                 " Batch1@EXAMPLE.COM ");
-        assertEmailPair(jdbc.queryForObject("SELECT id FROM users WHERE username = 'batch5'", UUID.class),
+        assertEmailPair(jdbc.queryForObject("SELECT id FROM users WHERE student_code = 'B5'", UUID.class),
                 "batch5@example.com");
-        mvc.perform(post("/api/admin/users/batch").with(user("admin").roles("ADMIN"))
+        mvc.perform(post("/api/admin/users/batch").with(user(userId("admin").toString()).roles("ADMIN"))
                 .contentType(MediaType.APPLICATION_JSON).content("[]")).andExpect(status().isBadRequest());
     }
 
     @Test
     void assignmentAuditIsRecordedAndRepeatedAssignmentPreservesIt() throws Exception {
         String before = jdbc.queryForObject("SELECT assigned_at::text FROM course_lecturers WHERE course_id = ?", String.class, courseId);
-        mvc.perform(post("/api/admin/courses/" + courseId + "/lecturers").with(user("admin").roles("ADMIN"))
+        mvc.perform(post("/api/admin/courses/" + courseId + "/lecturers").with(user(userId("admin").toString()).roles("ADMIN"))
                 .contentType(MediaType.APPLICATION_JSON).content(json.writeValueAsString(Map.of("lecturerIds", List.of(lecturerId, lecturerId)))))
                 .andExpect(status().isOk()).andExpect(jsonPath("$.data.lecturerCount").value(1))
                 .andExpect(jsonPath("$.data.lecturerAssignments[0].assignedById").value(adminId.toString()))
                 .andExpect(jsonPath("$.data.lecturerAssignments[0].assignedAt").exists());
         assertThat(jdbc.queryForObject("SELECT assigned_at::text FROM course_lecturers WHERE course_id = ?", String.class, courseId)).isEqualTo(before);
-        mvc.perform(get("/api/courses").with(user("student").roles("STUDENT"))).andExpect(status().isOk())
+        mvc.perform(get("/api/courses").with(user(userId("student").toString()).roles("STUDENT"))).andExpect(status().isOk())
                 .andExpect(jsonPath("$.data[0].lecturers[0].id").value(lecturerId.toString()));
-        mvc.perform(get("/api/courses/" + courseId + "/lecturers").with(user("student").roles("STUDENT")))
+        mvc.perform(get("/api/courses/" + courseId + "/lecturers").with(user(userId("student").toString()).roles("STUDENT")))
                 .andExpect(status().isOk()).andExpect(jsonPath("$.data[0].id").value(lecturerId.toString()));
-        mvc.perform(delete("/api/admin/courses/" + courseId + "/lecturers/" + lecturerId).with(user("admin").roles("ADMIN")))
+        mvc.perform(delete("/api/admin/courses/" + courseId + "/lecturers/" + lecturerId).with(user(userId("admin").toString()).roles("ADMIN")))
                 .andExpect(status().isOk());
         assertThat(jdbc.queryForObject("SELECT count(*) FROM course_lecturers WHERE course_id = ?", Integer.class, courseId)).isZero();
     }
@@ -189,7 +192,7 @@ class LatestSchemaApiTest extends LatestSchemaSpringTest {
     @Test
     void invalidAssignmentRollsBackEarlierValidAssignmentAndKeepsAudit() throws Exception {
         UUID second = insertUser("secondLecturer", "LECTURER");
-        mvc.perform(post("/api/admin/courses/" + courseId + "/lecturers").with(user("admin").roles("ADMIN"))
+        mvc.perform(post("/api/admin/courses/" + courseId + "/lecturers").with(user(userId("admin").toString()).roles("ADMIN"))
                 .contentType(MediaType.APPLICATION_JSON).content(json.writeValueAsString(Map.of("lecturerIds", List.of(second, studentId)))))
                 .andExpect(status().isBadRequest()).andExpect(jsonPath("$.error").value("INVALID_ROLE"));
         assertThat(jdbc.queryForObject("SELECT count(*) FROM course_lecturers WHERE course_id = ?", Integer.class, courseId)).isEqualTo(1);
@@ -197,37 +200,37 @@ class LatestSchemaApiTest extends LatestSchemaSpringTest {
 
     @Test
     void courseCreateUpdateDeleteAndLengthValidationWork() throws Exception {
-        String response = mvc.perform(post("/api/admin/courses").with(user("admin").roles("ADMIN"))
+        String response = mvc.perform(post("/api/admin/courses").with(user(userId("admin").toString()).roles("ADMIN"))
                 .contentType(MediaType.APPLICATION_JSON).content("{\"courseCode\":\" prn232 \",\"courseName\":\"Dotnet\"}"))
                 .andExpect(status().isCreated()).andExpect(jsonPath("$.data.courseCode").value("PRN232"))
                 .andReturn().getResponse().getContentAsString();
         String id = JsonPath.read(response, "$.data.id");
-        mvc.perform(put("/api/admin/courses/" + id).with(user("admin").roles("ADMIN"))
+        mvc.perform(put("/api/admin/courses/" + id).with(user(userId("admin").toString()).roles("ADMIN"))
                 .contentType(MediaType.APPLICATION_JSON).content("{\"courseCode\":\"PRN233\",\"courseName\":\"Updated\"}"))
                 .andExpect(status().isOk());
-        mvc.perform(post("/api/admin/courses").with(user("admin").roles("ADMIN"))
+        mvc.perform(post("/api/admin/courses").with(user(userId("admin").toString()).roles("ADMIN"))
                 .contentType(MediaType.APPLICATION_JSON).content(json.writeValueAsString(Map.of("courseCode", "X".repeat(51), "courseName", "Name"))))
                 .andExpect(status().isBadRequest());
-        mvc.perform(delete("/api/admin/courses/" + id).with(user("admin").roles("ADMIN"))).andExpect(status().isOk());
+        mvc.perform(delete("/api/admin/courses/" + id).with(user(userId("admin").toString()).roles("ADMIN"))).andExpect(status().isOk());
     }
 
     @Test
     void newExamSettingsUseDefaultsSupportUpdatesAndFreezeAfterAssignment() throws Exception {
         UUID exam = createExam();
-        mvc.perform(get("/api/exams/" + exam).with(user("lecturer").roles("LECTURER")))
+        mvc.perform(get("/api/exams/" + exam).with(user(userId("lecturer").toString()).roles("LECTURER")))
                 .andExpect(status().isOk()).andExpect(jsonPath("$.data.exam.maxFollowupsPerMain").value(2))
                 .andExpect(jsonPath("$.data.exam.mainAnswerTimeLimitSeconds").value(120))
                 .andExpect(jsonPath("$.data.exam.followupAnswerTimeLimitSeconds").value(60));
-        mvc.perform(put("/api/lecturer/exams/" + exam).with(user("lecturer").roles("LECTURER"))
+        mvc.perform(put("/api/lecturer/exams/" + exam).with(user(userId("lecturer").toString()).roles("LECTURER"))
                 .contentType(MediaType.APPLICATION_JSON).content("{\"maxFollowupsPerMain\":3,\"mainAnswerTimeLimitSeconds\":180,\"followupAnswerTimeLimitSeconds\":90}"))
                 .andExpect(status().isOk()).andExpect(jsonPath("$.data.mainAnswerTimeLimitSeconds").value(180));
-        mvc.perform(put("/api/lecturer/exams/" + exam).with(user("lecturer").roles("LECTURER"))
+        mvc.perform(put("/api/lecturer/exams/" + exam).with(user(userId("lecturer").toString()).roles("LECTURER"))
                 .contentType(MediaType.APPLICATION_JSON).content("{\"mainAnswerTimeLimitSeconds\":0}"))
                 .andExpect(status().isBadRequest());
         UUID schedule = addStudent(exam);
-        mvc.perform(post("/api/lecturer/schedules/" + schedule + "/assign-questions").with(user("lecturer").roles("LECTURER")))
+        mvc.perform(post("/api/lecturer/schedules/" + schedule + "/assign-questions").with(user(userId("lecturer").toString()).roles("LECTURER")))
                 .andExpect(status().isOk()).andExpect(jsonPath("$.data.totalAssigned").value(1));
-        mvc.perform(put("/api/lecturer/exams/" + exam).with(user("lecturer").roles("LECTURER"))
+        mvc.perform(put("/api/lecturer/exams/" + exam).with(user(userId("lecturer").toString()).roles("LECTURER"))
                 .contentType(MediaType.APPLICATION_JSON).content("{\"mainAnswerTimeLimitSeconds\":200}"))
                 .andExpect(status().isBadRequest()).andExpect(jsonPath("$.error").value("CANNOT_MODIFY_ACTIVE_EXAM"));
     }
@@ -238,11 +241,11 @@ class LatestSchemaApiTest extends LatestSchemaSpringTest {
         UUID schedule = addStudent(exam);
         jdbc.update("UPDATE exams SET start_date = now() - interval '1 hour', end_date = now() + interval '1 hour' WHERE id = ?", exam);
         jdbc.update("UPDATE exam_schedules SET scheduled_start_time = now() - interval '1 minute', scheduled_end_time = now() + interval '30 minutes' WHERE id = ?", schedule);
-        mvc.perform(post("/api/student/schedules/" + schedule + "/start").with(user("student").roles("STUDENT")))
+        mvc.perform(post("/api/student/schedules/" + schedule + "/start").with(user(userId("student").toString()).roles("STUDENT")))
                 .andExpect(status().isOk()).andExpect(jsonPath("$.data.status").value("IN_PROGRESS"))
                 .andExpect(jsonPath("$.data.actualStartTime").exists()).andExpect(jsonPath("$.data.isConnected").value(false));
         jdbc.update("UPDATE exam_schedules SET full_recording_url = ?, graded_by = ?, actual_end_time = now(), final_score = 9, status = 'COMPLETED' WHERE id = ?", "r".repeat(500), lecturerId, schedule);
-        mvc.perform(get("/api/student/my-schedules").with(user("student").roles("STUDENT")))
+        mvc.perform(get("/api/student/my-schedules").with(user(userId("student").toString()).roles("STUDENT")))
                 .andExpect(status().isOk()).andExpect(jsonPath("$.data[0].gradedById").value(lecturerId.toString()))
                 .andExpect(jsonPath("$.data[0].fullRecordingUrl").value("r".repeat(500)))
                 .andExpect(jsonPath("$.data[0].actualEndTime").exists()).andExpect(jsonPath("$.data[0].finalScore").value(9));
@@ -252,11 +255,11 @@ class LatestSchemaApiTest extends LatestSchemaSpringTest {
     void restrictDeletesReturnBusinessErrorsAndRollback() throws Exception {
         UUID exam = createExam();
         UUID schedule = addStudent(exam);
-        mvc.perform(post("/api/lecturer/schedules/" + schedule + "/assign-questions").with(user("lecturer").roles("LECTURER"))).andExpect(status().isOk());
-        mvc.perform(delete("/api/admin/users/" + studentId).with(user("admin").roles("ADMIN")))
+        mvc.perform(post("/api/lecturer/schedules/" + schedule + "/assign-questions").with(user(userId("lecturer").toString()).roles("LECTURER"))).andExpect(status().isOk());
+        mvc.perform(delete("/api/admin/users/" + studentId).with(user(userId("admin").toString()).roles("ADMIN")))
                 .andExpect(status().isConflict()).andExpect(jsonPath("$.error").value("USER_IN_USE"));
         assertThat(jdbc.queryForObject("SELECT count(*) FROM users WHERE id = ?", Integer.class, studentId)).isEqualTo(1);
-        mvc.perform(delete("/api/admin/courses/" + courseId).with(user("admin").roles("ADMIN")))
+        mvc.perform(delete("/api/admin/courses/" + courseId).with(user(userId("admin").toString()).roles("ADMIN")))
                 .andExpect(status().isBadRequest()).andExpect(jsonPath("$.error").value("COURSE_IN_USE"));
         assertThat(jdbc.queryForObject("SELECT count(*) FROM course_lecturers WHERE course_id = ?", Integer.class, courseId)).isEqualTo(1);
     }
@@ -267,7 +270,7 @@ class LatestSchemaApiTest extends LatestSchemaSpringTest {
         UUID exam = createExam();
         UUID schedule = addStudent(exam);
         jdbc.update("UPDATE exam_schedules SET graded_by = ? WHERE id = ?", adminId, schedule);
-        mvc.perform(delete("/api/admin/users/" + adminId).with(user("otherAdmin").roles("ADMIN"))).andExpect(status().isOk());
+        mvc.perform(delete("/api/admin/users/" + adminId).with(user(userId("otherAdmin").toString()).roles("ADMIN"))).andExpect(status().isOk());
         assertThat(otherAdmin).isNotNull();
         assertThat(jdbc.queryForObject("SELECT assigned_by FROM course_lecturers WHERE course_id = ?", UUID.class, courseId)).isNull();
         assertThat(jdbc.queryForObject("SELECT graded_by FROM exam_schedules WHERE id = ?", UUID.class, schedule)).isNull();
@@ -292,16 +295,15 @@ class LatestSchemaApiTest extends LatestSchemaSpringTest {
     @Test
     void adminEndpointsRejectStudentAndUnauthenticatedCallers() throws Exception {
         mvc.perform(get("/api/admin/users")).andExpect(status().isUnauthorized());
-        mvc.perform(post("/api/admin/users").with(user("student").roles("STUDENT"))
+        mvc.perform(post("/api/admin/users").with(user(userId("student").toString()).roles("STUDENT"))
                 .contentType(MediaType.APPLICATION_JSON).content(json.writeValueAsString(payload("blocked", "B"))))
                 .andExpect(status().isForbidden());
-        mvc.perform(delete("/api/admin/courses/" + courseId).with(user("lecturer").roles("LECTURER")))
+        mvc.perform(delete("/api/admin/courses/" + courseId).with(user(userId("lecturer").toString()).roles("LECTURER")))
                 .andExpect(status().isForbidden());
     }
 
     private Map<String, Object> payload(String username, String code) {
         Map<String, Object> result = new HashMap<>();
-        result.put("username", username);
         result.put("password", "password123");
         result.put("fullName", "Full Name");
         result.put("role", "STUDENT");
@@ -311,7 +313,7 @@ class LatestSchemaApiTest extends LatestSchemaSpringTest {
     }
 
     private ResultActions postUser(Map<String, Object> body) throws Exception {
-        return mvc.perform(post("/api/admin/users").with(user("admin").roles("ADMIN"))
+        return mvc.perform(post("/api/admin/users").with(user(userId("admin").toString()).roles("ADMIN"))
                 .contentType(MediaType.APPLICATION_JSON).content(json.writeValueAsString(body)));
     }
 
@@ -333,13 +335,19 @@ class LatestSchemaApiTest extends LatestSchemaSpringTest {
 
     private UUID insertUser(String name, String role) {
         UUID id = UUID.randomUUID();
-        jdbc.update("INSERT INTO users(id, username, full_name, password_hash, role) VALUES (?, ?, ?, 'hash', ?)", id, name, name, role);
+        String email = name + "@example.com";
+        jdbc.update("INSERT INTO users(id, email, email_normalized, student_code, full_name, password_hash, role) VALUES (?, ?, ?, ?, ?, 'hash', ?)",
+                id, email, email, "STUDENT".equals(role) ? "CODE-" + name : null, name, role);
         return id;
+    }
+
+    private UUID userId(String name) {
+        return jdbc.queryForObject("SELECT id FROM users WHERE email_normalized = ?", UUID.class, name + "@example.com");
     }
 
     private UUID createExam() throws Exception {
         OffsetDateTime start = OffsetDateTime.now().plusDays(1).withNano(0);
-        String response = mvc.perform(post("/api/lecturer/exams").with(user("lecturer").roles("LECTURER"))
+        String response = mvc.perform(post("/api/lecturer/exams").with(user(userId("lecturer").toString()).roles("LECTURER"))
                 .contentType(MediaType.APPLICATION_JSON).content(json.writeValueAsString(Map.of(
                         "courseId", courseId, "title", "Viva", "startDate", start.toString(), "endDate", start.plusHours(2).toString(),
                         "maxMainQuestions", 1, "maxFollowupQuestions", 2))))
@@ -349,7 +357,7 @@ class LatestSchemaApiTest extends LatestSchemaSpringTest {
 
     private UUID addStudent(UUID exam) throws Exception {
         OffsetDateTime start = jdbc.queryForObject("SELECT start_date FROM exams WHERE id = ?", (rs, row) -> rs.getObject(1, OffsetDateTime.class), exam);
-        String response = mvc.perform(post("/api/lecturer/exams/" + exam + "/schedules").with(user("lecturer").roles("LECTURER"))
+        String response = mvc.perform(post("/api/lecturer/exams/" + exam + "/schedules").with(user(userId("lecturer").toString()).roles("LECTURER"))
                 .contentType(MediaType.APPLICATION_JSON).content(json.writeValueAsString(Map.of("students", List.of(Map.of(
                         "studentId", studentId, "scheduledStartTime", start.toString(), "scheduledEndTime", start.plusMinutes(30).toString()))))))
                 .andExpect(status().isCreated()).andReturn().getResponse().getContentAsString();

@@ -33,7 +33,7 @@ interface HeaderProps {
   setLanguage: (lang: Language) => void;
   currentUser?: UserAccount | null;
   onOpenAuthModal?: (tab?: 'login' | 'register') => void;
-  onSwitchUser?: (username: string) => void;
+  onSwitchUser?: (email: string) => void;
   onLogout?: () => void;
 }
 
@@ -262,7 +262,7 @@ export const Header: React.FC<HeaderProps> = ({
                       </span>
                     </div>
                     <p className="text-[11px] text-slate-500 dark:text-slate-400 font-mono mt-0.5">
-                      @{currentUser.username} • {currentUser.email}
+                      {currentUser.email}{currentUser.studentCode ? ` • MSSV: ${currentUser.studentCode}` : ''}
                     </p>
                   </div>
 
