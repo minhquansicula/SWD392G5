@@ -1,0 +1,102 @@
+@startuml
+title AIVES - Conduct a Voice Viva with Adaptive Follow-Ups
+skinparam shadowing false
+skinparam defaultFontName Arial
+
+|Student|
+start
+:Select personal exam schedule;
+:Check microphone and request start;
+|AIVES|
+:Verify identity, ownership,\nPENDING status, and time window;
+if (Start permitted?) then (Yes)
+else (No)
+  :Reject start and explain the reason;
+  stop
+endif
+
+if (Question set already assigned?) then (Yes)
+else (No)
+  :Select approved course questions\nunder the repetition policy;
+  if (Enough eligible questions?) then (Yes)
+    :Save question, answer, and rubric snapshots;
+  else (No)
+    :Report insufficient questions;\nKeep schedule PENDING;
+    stop
+  endif
+endif
+
+:Start attempt atomically;\nSet IN_PROGRESS and actual start time;
+:Initialize evidence capture and persisted progress;
+:Initialize main-question and total follow-up counters;
+note right
+Evidence capture is detailed in Flow 5.
+Gemini processes audio through the Viva integration.
+AI suggestions are not official grades.
+end note
+
+while (Main questions and session time remain\nand finish has not been requested?) is (Yes)
+  :Load next MAIN question and grading context;
+  :Reset follow-up count for this main question;
+  :Set current question to MAIN;\nSet askCurrentQuestion = true;
+
+  while (askCurrentQuestion and session time remain\nand finish has not been requested?) is (Yes)
+    :Persist current question and delivery state;
+    |Gemini AI Service|
+    :Deliver the spoken question;
+    |AIVES|
+    :Open the answer window and enforce its deadline\nusing the question limit and remaining session time;
+    |Student|
+    :Listen and answer by voice;
+    |Gemini AI Service|
+    :Process incoming audio and return transcripts;
+    |AIVES|
+    if (Connection or AI error?) then (Yes)
+      :Persist available transcript and progress;
+      :Pause audio and finalize the current evidence segment;
+      :Record interruption and notify the student;
+      :Use the recovery policy to resume later\nor require authorized intervention;
+      note right
+This path ends the interrupted execution,
+not a successfully completed attempt.
+Never fabricate missing speech or answers.
+end note
+      stop
+    else (No)
+      :Close the answer at turn completion\nor at the enforced deadline;
+      :Save available transcript and timing evidence;
+      :Mark the answer ANSWERED or TIMED_OUT;
+    endif
+
+    if (Session time remains and no finish request?) then (Yes)
+      |Gemini AI Service|
+      :Analyze the answer in question,\nexpected-answer, and rubric context;
+      |AIVES|
+      if (Clarification needed AND time remains\nAND per-main allowance remains\nAND total follow-up allowance remains?) then (Yes)
+        |Gemini AI Service|
+        :Generate a targeted follow-up question;
+        |AIVES|
+        :Link follow-up to the current MAIN;
+        :Increment per-main and total follow-up counts;
+        :Set current question to FOLLOW_UP;
+      else (No)
+        :Set askCurrentQuestion = false;
+      endif
+    else (No)
+      :Set askCurrentQuestion = false;
+    endif
+  endwhile (No)
+
+  :Close the main-question cycle;
+  :Advance the main-question counter;
+endwhile (No)
+
+:Stop voice interaction and finalize transcript;
+:Finalize evidence capture;
+:Save COMPLETED and actual end time;
+:Set grading status PENDING_REVIEW;
+:Request AI grading suggestions (Flow 4);
+|Student|
+:Receive attempt-completion confirmation;\nAwait lecturer review and publication;
+stop
+@enduml

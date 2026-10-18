@@ -1,0 +1,81 @@
+@startuml
+title AIVES - Administer Accounts, Courses, Permissions, and Languages
+skinparam shadowing false
+skinparam defaultFontName Arial
+
+|Administrator|
+start
+:Choose one administration operation;
+|AIVES|
+:Verify administrator permissions;
+if (Unauthorized?) then (Yes)
+  :Reject request;
+  stop
+endif
+
+|Administrator|
+if (Manage accounts?) then (Yes)
+  :Create, import, or update accounts and roles;
+  |AIVES|
+  :Check email, student code, role,\nand uniqueness rules;
+  if (Invalid account data?) then (Yes)
+    :Return validation errors;
+    stop
+  endif
+  :Save account changes;
+  :Send password-setup links when needed;
+  :Record delivery status and audit event;
+  |Administrator|
+  :View account operation result;
+  stop
+endif
+
+|Administrator|
+if (Manage courses?) then (Yes)
+  :Choose course view, create, update, or delete;
+  |AIVES|
+  :Check course data, uniqueness,\nand deletion constraints;
+  if (Operation blocked or invalid?) then (Yes)
+    :Explain why the course operation failed;
+    stop
+  endif
+  :Return course details or apply allowed change;
+  :Record audit event for changes;
+  |Administrator|
+  :View course operation result;
+  stop
+endif
+
+|Administrator|
+if (Assign or remove lecturers?) then (Yes)
+  :Select course and lecturer changes;
+  |AIVES|
+  :Check course, Lecturer role,\nand assignment rules;
+  if (Invalid assignment?) then (Yes)
+    :Return assignment errors;
+    stop
+  endif
+  :Save assignments and record audit event;
+  |Administrator|
+  :View assignment result;
+  stop
+endif
+
+|Administrator|
+:Select Vietnamese or English voice setting;
+|AIVES|
+:Check language and AI integration support;
+if (Unsupported language?) then (Yes)
+  :Reject configuration request;
+  stop
+endif
+:Save effective language setting;
+:Record administrator, timestamp, and audit event;
+note right
+Each new attempt captures its effective language.
+Existing attempts keep their captured setting.
+end note
+|Administrator|
+:View language configuration result;
+stop
+@enduml

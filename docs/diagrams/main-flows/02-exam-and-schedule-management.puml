@@ -1,0 +1,58 @@
+@startuml
+title AIVES - Prepare Exams and Schedules
+skinparam shadowing false
+skinparam defaultFontName Arial
+
+|Lecturer|
+start
+:Select an assigned course;
+|AIVES|
+:Verify lecturer permissions;
+if (Authorized?) then (Yes)
+else (No)
+  :Reject request;
+  stop
+endif
+
+repeat
+  |Lecturer|
+  :Enter exam title, exam period,\nquestion limits, and answer time limits;
+  |AIVES|
+  :Validate exam configuration;
+repeat while (Configuration invalid?) is (Yes) not (No)
+:Save exam;
+
+repeat
+  |Lecturer|
+  :Select students and individual time slots;
+  |AIVES|
+  :Validate student roles and uniqueness;
+  :Check slots within the exam period\nand student schedule conflicts;
+repeat while (Schedule batch invalid?) is (Yes) not (No)
+:Save the entire schedule batch atomically\nwith status PENDING;
+
+|Lecturer|
+if (Assign questions now?) then (Yes)
+  |AIVES|
+  :Load approved questions from the course;
+  :Apply selection and consecutive-candidate\nrepetition policy;
+  if (Enough eligible questions?) then (Yes)
+    :Assign question sets once;
+    :Save question, expected-answer,\nand rubric snapshots atomically;
+  else (No)
+    :Report insufficient question pool;
+    :Keep schedules PENDING;\nDo not save partial assignments;
+  endif
+else (Assign at start)
+  |AIVES|
+  :Defer assignment until the attempt starts;
+endif
+
+|Student|
+:Open personal examination schedules;
+|AIVES|
+:Return only this student's schedules;
+|Student|
+:View course, exam, time slot,\nand examination rules;
+stop
+@enduml

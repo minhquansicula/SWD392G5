@@ -1,0 +1,75 @@
+@startuml
+title AIVES - Prepare the Question Bank and Rubrics
+skinparam shadowing false
+skinparam defaultFontName Arial
+
+|Lecturer|
+start
+:Select course and topic;
+|AIVES|
+:Verify lecturer permissions;
+if (Authorized for this course?) then (Yes)
+else (No)
+  :Reject request;
+  stop
+endif
+|Lecturer|
+:Create or select a rubric;
+:Choose manual creation, import,\nor AI generation;
+|AIVES|
+:Validate rubric criteria and score ranges;
+if (Rubric valid?) then (Yes)
+else (No)
+  :Show validation errors;
+  stop
+endif
+
+if (Generate questions using AI?) then (Yes)
+  |Lecturer|
+  :Select or upload course materials;
+  |AIVES|
+  :Extract and index materials if needed;
+  if (Materials ready for retrieval?) then (Yes)
+    :Retrieve relevant course content (RAG);
+    :Prepare source context, topic,\nBloom targets, and rubric;
+    |Gemini AI Service|
+    :Generate draft questions\nwith source references;
+    |AIVES|
+    if (Generation failed?) then (Yes)
+      :Report generation failure;\nDo not approve any question;
+      stop
+    endif
+  else (No)
+    :Report material-processing errors;
+    stop
+  endif
+else (Manual or import)
+  |Lecturer|
+  :Enter questions or import a question file;
+endif
+
+|AIVES|
+:Validate basic draft data and save\nas PENDING_REVIEW;
+
+repeat
+  |Lecturer|
+  :Review or edit questions and expected answers;
+  :Assign Bloom levels and rubrics;
+  |AIVES|
+  :Validate required question data;
+repeat while (Corrections required?) is (Yes) not (No)
+
+|Lecturer|
+if (Approve reviewed questions?) then (Yes)
+  |AIVES|
+  :Mark approved questions APPROVED;
+  :Record reviewer, timestamp, and audit event;
+  :Make approved questions eligible for exams;
+else (Reject)
+  |AIVES|
+  :Mark rejected questions REJECTED;
+  :Keep them out of examination selection;
+  :Record review audit event;
+endif
+stop
+@enduml
