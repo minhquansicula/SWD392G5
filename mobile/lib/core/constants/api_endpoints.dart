@@ -1,9 +1,9 @@
 class ApiEndpoints {
   ApiEndpoints._();
 
-  // Spring Boot Java Backend default
-  // Android emulator uses 10.0.2.2 to reach host machine's localhost:8080
-  static String defaultBaseUrl = 'http://10.0.2.2:8080/api';
+  // Spring Boot Java Backend URL (Render Production Cloud)
+  static String defaultBaseUrl = 'https://aives-backend-qbox.onrender.com/api';
+  static const String localBaseUrl = 'http://10.0.2.2:8080/api';
 
   // Python AI Engine / WebSocket Viva Voice Core default
   // Endpoint format: ws://<host>:8000/ws/viva/{scheduleId}
