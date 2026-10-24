@@ -12,6 +12,9 @@ class ApiEndpoints {
   // Auth endpoints (AuthController.java)
   static const String login = '/auth/login';
   static const String currentUser = '/auth/me';
+  static const String forgotPassword = '/auth/password/forgot';
+  static const String checkPasswordLink = '/auth/password/link';
+  static const String setPassword = '/auth/password/set';
 
   // Exam endpoints (ExamScheduleController.java)
   static const String studentMySchedules = '/student/my-schedules';
