@@ -53,6 +53,16 @@ class AppRootGate extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final auth = context.watch<AuthProvider>();
+    if (auth.isInitializing) {
+      return const Scaffold(
+        backgroundColor: Color(0xFF0B101E),
+        body: Center(
+          child: CircularProgressIndicator(
+            valueColor: AlwaysStoppedAnimation<Color>(Color(0xFF6366F1)),
+          ),
+        ),
+      );
+    }
     if (auth.isAuthenticated) {
       return const MainNavigationScreen();
     }

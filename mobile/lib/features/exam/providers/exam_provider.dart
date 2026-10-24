@@ -46,6 +46,7 @@ class ExamProvider extends ChangeNotifier {
             .map((item) => ExamScheduleModel.fromJson(item as Map<String, dynamic>))
             .toList();
         debugPrint('[ExamProvider] Loaded ${_exams.length} schedules from Spring Boot Backend.');
+      } else {
         _exams = [];
         _errorMessage = res.message.isNotEmpty ? res.message : 'Không thể tải lịch thi từ máy chủ.';
       }
