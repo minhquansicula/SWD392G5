@@ -1,0 +1,71 @@
+@startuml
+title AIVES - Capture, Monitor, and Retrieve Evidence
+skinparam shadowing false
+skinparam defaultFontName Arial
+
+|Student|
+start
+:Start the scheduled voice examination;
+|AIVES|
+:Receive authorized attempt-start event;
+:Initialize audio recording and evidence metadata;
+if (Video recording required?) then (Yes)
+  :Initialize video recording;
+else (No)
+endif
+:Show recording status;
+note right
+This flow accompanies the voice examination.
+Recording failures follow the institution's policy.
+end note
+
+fork
+  |AIVES|
+  while (Examination ongoing?) is (Yes)
+    :Capture and store audio/video segments;
+    if (Recording or connection failure?) then (Yes)
+      :Record failed interval and notify the user;
+      :Apply the agreed recording/recovery policy;
+    else (No)
+      :Update recording coverage metadata;
+    endif
+  endwhile (No)
+fork again
+  |AIVES|
+  while (Examination ongoing?) is (Yes)
+    :Persist questions, ordered transcripts,\ntimestamps, and examination events;
+  endwhile (No)
+fork again
+  |Lecturer|
+  if (Monitoring requested?) then (Yes)
+    |AIVES|
+    :Verify lecturer monitoring permissions;
+    if (Authorized?) then (Yes)
+      :Provide examination and connection status;
+    else (No)
+      :Reject monitoring access;
+    endif
+  else (No)
+  endif
+end fork
+
+|AIVES|
+:Finalize files, checksums, and time intervals;
+:Mark recording coverage COMPLETE,\nPARTIAL, or FAILED;
+:Retain evidence according to the access\nand retention policy;
+:Append grading audit events when scores\nare reviewed, adjusted, finalized, or published;
+|Lecturer|
+:Request examination evidence for later review;
+|AIVES|
+:Check permission for the selected attempt;
+if (Authorized?) then (Yes)
+  :Retrieve recordings, transcripts,\nquestions, and grading history;
+  :Clearly identify any missing recording segments;
+  :Record evidence-access audit event;
+  |Lecturer|
+  :Review evidence for verification or an appeal;
+else (No)
+  :Reject evidence access;
+endif
+stop
+@enduml

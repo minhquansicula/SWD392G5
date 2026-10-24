@@ -1,0 +1,25 @@
+# ==============================================================================
+# TEMPLATE: Cấu hình môi trường Local (Copy file này thành application-local.yml)
+# File application-local.yml đã được .gitignore bỏ qua, an toàn để lưu mật khẩu cá nhân.
+# ==============================================================================
+
+spring:
+  # Cấu hình Database máy bạn hoặc Neon Cloud DB
+  datasource:
+    url: jdbc:postgresql://localhost:5432/aives_db
+    username: postgres
+    password: postgres
+    driver-class-name: org.postgresql.Driver
+
+  # Cấu hình gửi mail (Nếu cần test gửi mail thật)
+  mail:
+    username: your-email@gmail.com
+    password: your-gmail-app-password
+
+aives:
+  ai:
+    openai-api-key: your-openai-api-key-here
+    gemini-api-key: your-gemini-api-key-here
+  mail:
+    # Ghi link thiết lập mật khẩu ra terminal log để tiện copy test nhanh
+    log-links: true

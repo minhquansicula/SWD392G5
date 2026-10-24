@@ -1,0 +1,44 @@
+services:
+  # =========================================================================
+  # 🎙️ LiveKit WebRTC Server (Open-source Media Engine)
+  # =========================================================================
+  livekit:
+    image: livekit/livekit-server:latest
+    container_name: aives-livekit-server
+    restart: unless-stopped
+    command: --dev
+    ports:
+      - "7880:7880"         # HTTP API, Webhooks & WebSocket Signaling
+      - "7881:7881"         # WebRTC TCP Fallback
+      - "7882:7882/udp"     # WebRTC UDP Media (Audio & Video Streaming)
+    environment:
+      LIVEKIT_KEYS: "devkey: secret"
+    networks:
+      - aives-network
+
+  # =========================================================================
+  # 🤖 Python LiveKit Agent Worker (AI Examiner Core 3)
+  # =========================================================================
+  # Mẹo: Trong lúc phát triển code hàng ngày, bạn có thể chạy Agent trực tiếp 
+  # bằng Python local (.venv) để hỗ trợ hot-reload nhanh.
+  # Khi muốn chạy đóng gói toàn bộ hệ thống, chỉ cần bật service này lên.
+  agent:
+    build:
+      context: ./python
+      dockerfile: Dockerfile
+    container_name: aives-python-agent
+    restart: unless-stopped
+    environment:
+      - LIVEKIT_URL=ws://livekit:7880
+      - LIVEKIT_API_KEY=devkey
+      - LIVEKIT_API_SECRET=secret
+    env_file:
+      - ./python/.env
+    depends_on:
+      - livekit
+    networks:
+      - aives-network
+
+networks:
+  aives-network:
+    driver: bridge

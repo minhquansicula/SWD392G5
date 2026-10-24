@@ -1,0 +1,62 @@
+@startuml
+title AIVES - Generate AI Suggestions and Finalize Grades
+skinparam shadowing false
+skinparam defaultFontName Arial
+
+|AIVES|
+start
+:Receive completed-attempt event;
+:Load a completed attempt, transcript,\nand expected-answer/rubric snapshots;
+:Set AI grading status PROCESSING;
+
+while (Ungraded MAIN questions remain?) is (Yes)
+  :Collect main and follow-up answers,\nrubric snapshot, and relevant source context (RAG);
+  |Gemini AI Service|
+  :Suggest criterion/question scores\nand evidence-based feedback;
+  |AIVES|
+  :Validate score ranges, criterion IDs,\nand referenced transcript evidence;
+  if (AI result valid?) then (Yes)
+    :Save AI scores and feedback as suggestions;
+  else (No)
+    :Record grading failure or insufficient evidence;
+    :Mark the question for lecturer attention;\nNever generate a default sample score;
+  endif
+endwhile (No)
+
+:Set AI grading status SUCCEEDED or FAILED\naccording to the collected results;
+:Keep grading status PENDING_REVIEW;
+|Lecturer|
+:Select an attempt for grading;
+|AIVES|
+:Check lecturer permissions for this exam;
+if (Authorized?) then (Yes)
+else (No)
+  :Reject access;
+  stop
+endif
+
+:Display full transcript, available recordings,\nrubric, and AI suggestions/failure notices;
+repeat
+  |Lecturer|
+  :Review the evidence and rubric;
+  :Accept or adjust scores and feedback;\nGrade manually where AI suggestions are unavailable;
+  :Confirm finalization;
+  |AIVES|
+  :Validate required lecturer scores and ranges;
+  :Calculate overall grade using the agreed rubric formula;
+repeat while (Corrections required?) is (Yes) not (No)
+
+:Save lecturer scores, official overall grade,\ngrader, timestamp, and audit log atomically;
+:Set grading status FINALIZED;
+|Lecturer|
+if (Publish results now?) then (Yes)
+  |AIVES|
+  :Set grading status PUBLISHED;
+  :Record publication time and audit event;
+  :Make personal reports available to their owners;
+else (Later)
+  |AIVES|
+  :Keep FINALIZED results unavailable to students;
+endif
+stop
+@enduml

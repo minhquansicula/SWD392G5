@@ -1,0 +1,52 @@
+@startuml
+title AIVES - Provide Feedback, Analytics, and Grade Exports
+skinparam shadowing false
+skinparam defaultFontName Arial
+
+|Requester (Student or Lecturer)|
+start
+:Open reporting and choose request type;
+if (Personal student report?) then (Yes)
+  |Student|
+  :Select own examination result\nand request personal report;
+  |AIVES|
+  :Authenticate request and check\nownership/PUBLISHED status;
+  if (Not owned or not published?) then (Yes)
+    :Reject access or show result unavailable;
+    stop
+  endif
+  :Load official overall and per-question scores;
+  :Load AI and lecturer feedback;\nlabel AI scores as suggestions;
+  |Student|
+  :View personal examination report;
+  stop
+endif
+
+|Lecturer|
+:Select exam or supported roster and filters;\nRequest analytics;
+|AIVES|
+:Authenticate request and check\nlecturer permissions;
+if (Not authorized?) then (Yes)
+  :Reject access;
+  stop
+endif
+:Load finalized official grades and valid results;
+:List unfinalized attempts separately;
+:Calculate score distribution, question difficulty,\nand answer success rates;
+|Lecturer|
+:Review analytics;
+if (Export grade report?) then (No)
+  stop
+endif
+:Select institutional template and format;
+|AIVES|
+:Validate student codes, names, course/exam,\nfinalized grades, and template requirements;
+if (Invalid export data?) then (Yes)
+  :Report missing or invalid export data;
+  stop
+endif
+:Generate report using official grades only;
+|Lecturer|
+:Download grade report;
+stop
+@enduml
