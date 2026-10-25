@@ -361,7 +361,7 @@ def create_app(settings=None, gateway=None) -> FastAPI:
         except WebSocketDisconnect:
             logger.info("Thí sinh đã ngắt kết nối WebSocket: %s", schedule_id)
         except Exception as exc:
-            logger.warning("Voice room lỗi: %s", type(exc).__name__)
+            logger.exception("Voice room lỗi: %s", exc)
             message = exc.message if isinstance(exc, AppError) else (
                 "Lỗi kết nối Gemini Live. Vui lòng kiểm tra microphone, API key hoặc kết nối mạng."
             )

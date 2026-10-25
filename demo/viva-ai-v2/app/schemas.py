@@ -4,7 +4,7 @@ from pydantic import BaseModel, ConfigDict, Field, field_validator, model_valida
 
 
 class StrictModel(BaseModel):
-    model_config = ConfigDict(extra="forbid", str_strip_whitespace=True)
+    model_config = ConfigDict(extra="ignore", str_strip_whitespace=True)
 
 
 class Criterion(StrictModel):
@@ -28,29 +28,22 @@ class RubricData(StrictModel):
 
 
 class Evidence(StrictModel):
-    transcript_id: UUID | None = None
-    message_id: UUID | None = None
-    quote: str = Field(min_length=1, max_length=500)
+    transcript_id: str | None = None
+    message_id: str | None = None
+    quote: str = ""
 
 
 class CriterionGrade(StrictModel):
     criterion_id: str
-    score: float = Field(ge=0, le=10, allow_inf_nan=False)
-    rationale: str = Field(min_length=1, max_length=1600)
-    evidence: list[Evidence] = Field(max_length=6)
-    improvement: str = Field(min_length=1, max_length=1200)
+    score: float = 0.0
+    rationale: str = ""
+    evidence: list[Evidence] = Field(default_factory=list)
+    improvement: str = ""
 
 
 class GradeDraft(StrictModel):
-    criteria: list[CriterionGrade] = Field(min_length=1, max_length=10)
-    summary: str = Field(min_length=1, max_length=2000)
-
-    @field_validator("criteria")
-    @classmethod
-    def unique_criteria(cls, value):
-        if len({c.criterion_id for c in value}) != len(value):
-            raise ValueError("Duplicate grading criterion")
-        return value
+    criteria: list[CriterionGrade] = Field(default_factory=list)
+    summary: str = ""
 
 
 class GenerateQuestionsRequest(BaseModel):

@@ -10,7 +10,7 @@ class Settings(BaseSettings):
     model_config = SettingsConfigDict(env_file=".env", env_file_encoding="utf-8", extra="ignore")
 
     gemini_api_key: SecretStr = SecretStr("")
-    gemini_model: str = "gemini-3.5-flash"
+    gemini_model: str = "gemini-3.5-flash-lite"
     gemini_live_model: str = "gemini-3.8-live"
     live_silence_ms: int = Field(default=1000, ge=300, le=3000)
     live_max_minutes: int = Field(default=45, ge=1, le=120)

@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { ArrowLeft, BookOpen, Pencil, Plus, RefreshCw, Trash2 } from 'lucide-react';
+import { ArrowLeft, BookOpen, Pencil, Plus, RefreshCw, Trash2, Award } from 'lucide-react';
 import type { ExamDetailDto, ExamScheduleDto } from '../../../types/examApi';
 import { lecturerExamService } from '../../../services/lecturerExamService';
 import { canDeleteExam, canStartSchedule, formatExamTime, isExamOwner } from '../../../utils/lecturerExam';
@@ -12,7 +12,7 @@ import { ExamButton, ExamError, ExamField, ExamLoading, inputClass, panelClass, 
 type Modal = { kind: 'exam' | 'enroll' | 'deleteExam' }
   | { kind: 'schedule' | 'questions' | 'assign' | 'start' | 'deleteSchedule'; schedule: ExamScheduleDto };
 
-export function LecturerExamDetail({ examId, userId, userRole, language, onBack }: { examId: string; userId: string; userRole?: string; language: 'vi' | 'en'; onBack: () => void }) {
+export function LecturerExamDetail({ examId, userId, userRole, language, onBack, onNavigateToResults }: { examId: string; userId: string; userRole?: string; language: 'vi' | 'en'; onBack: () => void; onNavigateToResults?: (examId: string, scheduleId?: string) => void }) {
   const t = (vi: string, en: string) => language === 'vi' ? vi : en;
   const [detail, setDetail] = useState<ExamDetailDto | null>(null);
   const [loading, setLoading] = useState(true);
@@ -107,6 +107,12 @@ export function LecturerExamDetail({ examId, userId, userRole, language, onBack 
               <td className="px-3 py-4"><p>{s.assignedQuestionCount} {t('câu đã gán', 'assigned')}</p><p className="mt-1 font-semibold">{s.finalScore != null ? `${s.finalScore}/10` : t('Chưa có điểm', 'Not graded')}</p></td>
               <td className="max-w-72 px-3 py-4"><div className="flex flex-wrap gap-2">
                 <ExamButton disabled={!ready} onClick={() => setModal({ kind: 'questions', schedule: s })}>{t('Xem câu hỏi', 'View questions')}</ExamButton>
+                {s.status === 'COMPLETED' && (
+                  <ExamButton primary onClick={() => onNavigateToResults?.(exam.id, s.id)}>
+                    <Award aria-hidden="true" className="h-4 w-4" />
+                    {t('Xem kết quả', 'View Result')}
+                  </ExamButton>
+                )}
                 {owner && <>
                   <ExamButton disabled={!ready || s.status !== 'PENDING'} onClick={() => setModal({ kind: 'schedule', schedule: s })}>{t('Đổi giờ', 'Reschedule')}</ExamButton>
                   <ExamButton disabled={!ready || s.status !== 'PENDING' || s.assignedQuestionCount > 0} onClick={() => setModal({ kind: 'assign', schedule: s })}>{t('Gán câu hỏi', 'Assign questions')}</ExamButton>

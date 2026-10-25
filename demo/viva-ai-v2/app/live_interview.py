@@ -43,6 +43,7 @@ class VoiceRoom:
         self.assigned_questions = []
         self.current_q_index = 0
         self.followups_used = 0
+        self.total_followups_used = 0
         
         self.buffers = {}
         self.meta = {}
@@ -120,14 +121,18 @@ class VoiceRoom:
     def context(self):
         cur_q = self.current_question
         q_text = cur_q.content_snapshot if cur_q else ""
+        max_per_main = self.exam.max_followups_per_main if self.exam and self.exam.max_followups_per_main is not None else 2
+        max_total = self.exam.max_followup_questions if self.exam and self.exam.max_followup_questions is not None else 10
         return encode(
             {
-                "exam_title": self.exam.title,
+                "exam_title": self.exam.title if self.exam else "",
                 "current_question_index": self.current_q_index + 1,
                 "total_questions": len(self.assigned_questions),
                 "current_question_text": q_text,
                 "followups_used": self.followups_used,
-                "max_followups": self.exam.max_followups_per_main,
+                "max_followups": max_per_main,
+                "total_followups_used": self.total_followups_used,
+                "max_total_followups": max_total,
             }
         )
 
@@ -189,10 +194,22 @@ class VoiceRoom:
         if self.finish_requested or self.finished:
             return {"finished": True}
 
-        # Nếu chưa hỏi hết số lần hỏi xoáy cho câu hiện tại và có query đào sâu
-        max_followups = self.exam.max_followups_per_main
-        if self.followups_used < max_followups and query and not repeat:
+        max_per_main = self.exam.max_followups_per_main if self.exam and self.exam.max_followups_per_main is not None else 2
+        max_total = self.exam.max_followup_questions if self.exam and self.exam.max_followup_questions is not None else 10
+        main_limit = (self.exam.main_answer_time_limit_seconds if self.exam and self.exam.main_answer_time_limit_seconds else 120)
+        followup_limit = (self.exam.followup_answer_time_limit_seconds if self.exam and self.exam.followup_answer_time_limit_seconds else 60)
+
+        # Kiểm tra đồng thời ràng buộc theo câu chính và trần câu phụ toàn ca thi
+        can_followup = (
+            self.followups_used < max_per_main
+            and self.total_followups_used < max_total
+            and bool(query)
+            and not repeat
+        )
+
+        if can_followup:
             self.followups_used += 1
+            self.total_followups_used += 1
             # Tra cứu RAG ngữ cảnh bài giảng cho câu hỏi đào sâu
             refs = await self.service.retrieval.retrieve(
                 course_id=self.exam.course_id,
@@ -203,6 +220,10 @@ class VoiceRoom:
                 "type": "followup",
                 "question_order": self.current_q_index + 1,
                 "followup_index": self.followups_used,
+                "max_followups_per_main": max_per_main,
+                "total_followups_used": self.total_followups_used,
+                "max_total_followups": max_total,
+                "time_limit_seconds": followup_limit,
                 "sources": refs,
             }
             await self.send(
@@ -211,6 +232,10 @@ class VoiceRoom:
                     "kind": "followup",
                     "number": self.current_q_index + 1,
                     "followup_index": self.followups_used,
+                    "max_followups_per_main": max_per_main,
+                    "total_followups_used": self.total_followups_used,
+                    "max_total_followups": max_total,
+                    "time_limit_seconds": followup_limit,
                     "sources": refs,
                 }
             )
@@ -231,7 +256,13 @@ class VoiceRoom:
         self.plan = {
             "type": "main",
             "question_order": cur_q.question_order,
+            "total": len(self.assigned_questions),
             "content": cur_q.content_snapshot,
+            "followup_index": 0,
+            "max_followups_per_main": max_per_main,
+            "total_followups_used": self.total_followups_used,
+            "max_total_followups": max_total,
+            "time_limit_seconds": main_limit,
             "sources": [],
         }
         await self.send(
@@ -241,6 +272,11 @@ class VoiceRoom:
                 "number": cur_q.question_order,
                 "total": len(self.assigned_questions),
                 "content": cur_q.content_snapshot,
+                "followup_index": 0,
+                "max_followups_per_main": max_per_main,
+                "total_followups_used": self.total_followups_used,
+                "max_total_followups": max_total,
+                "time_limit_seconds": main_limit,
             }
         )
         return self.plan
@@ -337,9 +373,12 @@ class VoiceRoom:
             if kind == "finish":
                 self.finish_requested = True
                 await self.close_buffers()
-                # Chấm điểm toàn bộ ca thi
-                report = await self.service.finish(self.id)
-                await self.send({"type": "report", "report": report})
+                try:
+                    report = await self.service.finish(self.id)
+                    await self.send({"type": "report", "data": report, "report": report})
+                except Exception as exc:
+                    logger.error(f"Finish grading error: {exc}", exc_info=True)
+                    await self.send({"type": "error", "message": f"Chấm điểm thất bại: {exc}"})
                 self.closed = True
                 return
             if kind == "ping":
@@ -352,12 +391,24 @@ class VoiceRoom:
 
     async def run(self):
         await self.load()
+        max_main = self.exam.max_main_questions or len(self.assigned_questions)
+        max_followups = self.exam.max_followup_questions or 0
+        max_per_main = self.exam.max_followups_per_main or 2
+        main_limit = self.exam.main_answer_time_limit_seconds or 120
+        followup_limit = self.exam.followup_answer_time_limit_seconds or 60
+
         await self.send(
             {
                 "type": "ready",
                 "schedule_id": str(self.id),
-                "exam_title": self.exam.title,
+                "exam_title": self.exam.title if self.exam else "",
                 "total_questions": len(self.assigned_questions),
+                "max_main_questions": max_main,
+                "max_followup_questions": max_followups,
+                "max_followups_per_main": max_per_main,
+                "main_answer_time_limit_seconds": main_limit,
+                "followup_answer_time_limit_seconds": followup_limit,
+                "sample_rate": 24000,
             }
         )
         reader_task = asyncio.create_task(self.browser_reader())
@@ -365,7 +416,7 @@ class VoiceRoom:
             while not self.closed:
                 config = live_config(
                     self.service.settings,
-                    system_instruction=self.context(),
+                    context=self.context(),
                 )
                 try:
                     async with self.service.gateway.client.aio.live.connect(

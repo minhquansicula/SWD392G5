@@ -166,3 +166,44 @@ export async function generateQuestionsFromMaterials(
   return response.data;
 }
 
+export interface SessionTranscript {
+  id: string;
+  role: 'AI' | 'STUDENT';
+  text: string;
+  created_at: string;
+}
+
+export interface SessionQuestionResult {
+  question_id: string;
+  ai_score: number | null;
+  ai_feedback: string | null;
+}
+
+export interface SessionAssignedQuestion {
+  id: string;
+  question_id: string;
+  order: number;
+  content: string;
+}
+
+export interface SessionDetail {
+  schedule_id: string;
+  exam_id: string | null;
+  exam_title: string | null;
+  status: string;
+  final_score: number | null;
+  actual_start_time: string | null;
+  actual_end_time: string | null;
+  assigned_questions: SessionAssignedQuestion[];
+  transcripts: SessionTranscript[];
+  results: SessionQuestionResult[];
+}
+
+/**
+ * Lấy toàn bộ biên bản hội thoại thực tế (transcripts), điểm AI và nhận xét từng câu hỏi từ DB
+ */
+export async function getSessionDetail(scheduleId: string): Promise<SessionDetail> {
+  const response = await aiClient.get<SessionDetail>(`/api/v1/sessions/${scheduleId}`);
+  return response.data;
+}
+

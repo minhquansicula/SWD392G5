@@ -27,6 +27,7 @@ import { ClassAnalyticsDashboard } from './ClassAnalyticsDashboard';
 import { NoScoreView } from './NoScoreView';
 import { studentExamService } from '../../services/studentExamService';
 import { lecturerExamService } from '../../services/lecturerExamService';
+import { getSessionDetail, SessionDetail } from '../../services/aiService';
 
 interface ResultAnalyticsViewProps {
   report?: StudentEvaluationReport;
@@ -36,12 +37,16 @@ interface ResultAnalyticsViewProps {
   defaultSubTab?: 'student' | 'transcript' | 'class';
   language?: Language;
   currentUser?: UserAccount | null;
+  initialExamId?: string;
+  initialScheduleId?: string;
 }
 
 export const ResultAnalyticsView: React.FC<ResultAnalyticsViewProps> = ({
   language = 'vi',
   currentUser,
   defaultSubTab = 'student',
+  initialExamId,
+  initialScheduleId,
 }) => {
   const [activeTab, setActiveTab] = useState<'student' | 'transcript' | 'class'>(defaultSubTab);
   const t = translations[language];
@@ -54,11 +59,15 @@ export const ResultAnalyticsView: React.FC<ResultAnalyticsViewProps> = ({
 
   // For Lecturer/Admin: list of exams
   const [exams, setExams] = useState<ExamDto[]>([]);
-  const [selectedExamId, setSelectedExamId] = useState<string>('');
+  const [selectedExamId, setSelectedExamId] = useState<string>(initialExamId || '');
 
   // Schedules (Candidate attempts)
   const [schedules, setSchedules] = useState<ExamScheduleDto[]>([]);
-  const [selectedScheduleId, setSelectedScheduleId] = useState<string>('');
+  const [selectedScheduleId, setSelectedScheduleId] = useState<string>(initialScheduleId || '');
+
+  // Real session detail from Python AI (transcripts, question_results)
+  const [sessionDetail, setSessionDetail] = useState<SessionDetail | null>(null);
+  const [loadingDetail, setLoadingDetail] = useState<boolean>(false);
 
   // 1. Fetch Initial Data based on Role
   const loadData = async () => {
@@ -71,9 +80,13 @@ export const ResultAnalyticsView: React.FC<ResultAnalyticsViewProps> = ({
         const myScheds = await studentExamService.mySchedules();
         setSchedules(myScheds || []);
         if (myScheds && myScheds.length > 0) {
-          // Default to the first completed or first schedule
-          const completedSched = myScheds.find((s) => s.status === 'COMPLETED' && s.finalScore !== null);
-          setSelectedScheduleId(completedSched ? completedSched.id : myScheds[0].id);
+          if (initialScheduleId && myScheds.some((s) => s.id === initialScheduleId)) {
+            setSelectedScheduleId(initialScheduleId);
+          } else {
+            // Default to the first completed or first schedule
+            const completedSched = myScheds.find((s) => s.status === 'COMPLETED' && s.finalScore !== null);
+            setSelectedScheduleId(completedSched ? completedSched.id : myScheds[0].id);
+          }
         }
       } else {
         // LECTURER / ADMIN: Fetch available exams
@@ -82,13 +95,19 @@ export const ResultAnalyticsView: React.FC<ResultAnalyticsViewProps> = ({
         setExams(examList);
 
         if (examList.length > 0) {
-          const firstExamId = examList[0].id;
-          setSelectedExamId(firstExamId);
-          // Fetch schedules for the first exam
-          const schedList = await lecturerExamService.schedules(firstExamId);
+          const targetExamId = (initialExamId && examList.some(e => e.id === initialExamId))
+            ? initialExamId
+            : examList[0].id;
+          setSelectedExamId(targetExamId);
+          // Fetch schedules for the target exam
+          const schedList = await lecturerExamService.schedules(targetExamId);
           setSchedules(schedList || []);
           if (schedList && schedList.length > 0) {
-            setSelectedScheduleId(schedList[0].id);
+            if (initialScheduleId && schedList.some(s => s.id === initialScheduleId)) {
+              setSelectedScheduleId(initialScheduleId);
+            } else {
+              setSelectedScheduleId(schedList[0].id);
+            }
           } else {
             setSelectedScheduleId('');
           }
@@ -110,6 +129,19 @@ export const ResultAnalyticsView: React.FC<ResultAnalyticsViewProps> = ({
     loadData();
   }, [currentUser?.role, currentUser?.id]);
 
+  // Synchronize when initial props change
+  useEffect(() => {
+    if (initialExamId && initialExamId !== selectedExamId) {
+      handleExamChange(initialExamId);
+    }
+  }, [initialExamId]);
+
+  useEffect(() => {
+    if (initialScheduleId && initialScheduleId !== selectedScheduleId) {
+      setSelectedScheduleId(initialScheduleId);
+    }
+  }, [initialScheduleId]);
+
   // 2. Handle Lecturer/Admin changing Exam
   const handleExamChange = async (examId: string) => {
     setSelectedExamId(examId);
@@ -130,6 +162,30 @@ export const ResultAnalyticsView: React.FC<ResultAnalyticsViewProps> = ({
       setIsLoading(false);
     }
   };
+
+  // 3. Fetch real session detail (transcripts & question_results) when schedule changes
+  useEffect(() => {
+    if (!selectedScheduleId) {
+      setSessionDetail(null);
+      return;
+    }
+    let isCurrent = true;
+    setLoadingDetail(true);
+    getSessionDetail(selectedScheduleId)
+      .then((detail) => {
+        if (isCurrent) setSessionDetail(detail);
+      })
+      .catch((err) => {
+        console.warn('Could not load session detail from AI service:', err);
+        if (isCurrent) setSessionDetail(null);
+      })
+      .finally(() => {
+        if (isCurrent) setLoadingDetail(false);
+      });
+    return () => {
+      isCurrent = false;
+    };
+  }, [selectedScheduleId]);
 
   // Find currently selected schedule
   const currentSchedule = useMemo(() => {
@@ -154,26 +210,139 @@ export const ResultAnalyticsView: React.FC<ResultAnalyticsViewProps> = ({
     return 'F';
   };
 
-  // 3. Synthesize a real StudentEvaluationReport when currentSchedule has a finalScore
+  // Candidate display name
+  const currentCandidateName = useMemo(() => {
+    return currentSchedule?.student?.fullName || (isStudent ? currentUser?.fullName : 'Thí sinh') || 'Thí sinh';
+  }, [currentSchedule, isStudent, currentUser]);
+
+  // Map REAL transcripts from database if available (used for both report and standalone transcript viewer)
+  const mappedTranscripts = useMemo(() => {
+    if (sessionDetail?.transcripts && sessionDetail.transcripts.length > 0) {
+      return sessionDetail.transcripts.map((t, idx) => {
+        const isStudentRole = t.role === 'STUDENT';
+        const timeStr = t.created_at
+          ? new Date(t.created_at).toLocaleTimeString(isVi ? 'vi-VN' : 'en-US', { minute: '2-digit', second: '2-digit' })
+          : `00:${String(idx * 10).padStart(2, '0')}`;
+        return {
+          id: t.id || `tr-${idx}`,
+          speaker: (isStudentRole ? 'student' : 'examiner') as 'student' | 'examiner',
+          speakerName: isStudentRole ? (currentCandidateName || 'Thí sinh') : (isVi ? 'Giám khảo AI' : 'AI Examiner'),
+          text: t.text,
+          timestamp: timeStr,
+          isAdaptiveProbe: !isStudentRole && idx > 0,
+        };
+      });
+    }
+    return [];
+  }, [sessionDetail?.transcripts, currentCandidateName, isVi]);
+
+  // 4. Synthesize a real StudentEvaluationReport when currentSchedule has a finalScore
   const realReport = useMemo<StudentEvaluationReport | null>(() => {
-    if (!currentSchedule || currentSchedule.finalScore === null || currentSchedule.finalScore === undefined) {
+    const calcAvgScore = (sessionDetail?.results && sessionDetail.results.length > 0)
+      ? Math.round((sessionDetail.results.reduce((acc, r) => acc + (r.ai_score || 0), 0) / sessionDetail.results.length) * 10) / 10
+      : null;
+    const rawScore = sessionDetail?.final_score ?? currentSchedule?.finalScore ?? calcAvgScore;
+    if (rawScore === null || rawScore === undefined || !currentSchedule) {
       return null;
     }
 
-    const score = Number(currentSchedule.finalScore);
+    const score = Number(rawScore);
     const scorePercent = Math.min(100, Math.round(score * 10));
     const gradeLetter = getGradeLetter(score);
     const isPassed = score >= 5.0;
 
-    const candName = currentSchedule.student?.fullName || (isStudent ? currentUser?.fullName : 'Thí sinh');
+    const candName = currentCandidateName;
     const candCode = currentSchedule.student?.studentCode || (isStudent ? currentUser?.studentCode : null) || 'N/A';
 
     // Safe duration calculation
     let durationMin = 15.0;
-    if (currentSchedule.actualStartTime && currentSchedule.actualEndTime) {
-      const diffMs = new Date(currentSchedule.actualEndTime).getTime() - new Date(currentSchedule.actualStartTime).getTime();
+    const startTime = sessionDetail?.actual_start_time || currentSchedule.actualStartTime;
+    const endTime = sessionDetail?.actual_end_time || currentSchedule.actualEndTime;
+    if (startTime && endTime) {
+      const diffMs = new Date(endTime).getTime() - new Date(startTime).getTime();
       durationMin = Math.max(1, Math.round((diffMs / 60000) * 10) / 10);
     }
+
+    // Use mapped transcripts or default introduction
+    const reportTranscripts = mappedTranscripts.length > 0
+      ? mappedTranscripts
+      : [
+          {
+            id: 'tr-01',
+            speaker: 'examiner' as const,
+            speakerName: isVi ? 'Giám khảo AI' : 'AI Examiner',
+            timestamp: '00:05',
+            text: isVi
+              ? `Xin chào ${candName}, chào mừng bạn đến với ca thi vấn đáp môn ${currentSchedule.courseCode || 'chuyên ngành'}.`
+              : `Hello ${candName}, welcome to your oral examination for ${currentSchedule.courseCode || 'course'}.`,
+          },
+        ];
+
+    // Map REAL assigned questions and question results
+    const mappedQuestions = (sessionDetail?.assigned_questions && sessionDetail.assigned_questions.length > 0)
+      ? sessionDetail.assigned_questions.map((q, idx) => {
+          const resItem = sessionDetail.results?.find((r) => r.question_id === q.question_id);
+          const qScore = resItem?.ai_score != null ? Number(resItem.ai_score) : score;
+          const critique = resItem?.ai_feedback || (isPassed
+            ? (isVi ? 'Thí sinh trả lời tốt, nắm vững lý thuyết và đối chiếu chính xác với Rubric môn học.' : 'Candidate demonstrated good competence.')
+            : (isVi ? 'Thí sinh cần rèn luyện thêm kỹ năng diễn đạt và ôn tập lại kiến thức.' : 'Needs revision.'));
+          return {
+            questionNumber: q.order || idx + 1,
+            questionText: q.content,
+            topic: currentSchedule.courseName || currentSchedule.courseCode || 'Chuyên ngành',
+            difficulty: (idx === 0 ? 'basic' : idx === 1 ? 'intermediate' : 'advanced') as 'basic' | 'intermediate' | 'advanced',
+            studentResponseSummary: isVi
+              ? `Thí sinh đã trả lời và đạt điểm đánh giá: ${qScore}/10.`
+              : `Answer evaluated at ${qScore}/10.`,
+            score: qScore,
+            maxScore: 10,
+            bloomTaxonomy: 'Analyze / Evaluate',
+            examinerCritique: critique,
+            keyStrengths: [
+              isVi ? 'Hoàn thành lượt hỏi đáp vấn đáp' : 'Completed viva questions',
+              isVi ? 'Bản ghi âm và lời thoại được lưu trữ đầy đủ' : 'Spoken transcript recorded',
+            ],
+            knowledgeGaps: qScore < 5.0 ? [isVi ? 'Cần ôn tập thêm về câu hỏi này' : 'Needs review'] : [],
+            suggestedRevision: isVi ? 'Tham khảo lại tài liệu môn học và thực hành trả lời mở rộng.' : 'Consult curriculum materials.',
+          };
+        })
+      : [
+          {
+            questionNumber: 1,
+            questionText: isVi ? 'Bộ câu hỏi vấn đáp chuyên môn đã được phân bổ trong ca thi' : 'Core questions assigned in this oral examination',
+            topic: currentSchedule.courseName || currentSchedule.courseCode || 'Chuyên ngành',
+            difficulty: 'intermediate' as const,
+            studentResponseSummary: isVi
+              ? `Thí sinh đã trả lời đầy đủ các phần thi vấn đáp với AI Examiner, đạt tổng điểm ${score}/10.`
+              : `Candidate completed viva questions with AI Examiner, scoring ${score}/10.`,
+            score,
+            maxScore: 10,
+            bloomTaxonomy: 'Analyze / Evaluate',
+            examinerCritique: isPassed
+              ? (isVi ? 'Thí sinh nắm được kiến thức trọng tâm, giải thích mạch lạc và phản hồi đúng trọng tâm câu hỏi.' : 'Candidate demonstrated good subject mastery and articulated responses clearly.')
+              : (isVi ? 'Thí sinh cần ôn tập bổ sung thêm các khái niệm cốt lõi của môn học.' : 'Candidate needs further review on core curriculum concepts.'),
+            keyStrengths: [
+              isVi ? 'Tác phong thi nghiêm túc, phát âm rõ ràng' : 'Clear verbal articulation',
+              isVi ? 'Nắm bắt câu hỏi và trả lời đúng trọng tâm' : 'Direct answering to main questions',
+            ],
+            knowledgeGaps: isPassed
+              ? [isVi ? 'Cần đào sâu hơn các trường hợp thực tiễn phức tạp' : 'Further depth in edge cases']
+              : [isVi ? 'Cần ôn lại toàn bộ lý thuyết trọng tâm' : 'Requires comprehensive theoretical review'],
+            suggestedRevision: isVi
+              ? 'Xem lại tài liệu môn học và thực hành thêm các câu hỏi vận dụng nâng cao.'
+              : 'Review lecture syllabus and practice advanced application problems.',
+          },
+        ];
+
+    // Summary text from real results if available
+    const firstFeedback = sessionDetail?.results?.find(r => r.ai_feedback)?.ai_feedback;
+    const overallImpression = firstFeedback || (isPassed
+      ? (isVi
+        ? `Thí sinh ${candName} thể hiện phong thái tự tin, hoàn thành tốt các câu hỏi vấn đáp và đạt chuẩn đầu ra với điểm số ${score}/10.`
+        : `Candidate ${candName} showed confidence and met examination benchmarks with a score of ${score}/10.`)
+      : (isVi
+        ? `Thí sinh ${candName} đã tham gia ca thi nhưng phần trả lời chưa đạt yêu cầu tối thiểu (Điểm: ${score}/10).`
+        : `Candidate ${candName} completed the session but fell below minimum thresholds (Score: ${score}/10).`));
 
     return {
       studentId: currentSchedule.student?.id || currentSchedule.id,
@@ -182,8 +351,8 @@ export const ResultAnalyticsView: React.FC<ResultAnalyticsViewProps> = ({
       examId: currentSchedule.examId,
       examTitle: currentSchedule.examTitle || currentExam?.title || 'Kỳ thi vấn đáp AI',
       courseCode: currentSchedule.courseCode || currentExam?.courseCode || 'AIVES',
-      evaluatedAt: currentSchedule.actualEndTime
-        ? new Date(currentSchedule.actualEndTime).toLocaleDateString(isVi ? 'vi-VN' : 'en-US')
+      evaluatedAt: endTime
+        ? new Date(endTime).toLocaleDateString(isVi ? 'vi-VN' : 'en-US')
         : (isVi ? 'Đã thẩm định' : 'Evaluated'),
       totalScore: score,
       maxScore: 10,
@@ -218,61 +387,10 @@ export const ResultAnalyticsView: React.FC<ResultAnalyticsViewProps> = ({
           cohortAverage: 0.8,
         },
       ],
-      questionFeedback: [
-        {
-          questionNumber: 1,
-          questionText: isVi ? 'Bộ câu hỏi vấn đáp chuyên môn đã được phân bổ trong ca thi' : 'Core questions assigned in this oral examination',
-          topic: currentSchedule.courseName || currentSchedule.courseCode || 'Chuyên ngành',
-          difficulty: 'intermediate',
-          studentResponseSummary: isVi
-            ? `Thí sinh đã trả lời đầy đủ các phần thi vấn đáp với AI Examiner, đạt tổng điểm ${score}/10.`
-            : `Candidate completed viva questions with AI Examiner, scoring ${score}/10.`,
-          score,
-          maxScore: 10,
-          bloomTaxonomy: 'Analyze / Evaluate',
-          examinerCritique: isPassed
-            ? (isVi ? 'Thí sinh nắm được kiến thức trọng tâm, giải thích mạch lạc và phản hồi đúng trọng tâm câu hỏi.' : 'Candidate demonstrated good subject mastery and articulated responses clearly.')
-            : (isVi ? 'Thí sinh cần ôn tập bổ sung thêm các khái niệm cốt lõi của môn học.' : 'Candidate needs further review on core curriculum concepts.'),
-          keyStrengths: [
-            isVi ? 'Tác phong thi nghiêm túc, phát âm rõ ràng' : 'Clear verbal articulation',
-            isVi ? 'Nắm bắt câu hỏi và trả lời đúng trọng tâm' : 'Direct answering to main questions',
-          ],
-          knowledgeGaps: isPassed
-            ? [isVi ? 'Cần đào sâu hơn các trường hợp thực tiễn phức tạp' : 'Further depth in edge cases']
-            : [isVi ? 'Cần ôn lại toàn bộ lý thuyết trọng tâm' : 'Requires comprehensive theoretical review'],
-          suggestedRevision: isVi
-            ? 'Xem lại tài liệu môn học và thực hành thêm các câu hỏi vận dụng nâng cao.'
-            : 'Review lecture syllabus and practice advanced application problems.',
-        },
-      ],
-      fullTranscript: [
-        {
-          id: 'tr-01',
-          speaker: 'examiner',
-          speakerName: 'AI Examiner',
-          timestamp: '00:05',
-          text: isVi
-            ? `Xin chào ${candName}, chào mừng bạn đến với ca thi vấn đáp môn ${currentSchedule.courseCode || 'chuyên ngành'}.`
-            : `Hello ${candName}, welcome to your oral examination for ${currentSchedule.courseCode || 'course'}.`,
-        },
-        {
-          id: 'tr-02',
-          speaker: 'student',
-          speakerName: candName,
-          timestamp: '00:15',
-          text: isVi
-            ? 'Dạ em chào thầy/cô, em đã sẵn sàng cho buổi thi ạ.'
-            : 'Hello, I am ready for the examination session.',
-        },
-      ],
+      questionFeedback: mappedQuestions,
+      fullTranscript: reportTranscripts,
       aiExaminerSummary: {
-        overallImpression: isPassed
-          ? (isVi
-            ? `Thí sinh ${candName} thể hiện phong thái tự tin, hoàn thành tốt các câu hỏi vấn đáp và đạt chuẩn đầu ra với điểm số ${score}/10.`
-            : `Candidate ${candName} showed confidence and met examination benchmarks with a score of ${score}/10.`)
-          : (isVi
-            ? `Thí sinh ${candName} đã tham gia ca thi nhưng phần trả lời chưa đạt yêu cầu tối thiểu (Điểm: ${score}/10).`
-            : `Candidate ${candName} completed the session but fell below minimum thresholds (Score: ${score}/10).`),
+        overallImpression,
         recommendedGradeAdjustment: isPassed
           ? (isVi ? 'ĐẠT (Passed)' : 'PASSED')
           : (isVi ? 'KHÔNG ĐẠT (Failed)' : 'FAILED'),
@@ -285,7 +403,7 @@ export const ResultAnalyticsView: React.FC<ResultAnalyticsViewProps> = ({
         vocalConfidenceIndex: Math.min(98, Math.max(65, Math.round(score * 9.5))),
       },
     };
-  }, [currentSchedule, currentExam, isStudent, currentUser, isVi]);
+  }, [currentSchedule, currentExam, sessionDetail, isStudent, currentUser, isVi, currentCandidateName, mappedTranscripts]);
 
   // 4. Calculate Real Class Analytics from all schedules in current exam
   const realClassAnalytics = useMemo<ClassAnalyticsData>(() => {
@@ -553,11 +671,17 @@ export const ResultAnalyticsView: React.FC<ResultAnalyticsViewProps> = ({
 
       {/* CASE 2: TAB VERBATIM TRANSCRIPT */}
       {activeTab === 'transcript' && (
-        realReport ? (
+        mappedTranscripts.length > 0 ? (
+          <TranscriptViewer
+            transcript={mappedTranscripts}
+            candidateName={currentCandidateName}
+            examinerName={isVi ? 'Giám khảo AI' : 'Dr. Aris (AI-Examiner)'}
+          />
+        ) : realReport?.fullTranscript ? (
           <TranscriptViewer
             transcript={realReport.fullTranscript}
             candidateName={realReport.studentName}
-            examinerName="Dr. Aris (AI-Examiner)"
+            examinerName={isVi ? 'Giám khảo AI' : 'Dr. Aris (AI-Examiner)'}
           />
         ) : (
           <div className="p-8 text-center rounded-2xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 shadow-xs space-y-3">

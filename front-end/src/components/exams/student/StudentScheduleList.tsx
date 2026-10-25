@@ -1,18 +1,20 @@
 import { useEffect, useState } from 'react';
-import { BookOpen, Calendar, Clock, Play, RefreshCw, Award, CheckCircle2, AlertCircle } from 'lucide-react';
+import { BookOpen, Calendar, Clock, Play, RefreshCw, Award, CheckCircle2, AlertCircle, FileText } from 'lucide-react';
 import type { ExamScheduleDto } from '../../../types/examApi';
 import type { UserAccount } from '../../../types';
 import { studentExamService } from '../../../services/studentExamService';
 import { canStartSchedule, formatExamTime } from '../../../utils/lecturerExam';
 import { ExamButton, ExamError, ExamField, ExamLoading, inputClass, panelClass, ScheduleBadge } from '../lecturer/ExamUi';
 import { ExamConfirmation } from '../lecturer/ExamConfirmation';
+import { LiveVivaRoom } from '../../interview/LiveVivaRoom';
 
 interface Props {
   currentUser: UserAccount;
   language: 'vi' | 'en';
+  onNavigateToResults?: (scheduleId: string) => void;
 }
 
-export function StudentScheduleList({ currentUser, language }: Props) {
+export function StudentScheduleList({ currentUser, language, onNavigateToResults }: Props) {
   const [schedules, setSchedules] = useState<ExamScheduleDto[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<unknown>(null);
@@ -20,6 +22,7 @@ export function StudentScheduleList({ currentUser, language }: Props) {
   const [notice, setNotice] = useState('');
   const [filter, setFilter] = useState('ALL');
   const [selectedSchedule, setSelectedSchedule] = useState<ExamScheduleDto | null>(null);
+  const [activeRoomSchedule, setActiveRoomSchedule] = useState<ExamScheduleDto | null>(null);
   const [now, setNow] = useState(() => Date.now());
 
   const t = (vi: string, en: string) => language === 'vi' ? vi : en;
@@ -57,12 +60,45 @@ export function StudentScheduleList({ currentUser, language }: Props) {
   const completedCount = schedules.filter(s => s.status === 'COMPLETED').length;
 
   const handleStartExam = async (scheduleId: string) => {
-    const updated = await studentExamService.start(scheduleId);
-    setSelectedSchedule(null);
-    setNotice(t('Đã bắt đầu ca thi thành công! Thời gian bắt đầu thực tế đã được ghi nhận.', 'Examination started successfully! Actual start time has been recorded.'));
-    // Update local state with fresh DTO
-    setSchedules(prev => prev.map(s => s.id === scheduleId ? updated : s));
+    try {
+      const updated = await studentExamService.start(scheduleId);
+      setSelectedSchedule(null);
+      setNotice(
+        t(
+          'Đã bắt đầu ca thi thành công! Thời gian bắt đầu thực tế đã được ghi nhận.',
+          'Examination started successfully! Actual start time has been recorded.'
+        )
+      );
+      // Update local state with fresh DTO
+      setSchedules(prev => prev.map(s => (s.id === scheduleId ? updated : s)));
+      // Open Live Viva Room immediately
+      setActiveRoomSchedule(updated);
+    } catch (err: any) {
+      setError(err);
+      setSelectedSchedule(null);
+    }
   };
+
+  if (activeRoomSchedule) {
+    return (
+      <LiveVivaRoom
+        scheduleId={activeRoomSchedule.id}
+        examTitle={activeRoomSchedule.examTitle || undefined}
+        courseCode={activeRoomSchedule.courseCode || undefined}
+        candidateName={currentUser.fullName || undefined}
+        studentCode={currentUser.studentCode || undefined}
+        language={language}
+        onExit={() => {
+          setActiveRoomSchedule(null);
+          setReload(r => r + 1);
+        }}
+        onFinished={() => {
+          setActiveRoomSchedule(null);
+          setReload(r => r + 1);
+        }}
+      />
+    );
+  }
 
   return (
     <div className="space-y-6">
@@ -254,14 +290,40 @@ export function StudentScheduleList({ currentUser, language }: Props) {
                   )}
 
                   {s.status === 'IN_PROGRESS' && (
-                    <div className="rounded-lg bg-amber-50 p-2.5 text-center text-xs font-semibold text-amber-800 dark:bg-amber-950/60 dark:text-amber-200">
-                      {t('Lượt thi đang diễn ra. Vui lòng thực hiện phần vấn đáp.', 'Exam in progress. Please proceed with your oral viva voce.')}
+                    <div className="space-y-2">
+                      <button
+                        id={`enter-viva-room-btn-${s.id}`}
+                        data-testid="enter-viva-room-btn"
+                        onClick={() => {
+                          console.log('[StudentScheduleList] Entering Viva Room for schedule:', s.id);
+                          setActiveRoomSchedule(s);
+                        }}
+                        className="w-full inline-flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl text-xs font-bold bg-gradient-to-r from-purple-600 to-indigo-600 hover:from-purple-700 hover:to-indigo-700 text-white shadow-md transition-all cursor-pointer"
+                      >
+                        <Play className="h-4 w-4 fill-current" />
+                        <span>{t('Vào phòng thi vấn đáp ngay', 'Enter Viva Room Now')}</span>
+                      </button>
+                      <div className="rounded-lg bg-amber-50 p-2 text-center text-[11px] font-semibold text-amber-800 dark:bg-amber-950/60 dark:text-amber-200">
+                        {t(
+                          'Lượt thi đang diễn ra. Bấm nút phía trên để kết nối phỏng vấn với AI.',
+                          'Exam in progress. Click above to connect with AI.'
+                        )}
+                      </div>
                     </div>
                   )}
 
                   {s.status === 'COMPLETED' && (
-                    <div className="rounded-lg bg-emerald-50 p-2.5 text-center text-xs font-semibold text-emerald-800 dark:bg-emerald-950/60 dark:text-emerald-200">
-                      {t('Đã hoàn thành lượt thi.', 'Examination completed.')}
+                    <div className="space-y-2">
+                      <div className="rounded-lg bg-emerald-50 p-2.5 text-center text-xs font-semibold text-emerald-800 dark:bg-emerald-950/60 dark:text-emerald-200">
+                        {t('Đã hoàn thành lượt thi.', 'Examination completed.')}
+                      </div>
+                      <button
+                        onClick={() => onNavigateToResults?.(s.id)}
+                        className="w-full inline-flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl text-xs font-bold bg-indigo-600 hover:bg-indigo-700 text-white shadow-xs transition-all cursor-pointer"
+                      >
+                        <FileText className="h-4 w-4" />
+                        <span>{t('Xem kết quả & nhận xét', 'View Results & Feedback')}</span>
+                      </button>
                     </div>
                   )}
                 </div>

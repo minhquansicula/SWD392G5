@@ -8,10 +8,14 @@ import { LecturerExamDetail } from './ExamDetail';
 import { LecturerExamForm } from './ExamForm';
 import { ExamButton, ExamError, ExamField, ExamLoading, inputClass, panelClass } from './ExamUi';
 
-interface Props { currentUser: UserAccount; language: 'vi' | 'en' }
+interface Props {
+  currentUser: UserAccount;
+  language: 'vi' | 'en';
+  onNavigateToResults?: (examId: string, scheduleId?: string) => void;
+}
 
 // Mounted only for LECTURER in App. Existing auth/course integrations are reused.
-export function LecturerExamManagement({ currentUser, language }: Props) {
+export function LecturerExamManagement({ currentUser, language, onNavigateToResults }: Props) {
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [createOpen, setCreateOpen] = useState(false);
   const [page, setPage] = useState(0);
@@ -41,7 +45,7 @@ export function LecturerExamManagement({ currentUser, language }: Props) {
   }, [selectedId, currentUser.role, currentUser.id, page, size, sort, reload]);
 
   if (currentUser.role !== 'LECTURER' && currentUser.role !== 'ADMIN') return null;
-  if (selectedId) return <LecturerExamDetail key={selectedId} examId={selectedId} userId={currentUser.id} userRole={currentUser.role} language={language} onBack={() => setSelectedId(null)} />;
+  if (selectedId) return <LecturerExamDetail key={selectedId} examId={selectedId} userId={currentUser.id} userRole={currentUser.role} language={language} onBack={() => setSelectedId(null)} onNavigateToResults={onNavigateToResults} />;
 
   const isAdmin = currentUser.role === 'ADMIN';
 

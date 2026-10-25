@@ -153,20 +153,16 @@ class GeminiGateway:
 
     async def structured(self, schema: type[T], system: str, data: str, *, model=None) -> T:
         self.require_key()
-        candidate_models = [model or self.settings.gemini_model]
-        for fallback in ("gemini-3.5-flash-lite", "gemini-3-flash-preview", "gemini-3.5-flash"):
+        candidate_models = [model or self.settings.gemini_model or "gemini-3.5-flash-lite"]
+        for fallback in ("gemini-3.5-flash-lite", "gemini-3.1-flash-lite", "gemini-3-flash-preview"):
             if fallback not in candidate_models:
                 candidate_models.append(fallback)
-
-
-
 
         last_error = None
         for m in candidate_models:
             try:
                 async with asyncio.timeout(self.settings.model_timeout_seconds):
                     response = await self.client.aio.models.generate_content(
-
                         model=m,
                         contents=data,
                         config=types.GenerateContentConfig(
@@ -174,7 +170,7 @@ class GeminiGateway:
                             temperature=0.1,
                             max_output_tokens=12000,
                             response_mime_type="application/json",
-                            response_json_schema=schema.model_json_schema(),
+                            response_schema=schema,
                         ),
                     )
                 if not response.text:

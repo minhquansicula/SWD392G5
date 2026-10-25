@@ -46,6 +46,14 @@ export default function App() {
   // Navigation & View state
   const [activeModule, setActiveModule] = useState<ModuleType>('exams');
   const [examSubView, setExamSubView] = useState<ExamSubView>('list');
+  const [selectedResultExamId, setSelectedResultExamId] = useState<string | null>(null);
+  const [selectedResultScheduleId, setSelectedResultScheduleId] = useState<string | null>(null);
+
+  const handleNavigateToResults = (examId?: string, scheduleId?: string) => {
+    if (examId) setSelectedResultExamId(examId);
+    if (scheduleId) setSelectedResultScheduleId(scheduleId);
+    setActiveModule('analytics');
+  };
   const [isMobileSidebarOpen, setIsMobileSidebarOpen] = useState(false);
   const [isSidebarCollapsed, setIsSidebarCollapsed] = useState<boolean>(() => {
     try {
@@ -262,10 +270,20 @@ export default function App() {
           <div key={activeModule} className="animate-tab-enter">
           {/* MODULE 1: EXAM & SCHEDULE MANAGEMENT */}
           {activeModule === 'exams' && (currentUser.role === 'LECTURER' || currentUser.role === 'ADMIN') && (
-            <LecturerExamManagement key={currentUser.id} currentUser={currentUser} language={language} />
+            <LecturerExamManagement
+              key={currentUser.id}
+              currentUser={currentUser}
+              language={language}
+              onNavigateToResults={handleNavigateToResults}
+            />
           )}
           {activeModule === 'exams' && currentUser.role === 'STUDENT' && (
-            <StudentScheduleList key={currentUser.id} currentUser={currentUser} language={language} />
+            <StudentScheduleList
+              key={currentUser.id}
+              currentUser={currentUser}
+              language={language}
+              onNavigateToResults={(scheduleId) => handleNavigateToResults(undefined, scheduleId)}
+            />
           )}
 
           {/* MODULE: QUESTION BANK MANAGEMENT (LECTURER & ADMIN) */}
@@ -284,6 +302,8 @@ export default function App() {
             <ResultAnalyticsView
               language={language}
               currentUser={currentUser}
+              initialExamId={selectedResultExamId || undefined}
+              initialScheduleId={selectedResultScheduleId || undefined}
             />
           )}
 
