@@ -153,32 +153,48 @@ class GeminiGateway:
 
     async def structured(self, schema: type[T], system: str, data: str, *, model=None) -> T:
         self.require_key()
-        try:
-            async with asyncio.timeout(self.settings.model_timeout_seconds):
-                response = await self.client.aio.models.generate_content(
-                    model=model or self.settings.gemini_model,
-                    contents=data,
-                    config=types.GenerateContentConfig(
-                        system_instruction=system,
-                        temperature=0.1,
-                        max_output_tokens=12000,
-                        response_mime_type="application/json",
-                        response_json_schema=schema.model_json_schema(),
-                    ),
-                )
-            if (
-                not response.candidates
-                or response.candidates[0].finish_reason != types.FinishReason.STOP
-            ):
+        candidate_models = [model or self.settings.gemini_model]
+        for fallback in ("gemini-3.5-flash-lite", "gemini-3-flash-preview", "gemini-3.5-flash"):
+            if fallback not in candidate_models:
+                candidate_models.append(fallback)
+
+
+
+
+        last_error = None
+        for m in candidate_models:
+            try:
+                async with asyncio.timeout(self.settings.model_timeout_seconds):
+                    response = await self.client.aio.models.generate_content(
+
+                        model=m,
+                        contents=data,
+                        config=types.GenerateContentConfig(
+                            system_instruction=system,
+                            temperature=0.1,
+                            max_output_tokens=12000,
+                            response_mime_type="application/json",
+                            response_json_schema=schema.model_json_schema(),
+                        ),
+                    )
+                if not response.text:
+                    if not response.candidates or (
+                        response.candidates[0].finish_reason
+                        and response.candidates[0].finish_reason not in (types.FinishReason.STOP, "STOP", 1)
+                    ):
+                        raise AppError(
+                            "Gemini chưa hoàn thành dữ liệu có cấu trúc. Hãy thử lại.",
+                            502,
+                            "incomplete_output",
+                        )
+                return schema.model_validate_json(response.text or "")
+            except ValidationError as exc:
                 raise AppError(
-                    "Gemini chưa hoàn thành dữ liệu có cấu trúc. Hãy thử lại.",
-                    502,
-                    "incomplete_output",
-                )
-            return schema.model_validate_json(response.text or "")
-        except ValidationError as exc:
-            raise AppError(
-                "Gemini trả về dữ liệu chưa đúng cấu trúc. Hãy thử lại.", 502, "invalid_model_json"
-            ) from exc
-        except (errors.APIError, httpx.HTTPError, TimeoutError) as exc:
-            raise provider_error(exc) from exc
+                    "Gemini trả về dữ liệu chưa đúng cấu trúc. Hãy thử lại.", 502, "invalid_model_json"
+                ) from exc
+            except Exception as exc:
+                last_error = exc
+                continue
+
+        raise provider_error(last_error) from last_error
+

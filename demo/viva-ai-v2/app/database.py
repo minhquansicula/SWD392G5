@@ -1,8 +1,12 @@
+import sys
+if sys.platform == "win32":
+    import asyncio
+    asyncio.set_event_loop_policy(asyncio.WindowsSelectorEventLoopPolicy())
+
 from sqlalchemy import text
 from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
 
 from app.config import Settings
-from app.models import Base
 
 
 class Database:
@@ -15,9 +19,9 @@ class Database:
         self.sessions = async_sessionmaker(self.engine, expire_on_commit=False)
 
     async def initialize(self):
-        async with self.engine.begin() as connection:
-            await connection.execute(text("CREATE EXTENSION IF NOT EXISTS vector"))
-            await connection.run_sync(Base.metadata.create_all)
+        """Kiểm tra kết nối tới cơ sở dữ liệu khi khởi động (Database đã chuẩn hóa sẵn)."""
+        async with self.engine.connect() as connection:
+            await connection.execute(text("SELECT 1"))
 
     async def ping(self):
         async with self.engine.connect() as connection:

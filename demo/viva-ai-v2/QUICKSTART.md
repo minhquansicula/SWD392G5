@@ -18,9 +18,7 @@ Mở `.env`, điền `GEMINI_API_KEY=AIzaSy...`
 
 ## 3. Chạy
 
-`docker compose up -d`
-`uvicorn app.main:app --reload`
-`uvicorn app.main:app --reload --host [IP_ADDRESS] --port 8000`
+`uvicorn app.main:app --host 127.0.0.1 --port 8000`
 
 ## 4. Kiểm tra
 

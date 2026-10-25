@@ -1,4 +1,3 @@
-from typing import Literal
 from uuid import UUID
 
 from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
@@ -6,10 +5,6 @@ from pydantic import BaseModel, ConfigDict, Field, field_validator, model_valida
 
 class StrictModel(BaseModel):
     model_config = ConfigDict(extra="forbid", str_strip_whitespace=True)
-
-
-class CourseCreate(StrictModel):
-    name: str = Field(min_length=2, max_length=120)
 
 
 class Criterion(StrictModel):
@@ -32,31 +27,9 @@ class RubricData(StrictModel):
         return self
 
 
-class SessionCreate(StrictModel):
-    mode: Literal["text", "voice"] = "text"
-    course_id: UUID
-    rubric_id: UUID
-    student_name: str = Field(default="Sinh viên", min_length=1, max_length=80)
-    max_questions: int = Field(default=8, ge=1, le=20)
-    max_followups: int = Field(default=2, ge=0, le=3)
-
-
-class TurnRequest(StrictModel):
-    request_id: UUID
-    action: Literal["start", "answer"]
-    text: str = Field(default="", max_length=4000)
-
-    @model_validator(mode="after")
-    def validate_action(self):
-        if self.action == "answer" and not self.text:
-            raise ValueError("Câu trả lời không được để trống.")
-        if self.action == "start" and self.text:
-            raise ValueError("Lượt bắt đầu không có câu trả lời.")
-        return self
-
-
 class Evidence(StrictModel):
-    message_id: UUID
+    transcript_id: UUID | None = None
+    message_id: UUID | None = None
     quote: str = Field(min_length=1, max_length=500)
 
 
@@ -78,3 +51,24 @@ class GradeDraft(StrictModel):
         if len({c.criterion_id for c in value}) != len(value):
             raise ValueError("Duplicate grading criterion")
         return value
+
+
+class GenerateQuestionsRequest(BaseModel):
+    count: int = Field(default=5, ge=1, le=20, description="Số lượng câu hỏi muốn sinh (1 - 20)")
+    difficulty: str | None = Field(default="BALANCED", description="Độ khó: BALANCED, EASY, MEDIUM, HARD")
+    topic_hint: str | None = Field(default=None, max_length=255, description="Chủ đề cụ thể muốn tập trung (nếu có)")
+
+
+class QuestionItemSchema(BaseModel):
+    content: str = Field(description="Nội dung câu hỏi vấn đáp chính")
+    difficulty_level: str = Field(description="Độ khó: EASY, MEDIUM, hoặc HARD")
+    topic: str = Field(description="Chủ đề hoặc module kiến thức tương ứng")
+    expected_answer: str = Field(description="Barem câu trả lời mẫu gợi ý cho Giám khảo AI đối chiếu")
+
+
+class GeneratedQuestionsResponse(BaseModel):
+    course_id: str
+    course_name: str
+    total_generated: int
+    questions: list[QuestionItemSchema]
+

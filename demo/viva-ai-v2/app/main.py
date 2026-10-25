@@ -1,36 +1,44 @@
 import asyncio
-import json
 import logging
+import sys
+
+if sys.platform == "win32":
+    asyncio.set_event_loop_policy(asyncio.WindowsSelectorEventLoopPolicy())
+    try:
+        import uvicorn.loops.asyncio
+        uvicorn.loops.asyncio.asyncio_loop_factory = lambda use_subprocess=False: asyncio.SelectorEventLoop
+        import uvicorn.loops.auto
+        uvicorn.loops.auto.auto_loop_factory = lambda use_subprocess=False: asyncio.SelectorEventLoop
+    except Exception:
+        pass
 from contextlib import asynccontextmanager, suppress
 from pathlib import Path
-from urllib.parse import urlparse
 from uuid import UUID
 
 from fastapi import FastAPI, File, Request, UploadFile, WebSocket, WebSocketDisconnect
 from fastapi.encoders import jsonable_encoder
 from fastapi.exceptions import RequestValidationError
-from fastapi.responses import FileResponse, JSONResponse, StreamingResponse
-from fastapi.staticfiles import StaticFiles
+from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import JSONResponse
 from pydantic import ValidationError
-from sqlalchemy import select
+from sqlalchemy import delete, select
 from sqlalchemy.exc import SQLAlchemyError
 from starlette.concurrency import run_in_threadpool
-from starlette.middleware.trustedhost import TrustedHostMiddleware
 
 from app.config import get_settings
 from app.database import Database
 from app.documents import IngestionService, document_dict
 from app.errors import AppError
 from app.gemini import GeminiGateway
-from app.interview import InterviewService, encode, interview_dict
+from app.interview import InterviewService, encode
 from app.live_interview import VoiceRoom
-from app.models import Course, Document, Interview, Rubric
-from app.prompts import RUBRIC_SYSTEM
+from app.models import AiDocument, AiDocumentChunk, Course, ExamSchedule, Rubric
+from app.prompts import QUESTION_GENERATOR_SYSTEM, RUBRIC_SYSTEM
 from app.retrieval import RetrievalService
-from app.schemas import CourseCreate, RubricData, SessionCreate, TurnRequest
+from app.schemas import GenerateQuestionsRequest, GeneratedQuestionsResponse, RubricData
 
-logger = logging.getLogger("viva")
-ROOT = Path(__file__).resolve().parent
+
+logger = logging.getLogger("viva-ai")
 
 
 def create_app(settings=None, gateway=None) -> FastAPI:
@@ -42,66 +50,59 @@ def create_app(settings=None, gateway=None) -> FastAPI:
     interviews = InterviewService(database, provider, retrieval, settings)
 
     @asynccontextmanager
-    async def lifespan(app):
+    async def lifespan(app: FastAPI):
         app.state.db_ready = False
         try:
             await database.initialize()
             app.state.db_ready = True
+            logger.info("AI Service connected to database successfully.")
         except Exception as exc:
-            logger.warning(
-                "Database unavailable on startup (%s). Start PostgreSQL and restart.",
-                type(exc).__name__,
-            )
+            logger.warning("Database unavailable on startup: %s", exc)
         yield
         await provider.close()
         await database.close()
 
-    app = FastAPI(title="Viva AI Interview API", version="0.2.0", lifespan=lifespan)
-    app.state.database, app.state.interviews, app.state.gateway = database, interviews, provider
+    app = FastAPI(
+        title="AIVES — AI Oral Viva Voce Engine",
+        description="Microservice chuyên trách AI: Gemini Live Audio Duplex, RAG pgvector và Chấm điểm Rubric",
+        version="2.0.0",
+        lifespan=lifespan,
+    )
+    app.state.database = database
+    app.state.interviews = interviews
+    app.state.gateway = provider
+
+    # Cấu hình CORS mở cho Frontend React (localhost:5173) và Spring Boot (localhost:8080)
     app.add_middleware(
-        TrustedHostMiddleware, allowed_hosts=["localhost", "127.0.0.1", "[::1]", "testserver"]
+        CORSMiddleware,
+        allow_origins=["*"],
+        allow_credentials=True,
+        allow_methods=["*"],
+        allow_headers=["*"],
     )
 
-    @app.middleware("http")
-    async def local_origin(request: Request, call_next):
-        origin = request.headers.get("origin")
-        if request.method not in ("GET", "HEAD", "OPTIONS") and origin:
-            if urlparse(origin).netloc != request.headers.get("host"):
-                return JSONResponse({"detail": "Origin không hợp lệ."}, status_code=403)
-        if request.url.path.startswith("/api/v1/") and not app.state.db_ready:
-            return JSONResponse(
-                {
-                    "detail": "Chưa kết nối PostgreSQL. Chạy docker compose up -d db rồi khởi động lại ứng dụng."
-                },
-                status_code=503,
-            )
-        response = await call_next(request)
-        response.headers["X-Content-Type-Options"] = "nosniff"
-        response.headers["Referrer-Policy"] = "same-origin"
-        response.headers["Content-Security-Policy"] = (
-            "default-src 'self'; style-src 'self'; script-src 'self'; connect-src 'self'; img-src 'self' data:; frame-ancestors 'none'; base-uri 'self'"
-        )
-        return response
-
     @app.exception_handler(AppError)
-    async def handle_app_error(request, error):
+    async def handle_app_error(request: Request, error: AppError):
         return JSONResponse({"detail": error.message, "code": error.code}, status_code=error.status)
 
     @app.exception_handler(RequestValidationError)
-    async def handle_validation(request, error):
+    async def handle_validation(request: Request, error: RequestValidationError):
         issues = [
             {"field": ".".join(map(str, e["loc"])), "message": e["msg"]} for e in error.errors()
         ]
-        return JSONResponse({"detail": "Dữ liệu chưa hợp lệ.", "issues": issues}, status_code=422)
+        return JSONResponse({"detail": "Dữ liệu không hợp lệ.", "issues": issues}, status_code=422)
 
     @app.exception_handler(SQLAlchemyError)
-    async def handle_db_error(request, error):
-        logger.warning("Database operation failed (%s)", type(error).__name__)
+    async def handle_db_error(request: Request, error: SQLAlchemyError):
+        logger.warning("Database operation failed: %s", type(error).__name__)
         return JSONResponse(
-            {"detail": "Không truy cập được dữ liệu. Kiểm tra PostgreSQL rồi thử lại."},
+            {"detail": "Lỗi truy cập cơ sở dữ liệu PostgreSQL. Vui lòng kiểm tra kết nối."},
             status_code=503,
         )
 
+    # ==========================================================================
+    # 1. HEALTH CHECK
+    # ==========================================================================
     @app.get("/health")
     async def health():
         connected = app.state.db_ready
@@ -111,64 +112,102 @@ def create_app(settings=None, gateway=None) -> FastAPI:
             except Exception:
                 connected = False
         return {
-            "database": connected,
-            "gemini_configured": bool(settings.gemini_api_key.get_secret_value()),
-            "model": settings.gemini_model,
+            "status": "UP" if connected else "DEGRADED",
+            "database_connected": connected,
+            "gemini_live_model": settings.gemini_live_model,
+            "gemini_grading_model": settings.gemini_model,
             "embedding_model": settings.gemini_embedding_model,
             "embedding_dimensions": 768,
         }
 
-    @app.get("/api/v1/courses")
-    async def list_courses():
-        async with database.sessions() as db:
-            rows = (await db.scalars(select(Course).order_by(Course.created_at.desc()))).all()
-            return [{"id": str(c.id), "name": c.name} for c in rows]
-
-    @app.post("/api/v1/courses", status_code=201)
-    async def create_course(body: CourseCreate):
-        async with database.sessions() as db:
-            course = Course(name=body.name)
-            db.add(course)
-            await db.commit()
-            return {"id": str(course.id), "name": course.name}
-
-    @app.get("/api/v1/courses/{course_id}/documents")
-    async def list_documents(course_id: UUID):
-        async with database.sessions() as db:
-            rows = (
-                await db.scalars(
-                    select(Document)
-                    .where(Document.course_id == course_id)
-                    .order_by(Document.created_at.desc())
-                )
-            ).all()
-            return [document_dict(d) for d in rows]
-
-    async def read_upload(file):
+    # ==========================================================================
+    # 2. RAG KNOWLEDGE BASE (Nạp và Quản lý tài liệu giáo trình)
+    # ==========================================================================
+    async def read_upload(file: UploadFile) -> bytes:
         try:
             data = await file.read(settings.max_upload_bytes + 1)
             if len(data) > settings.max_upload_bytes:
-                raise AppError("File vượt giới hạn 10 MB.", 413)
+                raise AppError(f"File vượt quá giới hạn {settings.max_upload_bytes // (1024*1024)}MB.", 413)
             if not data:
                 raise AppError("File rỗng.")
             return data
         finally:
             await file.close()
 
+    @app.get("/api/v1/courses/{course_id}/documents")
+    async def list_course_documents(course_id: UUID):
+        """Lấy danh sách các tài liệu đã nạp cho môn học."""
+        async with database.sessions() as db:
+            rows = (
+                await db.scalars(
+                    select(AiDocument)
+                    .where(AiDocument.course_id == course_id)
+                    .order_by(AiDocument.created_at.desc())
+                )
+            ).all()
+            return [document_dict(d) for d in rows]
+
+    @app.get("/api/v1/courses")
+    async def list_courses():
+        """Lấy danh sách môn học từ cơ sở dữ liệu."""
+        async with database.sessions() as db:
+            rows = (await db.scalars(select(Course).order_by(Course.course_code))).all()
+            return [
+                {
+                    "id": str(c.id),
+                    "course_code": c.course_code,
+                    "courseCode": c.course_code,
+                    "course_name": c.course_name,
+                    "courseName": c.course_name,
+                }
+                for c in rows
+            ]
+
     @app.post("/api/v1/courses/{course_id}/documents", status_code=201)
-    async def upload_document(course_id: UUID, file: UploadFile = File(...)):
+    async def upload_course_document(course_id: UUID, file: UploadFile = File(...)):
+        """Upload giáo trình môn học (PDF/DOCX/TXT/MD), phân đoạn và nhúng vector pgvector."""
         return await ingestion.ingest(
             course_id, file.filename or "document.txt", await read_upload(file)
         )
 
+    @app.delete("/api/v1/courses/{course_id}/documents/{document_id}")
+    async def delete_course_document(course_id: UUID, document_id: UUID):
+        """Xóa tài liệu giáo trình và toàn bộ vector embedding liên quan."""
+        async with database.sessions() as db:
+            doc = await db.get(AiDocument, document_id)
+            if not doc or doc.course_id != course_id:
+                raise AppError("Không tìm thấy tài liệu tương ứng.", 404)
+            await db.execute(
+                delete(AiDocumentChunk).where(
+                    AiDocumentChunk.document_id == document_id,
+                    AiDocumentChunk.course_id == course_id,
+                )
+            )
+            await db.execute(
+                delete(AiDocument).where(
+                    AiDocument.id == document_id,
+                    AiDocument.course_id == course_id,
+                )
+            )
+            await db.commit()
+            return {
+                "success": True,
+                "message": "Đã xóa tài liệu và các vector chunks thành công.",
+                "deleted_id": str(document_id),
+            }
+
+    # ==========================================================================
+    # 3. RUBRIC ENGINE (Trích xuất & Lưu tiêu chí chấm thi)
+    # ==========================================================================
     @app.post("/api/v1/rubrics/preview")
     async def preview_rubric(file: UploadFile = File(...)):
+        """Dùng Gemini phân tích file Rubric (Markdown, PDF, DOCX, JSON) thành cấu trúc JSON chuẩn."""
         filename, data = file.filename or "rubric.txt", await read_upload(file)
         if filename.lower().endswith(".json"):
             try:
                 return RubricData.model_validate_json(data).model_dump()
             except (ValidationError, ValueError) as exc:
-                raise AppError("JSON rubric chưa đúng mẫu hoặc tổng trọng số khác 100%.") from exc
+                raise AppError("File JSON rubric không đúng mẫu hoặc tổng trọng số khác 100%.") from exc
         pages = await run_in_threadpool(
             ingestion.parser.parse, filename, data, settings.max_rubric_chars
         )
@@ -176,7 +215,8 @@ def create_app(settings=None, gateway=None) -> FastAPI:
         return result.model_dump()
 
     @app.get("/api/v1/courses/{course_id}/rubrics")
-    async def list_rubrics(course_id: UUID):
+    async def list_course_rubrics(course_id: UUID):
+        """Lấy danh sách rubric của môn học."""
         async with database.sessions() as db:
             rows = (
                 await db.scalars(
@@ -185,250 +225,174 @@ def create_app(settings=None, gateway=None) -> FastAPI:
                     .order_by(Rubric.created_at.desc())
                 )
             ).all()
-            return [{"id": str(r.id), **r.data} for r in rows]
+            return [{"id": str(r.id), "title": r.title, **r.data} for r in rows]
 
     @app.post("/api/v1/courses/{course_id}/rubrics", status_code=201)
-    async def save_rubric(course_id: UUID, body: RubricData):
+    async def save_course_rubric(course_id: UUID, body: RubricData):
+        """Lưu rubric cho môn học."""
         async with database.sessions() as db:
             if not await db.get(Course, course_id):
-                raise AppError("Không tìm thấy môn học.", 404)
+                raise AppError("Không tìm thấy môn học tương ứng.", 404)
             rubric = Rubric(course_id=course_id, title=body.title, data=body.model_dump())
             db.add(rubric)
             await db.commit()
-            return {"id": str(rubric.id), **rubric.data}
+            return {"id": str(rubric.id), "title": rubric.title, **rubric.data}
 
-    @app.get("/api/v1/sessions")
-    async def list_sessions(course_id: UUID):
+    @app.delete("/api/v1/courses/{course_id}/rubrics/{rubric_id}")
+    async def delete_course_rubric(course_id: UUID, rubric_id: UUID):
+        """Xóa tiêu chí rubric của môn học."""
         async with database.sessions() as db:
-            rows = (
+            rubric = await db.get(Rubric, rubric_id)
+            if not rubric or rubric.course_id != course_id:
+                raise AppError("Không tìm thấy rubric tương ứng.", 404)
+            await db.execute(
+                delete(Rubric).where(
+                    Rubric.id == rubric_id,
+                    Rubric.course_id == course_id,
+                )
+            )
+            await db.commit()
+            return {
+                "success": True,
+                "message": "Đã xóa rubric thành công.",
+                "deleted_id": str(rubric_id),
+            }
+
+    # ==========================================================================
+    # 3.1. AI QUESTION GENERATOR (Sinh câu hỏi từ Học liệu & Rubric)
+    # ==========================================================================
+    @app.post("/api/v1/courses/{course_id}/generate-questions", response_model=GeneratedQuestionsResponse)
+    async def generate_course_questions(course_id: UUID, body: GenerateQuestionsRequest):
+        """Dùng Gemini đọc học liệu và rubric của môn học để sinh câu hỏi gợi ý cho giáo viên."""
+        async with database.sessions() as db:
+            course = await db.get(Course, course_id)
+            if not course:
+                raise AppError("Không tìm thấy môn học tương ứng.", 404)
+
+            # Lấy Rubric môn học
+            rubric_row = (
                 await db.scalars(
-                    select(Interview)
-                    .where(Interview.course_id == course_id)
-                    .order_by(Interview.created_at.desc())
-                    .limit(100)
+                    select(Rubric)
+                    .where(Rubric.course_id == course_id)
+                    .order_by(Rubric.created_at.desc())
+                    .limit(1)
+                )
+            ).first()
+
+            # Lấy các chunk học liệu tiêu biểu
+            chunks = (
+                await db.scalars(
+                    select(AiDocumentChunk.text)
+                    .where(AiDocumentChunk.course_id == course_id)
+                    .order_by(AiDocumentChunk.position.asc())
+                    .limit(25)
                 )
             ).all()
-            return [interview_dict(i) for i in rows]
 
-    @app.post("/api/v1/sessions", status_code=201)
-    async def create_session(body: SessionCreate):
-        return await interviews.create(body)
 
-    @app.get("/api/v1/sessions/{interview_id}")
-    async def get_session(interview_id: UUID):
-        return await interviews.detail(interview_id)
+            if not rubric_row and not chunks:
+                raise AppError(
+                    "Môn học chưa có tài liệu học tập hoặc rubric chấm điểm. Vui lòng tải tài liệu lên trước.",
+                    400,
+                    "NO_MATERIAL_FOUND",
+                )
 
-    async def safe_events(interview_id, body):
-        terminal_event = None
-        try:
-            async for event in interviews.turn(interview_id, body):
-                if event["type"] == "done":
-                    terminal_event = event
-                else:
-                    yield event
-        except AppError as exc:
-            terminal_event = {"type": "error", "message": exc.message, "code": exc.code}
-        except Exception as exc:
-            logger.warning("Turn failed (%s)", type(exc).__name__)
-            terminal_event = {
-                "type": "error",
-                "message": "Lượt hỏi chưa hoàn thành. Hãy thử lại để tiếp tục.",
-                "code": "internal_error",
+            # Phân bổ độ khó
+            n = body.count
+            diff_mode = (body.difficulty or "BALANCED").upper()
+            if diff_mode == "EASY":
+                n_easy, n_med, n_hard = max(1, round(n * 0.7)), max(0, n - round(n * 0.7)), 0
+            elif diff_mode == "HARD":
+                n_easy, n_med, n_hard = 0, max(0, n - round(n * 0.7)), max(1, round(n * 0.7))
+            else:  # BALANCED
+                n_easy = max(1, round(n * 0.3))
+                n_hard = max(1, round(n * 0.2))
+                n_med = max(0, n - n_easy - n_hard)
+
+            context_payload = {
+                "course_code": course.course_code,
+                "course_name": course.course_name,
+                "required_count": n,
+                "difficulty_distribution": {
+                    "EASY": n_easy,
+                    "MEDIUM": n_med,
+                    "HARD": n_hard,
+                },
+                "topic_focus": body.topic_hint or "Toàn bộ kiến thức trong giáo trình môn học",
+                "rubric": rubric_row.data if rubric_row else "Chưa có rubric riêng; hãy biên soạn theo chuẩn môn học",
+                "document_excerpts": list(chunks[:20]) if chunks else ["Kiến thức tiêu chuẩn môn học"],
             }
-        if terminal_event:
-            yield terminal_event
 
-    @app.post("/api/v1/sessions/{interview_id}/turns")
-    async def stream_turn(interview_id: UUID, body: TurnRequest):
-        """HTTP SSE alternative for Spring WebClient. Errors after headers are SSE events."""
-        await interviews.detail(interview_id)
+            user_prompt = (
+                f"Hãy biên soạn chính xác {n} câu hỏi vấn đáp chính cho môn học [{course.course_code}] {course.course_name}.\n"
+                f"Mục tiêu độ khó: {n_easy} câu EASY, {n_med} câu MEDIUM, {n_hard} câu HARD.\n\n"
+                f"DỮ LIỆU HỌC LIỆU & TIÊU CHÍ:\n{encode(context_payload)}"
+            )
 
-        async def events():
-            iterator = safe_events(interview_id, body).__aiter__()
-            task = None
             try:
-                while True:
-                    if task is None:
-                        task = asyncio.create_task(anext(iterator))
-                    done, _ = await asyncio.wait({task}, timeout=15)
-                    if not done:
-                        yield ": heartbeat\n\n"
-                        continue
-                    try:
-                        event = task.result()
-                    except StopAsyncIteration:
-                        break
-                    task = None
-                    yield f"event: {event['type']}\ndata: {encode(event)}\n\n"
-            finally:
-                if task and not task.done():
-                    task.cancel()
-                    with suppress(asyncio.CancelledError, StopAsyncIteration):
-                        await task
-                await iterator.aclose()
+                result = await provider.structured(
+                    GeneratedQuestionsResponse,
+                    QUESTION_GENERATOR_SYSTEM,
+                    user_prompt,
+                )
+                result.course_id = str(course.id)
+                result.course_name = course.course_name
+                result.total_generated = len(result.questions)
+                return result
 
-        return StreamingResponse(
-            events(),
-            media_type="text/event-stream",
-            headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"},
-        )
+            except Exception as exc:
+                logger.exception("Failed to generate questions: %s", exc)
+                raise
 
-    @app.post("/api/v1/sessions/{interview_id}/finish")
-    async def finish_session(interview_id: UUID):
-        return await interviews.finish(interview_id)
 
-    @app.get("/api/v1/sessions/{interview_id}/export")
-    async def export_session(interview_id: UUID):
-        data = await interviews.detail(interview_id)
-        return JSONResponse(
-            jsonable_encoder(data),
-            headers={"Content-Disposition": f'attachment; filename="viva-{interview_id}.json"'},
-        )
+    # ==========================================================================
+    # 4. GEMINI LIVE DUPLEX AUDIO WEBSOCKET (Phòng thi trực tiếp)
+    # ==========================================================================
 
-    @app.websocket("/ws/live/sessions/{interview_id}")
-    async def live_socket(websocket: WebSocket, interview_id: UUID):
-        origin = websocket.headers.get("origin")
-        if origin and urlparse(origin).netloc != websocket.headers.get("host"):
-            await websocket.close(code=1008)
-            return
+    @app.websocket("/ws/live/sessions/{schedule_id}")
+    async def live_audio_socket(websocket: WebSocket, schedule_id: UUID):
+        """Kết nối WebSocket Audio hai chiều giữa thí sinh và Gemini Live."""
         await websocket.accept()
         try:
             if not app.state.db_ready:
-                raise AppError("PostgreSQL chưa sẵn sàng. Khởi động DB rồi restart server.", 503)
-            await VoiceRoom(interviews, websocket, interview_id).run()
+                raise AppError("Cơ sở dữ liệu chưa sẵn sàng.", 503)
+            room = VoiceRoom(interviews, websocket, schedule_id)
+            await room.run()
         except WebSocketDisconnect:
-            pass
+            logger.info("Thí sinh đã ngắt kết nối WebSocket: %s", schedule_id)
         except Exception as exc:
-            logger.warning("Voice room failed: %s", type(exc).__name__)
+            logger.warning("Voice room lỗi: %s", type(exc).__name__)
             message = exc.message if isinstance(exc, AppError) else (
-                "Không kết nối được Gemini Live. Kiểm tra API key, Live model, quota và mạng; "
-                "xem python -m scripts.check_live. Transcript đã nhận được vẫn được lưu.")
+                "Lỗi kết nối Gemini Live. Vui lòng kiểm tra microphone, API key hoặc kết nối mạng."
+            )
             with suppress(Exception):
                 await websocket.send_json({"type": "error", "message": message})
         finally:
             with suppress(Exception):
                 await websocket.close()
 
-    @app.websocket("/ws/sessions/{interview_id}")
-    async def interview_socket(websocket: WebSocket, interview_id: UUID):
-        origin = websocket.headers.get("origin")
-        if origin and urlparse(origin).netloc != websocket.headers.get("host"):
-            await websocket.close(code=1008)
-            return
-        if not app.state.db_ready:
-            await websocket.close(code=1013)
-            return
-        await websocket.accept()
-        active_task = None
-        send_lock = asyncio.Lock()
-        ready_for_next = asyncio.Event()
-        ready_for_next.set()
+    # ==========================================================================
+    # 5. GRADING & EXAMINATION RESULT (Chấm điểm & Lấy báo cáo)
+    # ==========================================================================
+    @app.get("/api/v1/sessions/{schedule_id}")
+    async def get_session_detail(schedule_id: UUID):
+        """Lấy chi tiết ca thi, danh sách câu hỏi đề thi và transcript đã lưu."""
+        return await interviews.detail(schedule_id)
 
-        async def send(event):
-            async with send_lock:
-                await websocket.send_json(event)
+    @app.post("/api/v1/sessions/{schedule_id}/finish")
+    async def finish_and_grade(schedule_id: UUID):
+        """Kích hoạt AI chấm điểm toàn bộ ca thi dựa trên transcript và Rubric."""
+        return await interviews.finish(schedule_id)
 
-        async def run_turn(body):
-            terminal_event = None
-            async for event in safe_events(interview_id, body):
-                if event["type"] in ("done", "error"):
-                    terminal_event = event
-                else:
-                    await send(event)
-            # Release the generator's DB lock before announcing completion.
-            ready_for_next.set()
-            if terminal_event:
-                await send(terminal_event)
+    @app.get("/api/v1/sessions/{schedule_id}/export")
+    async def export_report(schedule_id: UUID):
+        """Xuất file JSON báo cáo chi tiết buổi thi."""
+        data = await interviews.detail(schedule_id)
+        return JSONResponse(
+            jsonable_encoder(data),
+            headers={"Content-Disposition": f'attachment; filename="viva-report-{schedule_id}.json"'},
+        )
 
-        async def run_finish():
-            try:
-                await send({"type": "status", "message": "Đang đối chiếu câu trả lời với rubric…"})
-                report = await interviews.finish(interview_id)
-                terminal_event = {"type": "report", "report": report}
-            except AppError as exc:
-                terminal_event = {"type": "error", "message": exc.message, "code": exc.code}
-            except Exception as exc:
-                logger.warning("Grading failed (%s)", type(exc).__name__)
-                terminal_event = {
-                        "type": "error",
-                        "message": "Chưa thể chấm điểm. Hãy thử lại.",
-                        "code": "internal_error",
-                    }
-            ready_for_next.set()
-            await send(terminal_event)
-
-        try:
-            await send({"type": "snapshot", "session": await interviews.detail(interview_id)})
-            while True:
-                raw = await websocket.receive_text()
-                if len(raw) > 30000:
-                    await send(
-                        {"type": "error", "message": "Tin nhắn quá dài.", "code": "validation"}
-                    )
-                    continue
-                try:
-                    data = json.loads(raw)
-                    if not isinstance(data, dict):
-                        raise ValueError()
-                    kind = data.pop("type", "turn")
-                    if kind == "ping":
-                        await send({"type": "pong"})
-                        continue
-                    if kind == "cancel":
-                        if active_task and not active_task.done():
-                            active_task.cancel()
-                            with suppress(asyncio.CancelledError):
-                                await active_task
-                        await send(
-                            {
-                                "type": "error",
-                                "message": "Đã dừng sinh câu hỏi. Câu trả lời vẫn được lưu; chọn Thử lại để tiếp tục.",
-                                "code": "cancelled",
-                            }
-                        )
-                        continue
-                    if active_task and not active_task.done():
-                        if ready_for_next.is_set():
-                            await active_task
-                        else:
-                            await send({"type": "busy", "message": "Đang xử lý lượt hiện tại."})
-                            continue
-                    if active_task:
-                        with suppress(asyncio.CancelledError):
-                            active_task.result()
-                    if kind == "finish":
-                        ready_for_next.clear()
-                        active_task = asyncio.create_task(run_finish())
-                    elif kind == "turn":
-                        body = TurnRequest.model_validate(data)
-                        ready_for_next.clear()
-                        active_task = asyncio.create_task(
-                            run_turn(body)
-                        )
-                    else:
-                        raise ValueError()
-                except (ValueError, ValidationError):
-                    await send(
-                        {"type": "error", "message": "Tin nhắn chưa hợp lệ.", "code": "validation"}
-                    )
-        except AppError as exc:
-            with suppress(Exception):
-                await send({"type": "error", "message": exc.message, "code": exc.code})
-        except (WebSocketDisconnect, RuntimeError):
-            pass
-        finally:
-            if active_task and not active_task.done():
-                active_task.cancel()
-            if active_task:
-                with suppress(asyncio.CancelledError, Exception):
-                    await active_task
-
-    @app.get("/")
-    async def index():
-        return FileResponse(ROOT / "static" / "index.html")
-
-    app.mount("/static", StaticFiles(directory=ROOT / "static"), name="static")
-    app.mount("/examples", StaticFiles(directory=ROOT / "examples"), name="examples")
     return app
 
 

@@ -57,7 +57,7 @@ spring:
           timeout: 10000
           writetimeout: 10000
 
-  # Multipart Upload Configuration for Audio Blobs
+  # Multipart Upload Configuration
   servlet:
     multipart:
       enabled: true
@@ -71,16 +71,6 @@ jwt:
 
 # AIVES System Configuration
 aives:
-  # AI Provider Layer (STT, TTS, LLM)
-  ai:
-    openai-api-key: ${OPENAI_API_KEY:}
-    gemini-api-key: ${GEMINI_API_KEY:}
-    google-cloud-credentials: ${GOOGLE_APPLICATION_CREDENTIALS:}
-    stt-provider: ${STT_PROVIDER:whisper}       # whisper (default) | google
-    tts-provider: ${TTS_PROVIDER:google}        # google (default) | fpt
-    llm-provider: ${LLM_PROVIDER:openai}        # openai (default) | gemini
-    llm-model: ${LLM_MODEL:gpt-4o}
-
   # Password setup / reset links sent by email
   mail:
     from: ${MAIL_FROM:${MAIL_USERNAME:no-reply@aives.local}}
@@ -88,17 +78,6 @@ aives:
     password-link-hours: 72
     # Local development only: write the link to the log when SMTP is not configured.
     log-links: ${MAIL_LOG_LINKS:false}
-
-  # Audio Ingestion & Storage
-  audio:
-    mode: ${AUDIO_MODE:BUFFERED}                # BUFFERED (default) | STREAMING
-    storage-path: ${AUDIO_STORAGE_PATH:./uploads/audio}
-    max-duration-seconds: 120
-
-  # Real-time Viva Interview Session
-  interview:
-    heartbeat-interval-seconds: 15
-    heartbeat-timeout-seconds: 60
 
   # CORS Configuration (Frontend: React 18 + Vite)
   cors:

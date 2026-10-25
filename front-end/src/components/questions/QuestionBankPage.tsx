@@ -17,9 +17,14 @@ import {
   CheckCircle2,
   FileText,
   Upload,
+  Bot,
+  CheckSquare,
+  Square,
+  Wand2,
 } from 'lucide-react';
 import { questionService, QuestionDto, CreateQuestionRequest, QuestionBatchItem } from '../../services/questionService';
 import { getCourses, Course } from '../../services/courseService';
+import { generateQuestionsFromMaterials, QuestionItemAi } from '../../services/aiService';
 import { UserAccount } from '../../types';
 import { Language } from '../../utils/i18n';
 
@@ -68,6 +73,26 @@ export const QuestionBankPage: React.FC<QuestionBankPageProps> = ({
   const [batchRawText, setBatchRawText] = useState<string>('');
   const [batchError, setBatchError] = useState<string>('');
   const [isBatchSubmitting, setIsBatchSubmitting] = useState<boolean>(false);
+
+  // Modal AI Generate Questions
+  const [isAiConfigOpen, setIsAiConfigOpen] = useState<boolean>(false);
+  const [aiCourseId, setAiCourseId] = useState<string>('');
+  const [aiGenCount, setAiGenCount] = useState<number>(5);
+  const [aiGenDifficulty, setAiGenDifficulty] = useState<'BALANCED' | 'EASY' | 'MEDIUM' | 'HARD'>('BALANCED');
+  const [aiGenTopicHint, setAiGenTopicHint] = useState<string>('');
+  const [isAiGenerating, setIsAiGenerating] = useState<boolean>(false);
+  const [aiGenError, setAiGenError] = useState<string>('');
+
+  // Modal AI Review & Approve
+  const [isAiReviewOpen, setIsAiReviewOpen] = useState<boolean>(false);
+  const [aiGeneratedQuestions, setAiGeneratedQuestions] = useState<QuestionItemAi[]>([]);
+  const [selectedAiIndices, setSelectedAiIndices] = useState<Set<number>>(new Set());
+  const [aiReviewCourseId, setAiReviewCourseId] = useState<string>('');
+  const [aiReviewCourseName, setAiReviewCourseName] = useState<string>('');
+  const [isAiBatchSaving, setIsAiBatchSaving] = useState<boolean>(false);
+
+  // Single Question AI Suggestion state in Create Modal
+  const [isAiAutofillingSingle, setIsAiAutofillingSingle] = useState<boolean>(false);
 
   // Delete Confirm Modal
   const [deletingQuestion, setDeletingQuestion] = useState<QuestionDto | null>(null);
@@ -283,6 +308,162 @@ export const QuestionBankPage: React.FC<QuestionBankPageProps> = ({
     }
   }
 
+  // Open AI Config modal
+  const openAiConfigModal = () => {
+    setAiCourseId(selectedCourseId || (courses[0]?.id ?? ''));
+    setAiGenCount(5);
+    setAiGenDifficulty('BALANCED');
+    setAiGenTopicHint('');
+    setAiGenError('');
+    setIsAiConfigOpen(true);
+  };
+
+  // Run AI generation from materials
+  async function handleRunAiGenerate(e?: React.FormEvent) {
+    if (e) e.preventDefault();
+    if (!aiCourseId) {
+      setAiGenError(t('Vui lòng chọn môn học để AI phân tích học liệu.', 'Please select a course for AI analysis.'));
+      return;
+    }
+    setIsAiGenerating(true);
+    setAiGenError('');
+
+    try {
+      const res = await generateQuestionsFromMaterials(aiCourseId, {
+        count: aiGenCount,
+        difficulty: aiGenDifficulty,
+        topicHint: aiGenTopicHint,
+      });
+
+      if (!res.questions || res.questions.length === 0) {
+        throw new Error(
+          t(
+            'AI không tạo được câu hỏi nào. Vui lòng kiểm tra tài liệu học liệu môn học đã được nạp chưa.',
+            'No questions were generated. Please verify that course documents have been uploaded.'
+          )
+        );
+      }
+
+      setAiReviewCourseId(aiCourseId);
+      setAiReviewCourseName(res.course_name || courses.find(c => c.id === aiCourseId)?.courseName || '');
+      setAiGeneratedQuestions(res.questions);
+      setSelectedAiIndices(new Set(res.questions.map((_, i) => i)));
+      setIsAiConfigOpen(false);
+      setIsAiReviewOpen(true);
+    } catch (err: any) {
+      console.error('AI generation failed', err);
+      const msg =
+        err.response?.data?.detail || err.message || t('Lỗi kết nối AI sinh câu hỏi.', 'Failed to generate questions with AI.');
+      setAiGenError(msg);
+    } finally {
+      setIsAiGenerating(false);
+    }
+  }
+
+  // Toggle selection for AI items
+  const toggleAiSelect = (index: number) => {
+    setSelectedAiIndices(prev => {
+      const next = new Set(prev);
+      if (next.has(index)) next.delete(index);
+      else next.add(index);
+      return next;
+    });
+  };
+
+  const toggleAiSelectAll = () => {
+    if (selectedAiIndices.size === aiGeneratedQuestions.length) {
+      setSelectedAiIndices(new Set());
+    } else {
+      setSelectedAiIndices(new Set(aiGeneratedQuestions.map((_, i) => i)));
+    }
+  };
+
+  const updateAiQuestionItem = (index: number, field: keyof QuestionItemAi, value: string) => {
+    setAiGeneratedQuestions(prev => {
+      const next = [...prev];
+      next[index] = { ...next[index], [field]: value };
+      return next;
+    });
+  };
+
+  // Save approved AI questions via Spring Boot batch create
+  async function handleSaveApprovedAiQuestions() {
+    const selectedQuestions = aiGeneratedQuestions.filter((_, idx) => selectedAiIndices.has(idx));
+    if (selectedQuestions.length === 0) {
+      showToast(t('Vui lòng chọn ít nhất 1 câu hỏi để thêm vào ngân hàng.', 'Please select at least 1 question to add.'), 'error');
+      return;
+    }
+
+    setIsAiBatchSaving(true);
+    try {
+      const batchPayload: QuestionBatchItem[] = selectedQuestions.map(q => ({
+        content: q.content.trim(),
+        difficultyLevel: q.difficulty_level || 'MEDIUM',
+        topic: q.topic?.trim() || undefined,
+        expectedAnswer: q.expected_answer?.trim() || undefined,
+      }));
+
+      const created = await questionService.createBatchQuestions({
+        courseId: aiReviewCourseId,
+        questions: batchPayload,
+      });
+
+      showToast(
+        t(
+          `Đã thêm thành công ${created.length} câu hỏi AI gợi ý vào Ngân hàng!`,
+          `Successfully added ${created.length} AI questions to Question Bank!`
+        ),
+        'success'
+      );
+      setIsAiReviewOpen(false);
+      if (selectedCourseId !== aiReviewCourseId) {
+        setSelectedCourseId(aiReviewCourseId);
+      } else {
+        loadQuestions();
+      }
+    } catch (err: any) {
+      console.error('Failed to save approved questions', err);
+      showToast(err.response?.data?.message || err.message || t('Lưu câu hỏi AI thất bại.', 'Failed to save AI questions.'), 'error');
+    } finally {
+      setIsAiBatchSaving(false);
+    }
+  }
+
+  // Quick single question autofill inside Create Modal
+  async function handleAiAutofillSingleQuestion() {
+    if (!formCourseId) {
+      setFormError(t('Vui lòng chọn môn học trước khi yêu cầu AI gợi ý câu hỏi.', 'Please select a course first before requesting AI suggestion.'));
+      return;
+    }
+    setIsAiAutofillingSingle(true);
+    setFormError('');
+    try {
+      const res = await generateQuestionsFromMaterials(formCourseId, {
+        count: 1,
+        difficulty: (['EASY', 'MEDIUM', 'HARD'].includes(formDifficulty) ? formDifficulty : 'BALANCED') as any,
+        topicHint: formTopic.trim() || undefined,
+      });
+      if (res.questions && res.questions.length > 0) {
+        const q = res.questions[0];
+        setFormContent(q.content);
+        if (q.topic) setFormTopic(q.topic);
+        if (q.difficulty_level) setFormDifficulty(q.difficulty_level);
+        if (q.expected_answer) setFormExpectedAnswer(q.expected_answer);
+        showToast(t('AI đã gợi ý thành công nội dung câu hỏi!', 'AI question suggested successfully!'), 'success');
+      } else {
+        throw new Error(t('Không nhận được câu hỏi từ AI.', 'No question returned from AI.'));
+      }
+    } catch (err: any) {
+      setFormError(
+        err.response?.data?.detail ||
+          err.message ||
+          t('Không thể gợi ý từ AI. Hãy đảm bảo môn học đã có tài liệu.', 'Failed to get AI suggestion. Ensure course has materials uploaded.')
+      );
+    } finally {
+      setIsAiAutofillingSingle(false);
+    }
+  }
+
   const getDifficultyBadge = (level?: string) => {
     const norm = (level || '').toUpperCase();
     if (norm === 'EASY') {
@@ -358,6 +539,13 @@ export const QuestionBankPage: React.FC<QuestionBankPageProps> = ({
           </div>
 
           <div className="flex items-center gap-2.5 flex-wrap">
+            <button
+              onClick={openAiConfigModal}
+              className="inline-flex items-center gap-2 px-3.5 py-2 rounded-xl text-xs font-bold border border-purple-200 dark:border-purple-800/80 bg-gradient-to-r from-purple-50 to-indigo-50 dark:from-purple-950/40 dark:to-indigo-950/40 text-purple-700 dark:text-purple-300 hover:from-purple-100 hover:to-indigo-100 dark:hover:from-purple-900/50 dark:hover:to-indigo-900/50 transition-all cursor-pointer shadow-2xs"
+            >
+              <Bot className="h-4 w-4 text-purple-600 dark:text-purple-400" />
+              <span>{t('✨ AI Gợi ý câu hỏi từ Học liệu', '✨ AI Question Generator')}</span>
+            </button>
             <button
               onClick={openBatchModal}
               className="inline-flex items-center gap-2 px-3.5 py-2 rounded-xl text-xs font-semibold border border-indigo-200 dark:border-indigo-800/80 bg-indigo-50 dark:bg-indigo-950/40 text-indigo-700 dark:text-indigo-300 hover:bg-indigo-100 dark:hover:bg-indigo-900/50 transition-colors cursor-pointer shadow-2xs"
@@ -492,7 +680,14 @@ export const QuestionBankPage: React.FC<QuestionBankPageProps> = ({
               ? t('Môn học này hiện chưa có câu hỏi nào. Hãy thêm câu hỏi mới để hệ thống gán vào kỳ thi.', 'This course does not have questions yet. Add questions so exams can pull them into schedules.')
               : t('Không tìm thấy câu hỏi phù hợp với bộ lọc tìm kiếm hiện tại.', 'No questions match the current filter criteria.')}
           </p>
-          <div className="mt-4 flex gap-2">
+          <div className="mt-4 flex gap-2 flex-wrap justify-center">
+            <button
+              onClick={openAiConfigModal}
+              className="inline-flex items-center gap-2 px-4 py-2 rounded-xl text-xs font-bold bg-purple-600 hover:bg-purple-700 text-white cursor-pointer shadow-xs"
+            >
+              <Bot className="h-4 w-4" />
+              {t('✨ AI Gợi ý câu hỏi từ tài liệu', '✨ AI Suggest from Materials')}
+            </button>
             <button
               onClick={openCreateModal}
               className="inline-flex items-center gap-2 px-4 py-2 rounded-xl text-xs font-bold bg-indigo-600 hover:bg-indigo-700 text-white cursor-pointer shadow-xs"
@@ -661,11 +856,33 @@ export const QuestionBankPage: React.FC<QuestionBankPageProps> = ({
                 </div>
               </div>
 
-              {/* Content */}
+              {/* Content with AI Autofill Button */}
               <div>
-                <label className="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1.5">
-                  {t('Nội dung câu hỏi vấn đáp *', 'Oral Examination Question Content *')}
-                </label>
+                <div className="flex items-center justify-between mb-1.5">
+                  <label className="text-xs font-semibold text-slate-700 dark:text-slate-300">
+                    {t('Nội dung câu hỏi vấn đáp *', 'Oral Examination Question Content *')}
+                  </label>
+                  {!editingQuestion && (
+                    <button
+                      type="button"
+                      disabled={isAiAutofillingSingle || !formCourseId}
+                      onClick={handleAiAutofillSingleQuestion}
+                      className="inline-flex items-center gap-1.5 text-xs font-medium text-purple-600 dark:text-purple-400 hover:text-purple-700 dark:hover:text-purple-300 disabled:opacity-50 transition-colors cursor-pointer"
+                      title={t('Dùng AI tạo gợi ý 1 câu hỏi từ tài liệu học liệu môn này', 'Use AI to suggest 1 question from course materials')}
+                    >
+                      {isAiAutofillingSingle ? (
+                        <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                      ) : (
+                        <Sparkles className="h-3.5 w-3.5 text-purple-500" />
+                      )}
+                      <span>
+                        {isAiAutofillingSingle
+                          ? t('AI đang sinh…', 'AI generating…')
+                          : t('✨ AI gợi ý 1 câu', '✨ AI suggest 1 question')}
+                      </span>
+                    </button>
+                  )}
+                </div>
                 <textarea
                   rows={4}
                   required
@@ -905,6 +1122,381 @@ export const QuestionBankPage: React.FC<QuestionBankPageProps> = ({
                 {isDeleting && <Loader2 className="h-3.5 w-3.5 animate-spin" />}
                 <span>{isDeleting ? t('Đang xóa…', 'Deleting…') : t('Xác nhận xóa', 'Confirm Delete')}</span>
               </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Modal: AI Generate Questions Config */}
+      {isAiConfigOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/60 backdrop-blur-xs">
+          <div className="w-full max-w-xl rounded-2xl border border-slate-200 bg-white p-6 shadow-2xl dark:border-slate-700 dark:bg-slate-900 max-h-[90vh] overflow-y-auto">
+            <div className="flex items-center justify-between pb-4 border-b border-slate-100 dark:border-slate-800">
+              <div className="flex items-center gap-2.5">
+                <div className="h-9 w-9 rounded-xl bg-purple-100 dark:bg-purple-950 flex items-center justify-center text-purple-600 dark:text-purple-400">
+                  <Bot className="h-5 w-5" />
+                </div>
+                <div>
+                  <h2 className="text-lg font-bold text-slate-900 dark:text-white">
+                    {t('AI Sinh Câu Hỏi Gợi Ý từ Học Liệu', 'AI Question Generator from Materials')}
+                  </h2>
+                  <p className="text-xs text-slate-500 dark:text-slate-400">
+                    {t(
+                      'Phân tích giáo trình & rubric để sinh câu hỏi vấn đáp chuẩn hóa',
+                      'Analyze course documents & rubrics to generate oral questions'
+                    )}
+                  </p>
+                </div>
+              </div>
+              <button
+                onClick={() => setIsAiConfigOpen(false)}
+                className="p-1 rounded-lg text-slate-400 hover:text-slate-600 dark:hover:text-slate-200"
+              >
+                <X className="h-5 w-5" />
+              </button>
+            </div>
+
+            <form onSubmit={handleRunAiGenerate} className="mt-4 space-y-4">
+              {aiGenError && (
+                <div className="flex items-start gap-2 p-3 rounded-xl border border-rose-200 bg-rose-50 text-xs font-medium text-rose-700 dark:border-rose-900 dark:bg-rose-950/50 dark:text-rose-200">
+                  <AlertCircle className="h-4 w-4 shrink-0 mt-0.5" />
+                  <div className="flex-1">
+                    <span>{aiGenError}</span>
+                  </div>
+                </div>
+              )}
+
+              {/* Target Course */}
+              <div>
+                <label className="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1.5">
+                  {t('Môn học cần phân tích học liệu *', 'Target Course for Analysis *')}
+                </label>
+                <select
+                  value={aiCourseId}
+                  onChange={e => setAiCourseId(e.target.value)}
+                  className="w-full rounded-xl border border-slate-300 bg-white p-2.5 text-xs text-slate-900 focus:outline-hidden focus:ring-2 focus:ring-purple-500 dark:border-slate-700 dark:bg-slate-800 dark:text-white"
+                  required
+                >
+                  <option value="">{t('-- Chọn môn học --', '-- Select Course --')}</option>
+                  {courses.map(c => (
+                    <option key={c.id} value={c.id}>
+                      {c.courseCode} - {c.courseName}
+                    </option>
+                  ))}
+                </select>
+                <p className="mt-1 text-[11px] text-slate-400">
+                  {t(
+                    'AI sẽ đọc các đoạn văn bản (chunks) từ tài liệu môn học và tiêu chí rubric đã được nạp.',
+                    'AI reads document chunks and rubric criteria previously uploaded for this course.'
+                  )}
+                </p>
+              </div>
+
+              {/* Number of questions */}
+              <div>
+                <label className="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1.5">
+                  {t('Số lượng câu hỏi muốn sinh (1 - 20)', 'Number of questions to generate (1 - 20)')}
+                </label>
+                <div className="flex items-center gap-3">
+                  <input
+                    type="range"
+                    min={1}
+                    max={20}
+                    value={aiGenCount}
+                    onChange={e => setAiGenCount(parseInt(e.target.value, 10))}
+                    className="flex-1 accent-purple-600"
+                  />
+                  <span className="w-12 text-center py-1 px-2.5 rounded-lg border border-purple-200 bg-purple-50 text-xs font-bold text-purple-700 dark:border-purple-800 dark:bg-purple-950 dark:text-purple-300">
+                    {aiGenCount}
+                  </span>
+                </div>
+                <div className="mt-2 flex gap-1.5">
+                  {[3, 5, 8, 10, 15].map(cnt => (
+                    <button
+                      key={cnt}
+                      type="button"
+                      onClick={() => setAiGenCount(cnt)}
+                      className={`px-2.5 py-1 text-xs rounded-lg border font-medium transition-colors ${
+                        aiGenCount === cnt
+                          ? 'border-purple-500 bg-purple-500 text-white'
+                          : 'border-slate-200 bg-slate-50 text-slate-600 hover:bg-slate-100 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-300'
+                      }`}
+                    >
+                      {cnt} {t('câu', 'qs')}
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              {/* Difficulty Strategy */}
+              <div>
+                <label className="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1.5">
+                  {t('Định hướng mức độ khó', 'Difficulty Distribution')}
+                </label>
+                <div className="grid grid-cols-2 gap-2">
+                  {[
+                    { val: 'BALANCED', label: t('Cân đối Bloom', 'Balanced Bloom'), desc: t('Tỉ lệ Dễ - Vừa - Khó', 'Ratio Easy - Med - Hard') },
+                    { val: 'EASY', label: t('Ưu tiên Dễ', 'Focus Easy'), desc: t('Nhớ & Hiểu khái niệm', 'Remember & Understand') },
+                    { val: 'MEDIUM', label: t('Ưu tiên Trung bình', 'Focus Medium'), desc: t('Vận dụng & Phân tích', 'Apply & Analyze') },
+                    { val: 'HARD', label: t('Ưu tiên Khó', 'Focus Hard'), desc: t('Đánh giá & Xử lý tình huống', 'Evaluate & Scenario') },
+                  ].map(d => (
+                    <button
+                      key={d.val}
+                      type="button"
+                      onClick={() => setAiGenDifficulty(d.val as any)}
+                      className={`p-2.5 rounded-xl border text-left transition-all cursor-pointer ${
+                        aiGenDifficulty === d.val
+                          ? 'border-purple-500 bg-purple-50/60 dark:bg-purple-950/40 text-purple-900 dark:text-purple-200 ring-1 ring-purple-500'
+                          : 'border-slate-200 hover:border-slate-300 bg-white dark:border-slate-800 dark:bg-slate-800/40 text-slate-700 dark:text-slate-300'
+                      }`}
+                    >
+                      <div className="text-xs font-bold">{d.label}</div>
+                      <div className="text-[11px] text-slate-400 mt-0.5">{d.desc}</div>
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              {/* Optional Topic Hint */}
+              <div>
+                <label className="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1.5">
+                  {t('Chủ đề hoặc Chương muốn tập trung (Tùy chọn)', 'Target Topic or Chapter Hint (Optional)')}
+                </label>
+                <input
+                  type="text"
+                  value={aiGenTopicHint}
+                  onChange={e => setAiGenTopicHint(e.target.value)}
+                  placeholder={t(
+                    'VD: Microservices Architecture, Clean Architecture, Bảo mật API...',
+                    'e.g. Microservices, Clean Architecture, API Security...'
+                  )}
+                  className="w-full rounded-xl border border-slate-300 bg-white p-2.5 text-xs text-slate-900 focus:outline-hidden focus:ring-2 focus:ring-purple-500 dark:border-slate-700 dark:bg-slate-800 dark:text-white"
+                />
+              </div>
+
+              <div className="rounded-xl border border-purple-100 bg-purple-50/50 p-3 text-xs text-purple-800 dark:border-purple-900/40 dark:bg-purple-950/30 dark:text-purple-300">
+                <span className="font-semibold block mb-1">
+                  💡 {t('Quy trình duyệt trước khi lưu:', 'Approval workflow:')}
+                </span>
+                <p className="text-[11px] leading-relaxed">
+                  {t(
+                    'Sau khi AI hoàn thành, danh sách câu hỏi sẽ hiển thị ở bảng duyệt để bạn kiểm tra, chỉnh sửa nội dung, hoặc bỏ chọn những câu không phù hợp trước khi chính thức đưa vào CSDL.',
+                    'Once generated, questions will be presented in a review table for you to inspect, edit, or reject before saving to the database.'
+                  )}
+                </p>
+              </div>
+
+              <div className="flex justify-end gap-2 pt-3 border-t border-slate-100 dark:border-slate-800">
+                <button
+                  type="button"
+                  disabled={isAiGenerating}
+                  onClick={() => setIsAiConfigOpen(false)}
+                  className="px-4 py-2 rounded-xl text-xs font-semibold text-slate-600 hover:bg-slate-100 dark:text-slate-300 dark:hover:bg-slate-800 transition-colors"
+                >
+                  {t('Hủy', 'Cancel')}
+                </button>
+                <button
+                  type="submit"
+                  disabled={isAiGenerating || !aiCourseId}
+                  className="inline-flex items-center gap-2 px-5 py-2.5 rounded-xl text-xs font-bold bg-gradient-to-r from-purple-600 to-indigo-600 hover:from-purple-700 hover:to-indigo-700 text-white transition-all cursor-pointer shadow-md disabled:opacity-50"
+                >
+                  {isAiGenerating ? (
+                    <>
+                      <Loader2 className="h-4 w-4 animate-spin" />
+                      <span>{t('AI đang phân tích & sinh câu hỏi…', 'AI analyzing & generating…')}</span>
+                    </>
+                  ) : (
+                    <>
+                      <Sparkles className="h-4 w-4" />
+                      <span>{t(`Sinh ${aiGenCount} câu hỏi gợi ý`, `Generate ${aiGenCount} Questions`)}</span>
+                    </>
+                  )}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* Modal: AI Review & Approval Table */}
+      {isAiReviewOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/60 backdrop-blur-xs">
+          <div className="w-full max-w-4xl rounded-2xl border border-slate-200 bg-white p-6 shadow-2xl dark:border-slate-700 dark:bg-slate-900 max-h-[92vh] flex flex-col">
+            {/* Header */}
+            <div className="flex items-center justify-between pb-4 border-b border-slate-100 dark:border-slate-800 shrink-0">
+              <div className="flex items-center gap-3">
+                <div className="h-10 w-10 rounded-xl bg-purple-100 dark:bg-purple-950 flex items-center justify-center text-purple-600 dark:text-purple-400">
+                  <CheckSquare className="h-5 w-5" />
+                </div>
+                <div>
+                  <div className="flex items-center gap-2">
+                    <h2 className="text-lg font-bold text-slate-900 dark:text-white">
+                      {t('Duyệt & Chấp Thuận Câu Hỏi AI Gợi Ý', 'Review & Approve AI Questions')}
+                    </h2>
+                    <span className="px-2 py-0.5 rounded-md text-xs font-bold bg-purple-100 text-purple-700 dark:bg-purple-950 dark:text-purple-300">
+                      {aiGeneratedQuestions.length} {t('câu hỏi', 'questions')}
+                    </span>
+                  </div>
+                  <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">
+                    {t('Môn học:', 'Course:')} <span className="font-semibold text-slate-700 dark:text-slate-200">{aiReviewCourseName}</span>
+                    {' • '}{t('Bạn có thể sửa nội dung trực tiếp trước khi nhấn Lưu.', 'You can edit fields inline before saving.')}
+                  </p>
+                </div>
+              </div>
+
+              <div className="flex items-center gap-2">
+                <button
+                  type="button"
+                  onClick={toggleAiSelectAll}
+                  className="px-3 py-1.5 rounded-lg border border-slate-200 dark:border-slate-700 text-xs font-semibold text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors"
+                >
+                  {selectedAiIndices.size === aiGeneratedQuestions.length
+                    ? t('Bỏ chọn tất cả', 'Deselect All')
+                    : t('Chọn tất cả', 'Select All')}
+                </button>
+                <button
+                  onClick={() => setIsAiReviewOpen(false)}
+                  className="p-1.5 rounded-lg text-slate-400 hover:text-slate-600 dark:hover:text-slate-200"
+                >
+                  <X className="h-5 w-5" />
+                </button>
+              </div>
+            </div>
+
+            {/* List of Questions */}
+            <div className="flex-1 overflow-y-auto py-4 space-y-4 pr-1">
+              {aiGeneratedQuestions.map((q, idx) => {
+                const isSelected = selectedAiIndices.has(idx);
+                return (
+                  <div
+                    key={idx}
+                    className={`rounded-xl border p-4 transition-all ${
+                      isSelected
+                        ? 'border-purple-300 bg-purple-50/20 dark:border-purple-800/80 dark:bg-purple-950/20 shadow-xs'
+                        : 'border-slate-200 bg-slate-50/40 dark:border-slate-800 dark:bg-slate-900/40 opacity-70'
+                    }`}
+                  >
+                    {/* Item Toolbar */}
+                    <div className="flex items-center justify-between gap-3 mb-3">
+                      <div className="flex items-center gap-2.5">
+                        <button
+                          type="button"
+                          onClick={() => toggleAiSelect(idx)}
+                          className="text-purple-600 dark:text-purple-400 hover:scale-110 transition-transform cursor-pointer"
+                        >
+                          {isSelected ? <CheckSquare className="h-5 w-5" /> : <Square className="h-5 w-5 text-slate-400" />}
+                        </button>
+                        <span className="flex h-6 w-6 items-center justify-center rounded-md bg-purple-100 dark:bg-purple-900/60 text-xs font-bold text-purple-700 dark:text-purple-300">
+                          #{idx + 1}
+                        </span>
+                        <span className="text-xs font-semibold text-slate-700 dark:text-slate-300">
+                          {isSelected ? t('Đã chọn lưu', 'Approved to save') : t('Bỏ qua', 'Skipped')}
+                        </span>
+                      </div>
+
+                      <div className="flex items-center gap-2">
+                        {/* Topic Input */}
+                        <div className="flex items-center gap-1.5">
+                          <span className="text-[11px] font-medium text-slate-400">{t('Chủ đề:', 'Topic:')}</span>
+                          <input
+                            type="text"
+                            value={q.topic || ''}
+                            onChange={e => updateAiQuestionItem(idx, 'topic', e.target.value)}
+                            placeholder={t('Chủ đề...', 'Topic...')}
+                            className="w-36 rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 px-2 py-1 text-xs text-slate-800 dark:text-slate-200"
+                          />
+                        </div>
+
+                        {/* Difficulty Select */}
+                        <div className="flex items-center gap-1.5">
+                          <span className="text-[11px] font-medium text-slate-400">{t('Độ khó:', 'Diff:')}</span>
+                          <select
+                            value={(q.difficulty_level || 'MEDIUM').toUpperCase()}
+                            onChange={e => updateAiQuestionItem(idx, 'difficulty_level', e.target.value)}
+                            className="rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 px-2 py-1 text-xs font-semibold text-slate-800 dark:text-slate-200"
+                          >
+                            <option value="EASY">{t('Dễ', 'Easy')}</option>
+                            <option value="MEDIUM">{t('Trung bình', 'Medium')}</option>
+                            <option value="HARD">{t('Khó', 'Hard')}</option>
+                          </select>
+                        </div>
+                      </div>
+                    </div>
+
+                    {/* Question Content */}
+                    <div className="space-y-1.5">
+                      <label className="text-[11px] font-semibold text-slate-600 dark:text-slate-400">
+                        {t('Nội dung câu hỏi vấn đáp:', 'Oral Question Content:')}
+                      </label>
+                      <textarea
+                        rows={2}
+                        value={q.content}
+                        onChange={e => updateAiQuestionItem(idx, 'content', e.target.value)}
+                        className="w-full rounded-lg border border-slate-300 bg-white p-2.5 text-xs text-slate-900 focus:outline-hidden focus:ring-2 focus:ring-purple-500 dark:border-slate-700 dark:bg-slate-800 dark:text-white leading-relaxed"
+                      />
+                    </div>
+
+                    {/* Expected Answer */}
+                    <div className="mt-2.5 space-y-1">
+                      <label className="text-[11px] font-semibold text-purple-700 dark:text-purple-400">
+                        {t('Gợi ý đáp án & Tiêu chí Giám khảo AI chấm:', 'Expected Answer & AI Scoring Rubric:')}
+                      </label>
+                      <textarea
+                        rows={2}
+                        value={q.expected_answer || ''}
+                        onChange={e => updateAiQuestionItem(idx, 'expected_answer', e.target.value)}
+                        placeholder={t('Từ khóa, khái niệm thí sinh cần nêu ra...', 'Key concepts candidate should mention...')}
+                        className="w-full rounded-lg border border-slate-200 bg-slate-50/80 p-2.5 text-xs text-slate-800 focus:outline-hidden focus:ring-2 focus:ring-purple-500 dark:border-slate-700 dark:bg-slate-800/80 dark:text-slate-200 leading-relaxed font-mono text-[11px]"
+                      />
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+
+            {/* Bottom Actions */}
+            <div className="flex items-center justify-between pt-4 border-t border-slate-100 dark:border-slate-800 shrink-0">
+              <div className="text-xs font-semibold text-slate-600 dark:text-slate-400">
+                {t('Đã chấp thuận:', 'Selected:')}{' '}
+                <span className="font-bold text-purple-700 dark:text-purple-300">
+                  {selectedAiIndices.size} / {aiGeneratedQuestions.length}
+                </span>{' '}
+                {t('câu hỏi', 'questions')}
+              </div>
+
+              <div className="flex items-center gap-2">
+                <button
+                  type="button"
+                  disabled={isAiBatchSaving}
+                  onClick={() => setIsAiReviewOpen(false)}
+                  className="px-4 py-2 rounded-xl text-xs font-semibold text-slate-600 hover:bg-slate-100 dark:text-slate-300 dark:hover:bg-slate-800 transition-colors"
+                >
+                  {t('Hủy bỏ', 'Cancel')}
+                </button>
+                <button
+                  type="button"
+                  disabled={isAiBatchSaving || selectedAiIndices.size === 0}
+                  onClick={handleSaveApprovedAiQuestions}
+                  className="inline-flex items-center gap-2 px-5 py-2.5 rounded-xl text-xs font-bold bg-gradient-to-r from-purple-600 to-indigo-600 hover:from-purple-700 hover:to-indigo-700 text-white transition-all cursor-pointer shadow-md disabled:opacity-50"
+                >
+                  {isAiBatchSaving ? (
+                    <>
+                      <Loader2 className="h-4 w-4 animate-spin" />
+                      <span>{t('Đang lưu vào ngân hàng…', 'Saving to Question Bank…')}</span>
+                    </>
+                  ) : (
+                    <>
+                      <CheckCircle2 className="h-4 w-4" />
+                      <span>
+                        {t(
+                          `Chấp thuận & Lưu ${selectedAiIndices.size} câu hỏi vào Ngân hàng`,
+                          `Approve & Save ${selectedAiIndices.size} Questions to Bank`
+                        )}
+                      </span>
+                    </>
+                  )}
+                </button>
+              </div>
             </div>
           </div>
         </div>

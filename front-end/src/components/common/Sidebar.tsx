@@ -6,6 +6,7 @@ import {
   BarChart3,
   ShieldCheck,
   BookOpen,
+  BookMarked,
   LogIn,
   X,
   PanelLeftClose,
@@ -57,6 +58,12 @@ export const Sidebar: React.FC<SidebarProps> = ({
       label: t.navQuestions,
       icon: FileQuestion,
       show: currentUser?.role === 'LECTURER' || currentUser?.role === 'ADMIN',
+    },
+    {
+      id: 'materials' as ModuleType,
+      label: t.navMaterials || (isVi ? 'Học liệu & Rubric AI' : 'Materials & Rubrics'),
+      icon: BookMarked,
+      show: currentUser?.role === 'LECTURER',
     },
     {
       id: 'analytics' as ModuleType,

@@ -2,27 +2,36 @@ from uuid import UUID
 
 from sqlalchemy import select
 
-from app.models import Chunk, Document
+from app.models import AiDocument, AiDocumentChunk
 
 
 class RetrievalService:
     def __init__(self, database, gateway, top_k: int):
         self.db, self.gateway, self.top_k = database, gateway, top_k
 
-    async def retrieve(self, interview, query: str) -> list[dict]:
+    async def retrieve(
+        self,
+        course_id: UUID,
+        query: str,
+        document_ids: list[str | UUID] | None = None,
+        embedding_model: str = "gemini-embedding-001",
+    ) -> list[dict]:
         vector = (
-            await self.gateway.embed([query[:1800]], query=True, model=interview.embedding_model)
+            await self.gateway.embed([query[:1800]], query=True, model=embedding_model)
         )[0]
-        distance = Chunk.embedding.cosine_distance(vector)
-        # Filter BEFORE ranking. A session cannot retrieve another course's chunks.
+        distance = AiDocumentChunk.embedding.cosine_distance(vector)
+        
+        conditions = [
+            AiDocumentChunk.course_id == course_id,
+            AiDocument.embedding_model == embedding_model,
+        ]
+        if document_ids:
+            conditions.append(AiDocumentChunk.document_id.in_([UUID(str(v)) for v in document_ids]))
+
         statement = (
-            select(Chunk, Document.filename, distance.label("distance"))
-            .join(Document, Chunk.document_id == Document.id)
-            .where(
-                Chunk.course_id == interview.course_id,
-                Chunk.document_id.in_([UUID(v) for v in interview.document_ids]),
-                Document.embedding_model == interview.embedding_model,
-            )
+            select(AiDocumentChunk, AiDocument.filename, distance.label("distance"))
+            .join(AiDocument, AiDocumentChunk.document_id == AiDocument.id)
+            .where(*conditions)
             .order_by(distance)
             .limit(self.top_k)
         )

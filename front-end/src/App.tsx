@@ -14,6 +14,7 @@ import { ResultAnalyticsView } from './components/analytics/ResultAnalyticsView'
 import { UserManagementPage } from './components/admin/UserManagementPage';
 import { CourseManagementPage } from './components/admin/CourseManagementPage';
 import { QuestionBankPage } from './components/questions/QuestionBankPage';
+import { CourseMaterialsPage } from './components/materials/CourseMaterialsPage';
 import { AuthModal } from './components/auth/AuthModal';
 import { AuthLandingPage } from './components/auth/AuthLandingPage';
 import { SetPasswordPage } from './components/auth/SetPasswordPage';
@@ -270,6 +271,11 @@ export default function App() {
           {/* MODULE: QUESTION BANK MANAGEMENT (LECTURER & ADMIN) */}
           {activeModule === 'questions' && (currentUser.role === 'LECTURER' || currentUser.role === 'ADMIN') && (
             <QuestionBankPage currentUser={currentUser} language={language} />
+          )}
+
+          {/* MODULE: COURSE MATERIALS & AI RUBRICS (LECTURER ONLY) */}
+          {activeModule === 'materials' && currentUser.role === 'LECTURER' && (
+            <CourseMaterialsPage key={currentUser.id} currentUser={currentUser} language={language} />
           )}
 
 
