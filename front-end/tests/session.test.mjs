@@ -73,7 +73,11 @@ function harness() {
     assert.equal(id, './apiClient');
     return { __esModule: true, ...api };
   });
-  return { local, session, requests, events, api, service, server: handler => { server = handler; } };
+  const loadApiService = path => load(path, id => {
+    assert.equal(id, './apiClient');
+    return { __esModule: true, ...api };
+  });
+  return { local, session, requests, events, api, service, loadApiService, server: handler => { server = handler; } };
 }
 
 test('/me bypasses cache and replaces a cached ADMIN role with backend identity', async () => {
@@ -229,4 +233,31 @@ test('password link endpoints never carry or invalidate the current session', as
   await assert.rejects(h.api.default.post('/admin/users/u1/password-link'));
   assert.equal(h.local.get('accessToken'), undefined);
   assert.deepEqual(h.events, ['auth:unauthorized']);
+});
+
+test('explicit schedule refresh bypasses cached status after another service completes the exam', async () => {
+  const h = harness(); h.local.set('accessToken', 'session');
+  const { studentExamService } = h.loadApiService('../src/services/studentExamService.ts');
+  h.server(async () => ({ data: { data: [{ id: 's', status: 'PENDING' }] } }));
+  await studentExamService.mySchedules();
+  h.server(async () => ({ data: { data: [{ id: 's', status: 'COMPLETED' }] } }));
+  assert.equal((await studentExamService.mySchedules())[0].status, 'PENDING');
+  assert.equal((await studentExamService.mySchedules(undefined, true))[0].status, 'COMPLETED');
+  assert.equal(h.requests.length, 2);
+  assert.equal(h.requests.at(-1).headers['Cache-Control'], 'no-cache');
+});
+
+test('exam list, detail and schedules support explicit fresh reads', async () => {
+  const h = harness(); h.local.set('accessToken', 'session');
+  const { lecturerExamService } = h.loadApiService('../src/services/lecturerExamService.ts');
+  for (const read of [
+    fresh => lecturerExamService.list(0, 10, 'startDate,desc', undefined, fresh),
+    fresh => lecturerExamService.detail('e', undefined, fresh),
+    fresh => lecturerExamService.schedules('e', undefined, fresh),
+  ]) {
+    h.server(async () => ({ data: { data: 'old' } })); await read(false);
+    h.server(async () => ({ data: { data: 'new' } }));
+    assert.equal(await read(true), 'new');
+    assert.equal(h.requests.at(-1).headers['Cache-Control'], 'no-cache');
+  }
 });

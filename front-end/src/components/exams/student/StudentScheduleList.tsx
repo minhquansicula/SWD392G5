@@ -1,11 +1,13 @@
 import { useEffect, useState } from 'react';
+import { useSearchParams } from 'react-router-dom';
 import { BookOpen, Calendar, Clock, Play, RefreshCw, Award, CheckCircle2, AlertCircle, FileText } from 'lucide-react';
 import type { ExamScheduleDto } from '../../../types/examApi';
 import type { UserAccount } from '../../../types';
 import { studentExamService } from '../../../services/studentExamService';
 import { canStartSchedule, formatExamTime } from '../../../utils/lecturerExam';
 import { ExamButton, ExamError, ExamField, ExamLoading, inputClass, panelClass, ScheduleBadge } from '../lecturer/ExamUi';
-import { ExamConfirmation } from '../lecturer/ExamConfirmation';
+import { DeviceCheckDialog } from '../../interview/DeviceCheckDialog';
+import { PageHeader } from '../../ui';
 import { LiveVivaRoom } from '../../interview/LiveVivaRoom';
 
 interface Props {
@@ -20,7 +22,9 @@ export function StudentScheduleList({ currentUser, language, onNavigateToResults
   const [error, setError] = useState<unknown>(null);
   const [reload, setReload] = useState(0);
   const [notice, setNotice] = useState('');
-  const [filter, setFilter] = useState('ALL');
+  const [params, setParams] = useSearchParams();
+  const filter = params.get('status') || 'ALL';
+  const setFilter = (status: string) => setParams(previous => { const next = new URLSearchParams(previous); next.set('status', status); return next; });
   const [selectedSchedule, setSelectedSchedule] = useState<ExamScheduleDto | null>(null);
   const [activeRoomSchedule, setActiveRoomSchedule] = useState<ExamScheduleDto | null>(null);
   const [now, setNow] = useState(() => Date.now());
@@ -38,7 +42,7 @@ export function StudentScheduleList({ currentUser, language, onNavigateToResults
     const controller = new AbortController();
     setLoading(true);
     setError(null);
-    studentExamService.mySchedules(controller.signal)
+    studentExamService.mySchedules(controller.signal, true)
       .then(data => {
         if (!controller.signal.aborted) {
           setSchedules(data);
@@ -53,14 +57,16 @@ export function StudentScheduleList({ currentUser, language, onNavigateToResults
     return () => controller.abort();
   }, [reload]);
 
-  const filtered = schedules.filter(s => filter === 'ALL' || s.status === filter);
+  const filtered = schedules.filter(s => filter === 'ALL' || s.status === filter).sort((a, b) => {
+    const rank = (s: ExamScheduleDto) => s.status === 'IN_PROGRESS' ? 0 : canStartSchedule(s, now) ? 1 : s.status === 'PENDING' && s.scheduledStartTime && Date.parse(s.scheduledStartTime) > now ? 2 : s.status === 'PENDING' ? 3 : 4;
+    return rank(a) - rank(b) || (Date.parse(a.scheduledStartTime || '') || 0) - (Date.parse(b.scheduledStartTime || '') || 0);
+  });
 
   const pendingCount = schedules.filter(s => s.status === 'PENDING').length;
   const inProgressCount = schedules.filter(s => s.status === 'IN_PROGRESS').length;
   const completedCount = schedules.filter(s => s.status === 'COMPLETED').length;
 
   const handleStartExam = async (scheduleId: string) => {
-    try {
       const updated = await studentExamService.start(scheduleId);
       setSelectedSchedule(null);
       setNotice(
@@ -73,10 +79,6 @@ export function StudentScheduleList({ currentUser, language, onNavigateToResults
       setSchedules(prev => prev.map(s => (s.id === scheduleId ? updated : s)));
       // Open Live Viva Room immediately
       setActiveRoomSchedule(updated);
-    } catch (err: any) {
-      setError(err);
-      setSelectedSchedule(null);
-    }
   };
 
   if (activeRoomSchedule) {
@@ -103,28 +105,7 @@ export function StudentScheduleList({ currentUser, language, onNavigateToResults
   return (
     <div className="space-y-6">
       {/* Header */}
-      <header className="flex flex-wrap items-start justify-between gap-4">
-        <div>
-          <p className="mb-1 text-xs font-semibold uppercase tracking-wider text-emerald-600 dark:text-emerald-400">
-            {t('Không gian sinh viên', 'Student workspace')}
-          </p>
-          <h1 className="text-2xl font-bold sm:text-3xl">
-            {t('Lịch thi vấn đáp của tôi', 'My Viva Voce Examinations')}
-          </h1>
-          <p className="mt-2 max-w-2xl text-sm text-slate-500 dark:text-slate-400">
-            {t(
-              'Xem các ca thi được xếp lịch cho bạn và bắt đầu lượt thi khi đến khung giờ quy định. Dữ liệu được tải trực tiếp từ máy chủ.',
-              'View your assigned examination schedules and start your oral viva when your time window opens. Data is loaded directly from the server.'
-            )}
-          </p>
-        </div>
-        <div className="flex gap-2">
-          <ExamButton disabled={loading} onClick={() => setReload(r => r + 1)}>
-            <RefreshCw aria-hidden="true" className="h-4 w-4" />
-            {t('Tải lại', 'Reload')}
-          </ExamButton>
-        </div>
-      </header>
+      <PageHeader title={t('Lịch thi của tôi', 'My examinations')} description={t('Chuẩn bị thiết bị, theo dõi lịch và tham gia ca thi khi đến giờ. Ca thi đang diễn ra được ưu tiên hiển thị trước.', 'Prepare your devices, check your schedule, and join when your time window opens. Active examinations appear first.')} actions={<ExamButton disabled={loading} onClick={() => setReload(r => r + 1)}><RefreshCw aria-hidden="true" className="h-4 w-4" />{t('Làm mới', 'Refresh')}</ExamButton>} />
 
       {/* Success Notification */}
       {notice && (
@@ -273,7 +254,7 @@ export function StudentScheduleList({ currentUser, language, onNavigateToResults
                         onClick={() => setSelectedSchedule(s)}
                       >
                         <Play className="h-4 w-4 fill-current" />
-                        {t('Bắt đầu lượt thi', 'Start Examination')}
+                        {t('Chuẩn bị & Vào thi', 'Prepare & enter examination')}
                       </ExamButton>
 
                       {!isEligibleToStart && (
@@ -295,10 +276,9 @@ export function StudentScheduleList({ currentUser, language, onNavigateToResults
                         id={`enter-viva-room-btn-${s.id}`}
                         data-testid="enter-viva-room-btn"
                         onClick={() => {
-                          console.log('[StudentScheduleList] Entering Viva Room for schedule:', s.id);
                           setActiveRoomSchedule(s);
                         }}
-                        className="w-full inline-flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl text-xs font-bold bg-gradient-to-r from-purple-600 to-indigo-600 hover:from-purple-700 hover:to-indigo-700 text-white shadow-md transition-all cursor-pointer"
+                        className="ui-button ui-button-primary w-full"
                       >
                         <Play className="h-4 w-4 fill-current" />
                         <span>{t('Vào phòng thi vấn đáp ngay', 'Enter Viva Room Now')}</span>
@@ -335,15 +315,10 @@ export function StudentScheduleList({ currentUser, language, onNavigateToResults
 
       {/* Confirmation Modal to Start Exam */}
       {selectedSchedule && (
-        <ExamConfirmation
+        <DeviceCheckDialog
           language={language}
-          title={t('Bắt đầu ca thi vấn đáp?', 'Start oral viva examination?')}
-          description={t(
-            `Bạn chuẩn bị bắt đầu ca thi cho môn “${selectedSchedule.courseCode} — ${selectedSchedule.examTitle}”. Hệ thống sẽ tự động bốc câu hỏi từ ngân hàng đề và ghi nhận thời gian bắt đầu thực tế. Bạn không thể hoàn tác thao tác này.`,
-            `You are about to start the examination for “${selectedSchedule.courseCode} — ${selectedSchedule.examTitle}”. The system will auto-assign questions and record your actual start time. This action cannot be undone.`
-          )}
-          confirmLabel={t('Bắt đầu thi ngay', 'Start Exam Now')}
-          onClose={() => setSelectedSchedule(null)}
+          examTitle={`${selectedSchedule.courseCode || ''} · ${selectedSchedule.examTitle}`}
+          onClose={() => { setSelectedSchedule(null); setReload(value => value + 1); }}
           onConfirm={() => handleStartExam(selectedSchedule.id)}
         />
       )}

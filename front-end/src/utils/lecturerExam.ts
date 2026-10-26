@@ -27,10 +27,16 @@ export function toVietnamInput(iso: string | null) {
 export function fromVietnamInput(value: string) {
   if (!/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}(:\d{2}(\.\d{1,3})?)?$/.test(value)) return '';
   const iso = `${value}+07:00`;
-  return Number.isFinite(Date.parse(iso)) ? iso : '';
+  if (!Number.isFinite(Date.parse(iso))) return '';
+  const [date, time] = value.split('T');
+  const [hours, minutes, seconds = '00'] = time.split(':');
+  const [wholeSeconds, fraction = ''] = seconds.split('.');
+  const canonical = `${date}T${hours}:${minutes}:${wholeSeconds}.${fraction.padEnd(3, '0')}`;
+  // Date.parse normalizes February 30 and 24:00 rather than rejecting them.
+  return toVietnamInput(iso) === canonical ? iso : '';
 }
 
-export function formatExamTime(value: string | null, language: 'vi' | 'en' = 'vi') {
+export function formatExamTime(value: string | null | undefined, language: 'vi' | 'en' = 'vi') {
   if (!value || !Number.isFinite(Date.parse(value))) return '—';
   return new Intl.DateTimeFormat(language === 'vi' ? 'vi-VN' : 'en-GB', {
     timeZone: 'Asia/Ho_Chi_Minh', year: 'numeric', month: '2-digit', day: '2-digit',
@@ -50,8 +56,9 @@ export function isWithinExam(start: string, end: string, exam: ExamDto) {
 export function validateEnrollment(students: StudentScheduleEntry[], exam: ExamDto, schedules: ExamScheduleDto[]) {
   if (!students.length) return 'EMPTY';
   const ids = new Set<string>();
-  const enrolled = new Set(schedules.map(s => s.student?.id.toLowerCase()));
+  const enrolled = new Set(schedules.map(s => s.student?.id?.toLowerCase()));
   for (const entry of students) {
+    if (typeof entry.studentId !== 'string') return 'UUID';
     const id = entry.studentId.toLowerCase();
     if (!/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(id)) return 'UUID';
     if (ids.has(id) || enrolled.has(id)) return 'DUPLICATE';

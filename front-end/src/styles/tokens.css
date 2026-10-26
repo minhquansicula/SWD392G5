@@ -1,0 +1,71 @@
+/* Academic Modern: shared palette for existing Tailwind screens and new UI. */
+@theme {
+  --color-slate-50: #f7f8f5;
+  --color-slate-100: #eef2ef;
+  --color-slate-200: #dce4e1;
+  --color-slate-300: #bdcbc7;
+  --color-slate-400: #738983;
+  --color-slate-500: #526b65;
+  --color-slate-600: #405950;
+  --color-slate-700: #30473f;
+  --color-slate-800: #233b37;
+  --color-slate-900: #172c29;
+  --color-slate-950: #0e1d1b;
+  --color-indigo-50: #effaf7;
+  --color-indigo-100: #d4f1e8;
+  --color-indigo-200: #abe1d2;
+  --color-indigo-300: #78cdb8;
+  --color-indigo-400: #45b49d;
+  --color-indigo-500: #219780;
+  --color-indigo-600: #0f766e;
+  --color-indigo-700: #0f615b;
+  --color-indigo-800: #134e48;
+  --color-indigo-900: #123f3a;
+  --color-indigo-950: #082e2a;
+  --color-purple-50: #eff6ff;
+  --color-purple-100: #dbeafe;
+  --color-purple-200: #bfdbfe;
+  --color-purple-300: #93c5fd;
+  --color-purple-400: #60a5fa;
+  --color-purple-500: #3b82f6;
+  --color-purple-600: #2563eb;
+  --color-purple-700: #1d4ed8;
+  --color-purple-800: #1e40af;
+  --color-purple-900: #1e3a8a;
+  --color-purple-950: #172554;
+  --text-xs: 0.8125rem;
+  --text-xs--line-height: 1.5;
+  --radius-2xl: 0.875rem;
+  --radius-3xl: 1.25rem;
+  --shadow-xs: 0 1px 3px rgb(23 43 58 / 0.035);
+}
+
+:root {
+  color-scheme: light;
+  --surface: #ffffff;
+  --canvas: #f7f8f5;
+  --surface-muted: #eef2ef;
+  --ink: #172b3a;
+  --muted: #526471;
+  --line: #dce4e1;
+  --primary: #0f766e;
+  --primary-hover: #0f615b;
+  --primary-soft: #effaf7;
+  --focus: #0f766e;
+  --shadow-panel: 0 2px 4px rgb(23 43 58 / 0.025), 0 12px 36px rgb(23 43 58 / 0.035);
+}
+
+:root.dark {
+  color-scheme: dark;
+  --surface: #172c29;
+  --canvas: #0e1d1b;
+  --surface-muted: #233b37;
+  --ink: #edf5f2;
+  --muted: #b4c8c1;
+  --line: #35504a;
+  --primary: #78cdb8;
+  --primary-hover: #abe1d2;
+  --primary-soft: #123f3a;
+  --focus: #78cdb8;
+  --shadow-panel: 0 8px 32px rgb(0 0 0 / 0.12);
+}

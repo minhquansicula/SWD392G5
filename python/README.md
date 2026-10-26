@@ -1,5 +1,9 @@
 # 🎙️ AIVES Viva - High-Performance Gemini Live Bridge
 
+> **Lưu ý cho React frontend:** `front-end/` dùng AI service trong
+> `demo/viva-ai-v2`, không dùng server trong thư mục này. Hai service có route và
+> định dạng WebSocket khác nhau. Xem `../front-end/README.md` để cấu hình đúng.
+
 Dự án AI Giám khảo Thi Vấn Đáp Trực Tuyến hiệu năng cao dành cho ứng dụng **Flutter Mobile** và hệ thống backend **Java Spring Boot**, sử dụng trực tiếp **Google Gemini 3.8 Live (`models/gemini-3.8-live`)**.
 
 ---

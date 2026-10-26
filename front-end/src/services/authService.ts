@@ -154,7 +154,7 @@ export async function verifyCurrentSession(): Promise<UserAccount | null> {
  * Admin: Get registered users list
  * Calls GET /api/admin/users
  */
-export async function getRegisteredUsers(role?: string): Promise<UserAccount[]> {
+export async function getRegisteredUsers(role?: string, fresh = false): Promise<UserAccount[]> {
   try {
     const response = await apiClient.get<{
       success: boolean;
@@ -163,6 +163,7 @@ export async function getRegisteredUsers(role?: string): Promise<UserAccount[]> 
         content?: BackendUserDto[];
       } | BackendUserDto[];
     }>('/admin/users', {
+      headers: fresh ? { 'Cache-Control': 'no-cache' } : {},
       params: {
         role: role && role !== 'ALL' ? role : undefined,
         size: 100,

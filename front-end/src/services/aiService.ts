@@ -1,10 +1,16 @@
 import axios from 'axios';
+import { getAiAccessToken } from './aiAuth';
 
 const AI_BASE_URL = import.meta.env.VITE_AI_API_URL || 'http://localhost:8000';
 
-const aiClient = axios.create({
+export const aiClient = axios.create({
   baseURL: AI_BASE_URL,
   timeout: 120000, // 2 phút cho các tác vụ embedding & phân tích LLM
+});
+
+aiClient.interceptors.request.use(config => {
+  config.headers.Authorization = `Bearer ${getAiAccessToken()}`;
+  return config;
 });
 
 export interface CourseDocument {

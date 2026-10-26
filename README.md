@@ -194,6 +194,12 @@ npm run dev
 
 The app starts at `http://localhost:5173` with hot module replacement enabled.
 
+**React AI integration:** run the AI service in `demo/viva-ai-v2` on port 8000, not
+`python/server.py` (a different mobile bridge protocol). Configure
+`front-end/.env.local` from `.env.example`; set `BACKEND_API_URL` and `CORS_ORIGINS`
+on the AI service. HTTP and WebSocket AI access now requires a Spring Boot login
+and server-side course/schedule authorization. See [frontend setup](front-end/README.md).
+
 ### Environment Variables
 
 Create `back-end/src/main/resources/application-dev.yml`:

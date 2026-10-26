@@ -110,6 +110,7 @@ export function LecturerExamForm({ userId, userRole, detail, language, onClose, 
     <form onSubmit={submit} className="space-y-5">
       <ExamError error={error} language={language} />
       <fieldset disabled={busy} className="space-y-4">
+        <legend className="mb-4 text-base font-semibold">{t('Thông tin kỳ thi', 'Examination information')}</legend>
         {exam ? <p className="text-sm text-slate-600 dark:text-slate-300">{exam.courseCode} · {exam.courseName}</p> : <>
           <ExamError error={courseError} language={language} />
           {loadingCourses ? <ExamLoading language={language} /> : courseError ? <ExamButton onClick={() => setRetry(r => r + 1)}>{t('Tải lại môn học', 'Reload courses')}</ExamButton> : <ExamField label={t('Môn học được phân công *', 'Assigned course *')}>
@@ -121,7 +122,7 @@ export function LecturerExamForm({ userId, userRole, detail, language, onClose, 
           {!loadingCourses && !courseError && !courses.length && <p role="status" className="text-sm text-amber-700 dark:text-amber-300">{t('Bạn chưa được phân công môn học. Liên hệ quản trị viên để được phân công trước khi tạo kỳ thi.', 'No courses are assigned to you. Contact an administrator before creating an exam.')}</p>}
         </>}
         <ExamField label={t('Tiêu đề kỳ thi *', 'Examination title *')}><input required maxLength={255} className={inputClass} value={title} onChange={e => setTitle(e.target.value)} /></ExamField>
-        <p className="text-xs text-slate-500 dark:text-slate-400">{t('Tất cả thời gian bên dưới theo giờ Việt Nam (UTC+07:00).', 'All times below use Vietnam time (UTC+07:00).')}</p>
+        <div className="border-t border-[var(--line)] pt-5"><h3 className="text-base font-semibold">{t('Thời gian tổ chức', 'Examination dates')}</h3><p className="mt-2 text-xs text-slate-500 dark:text-slate-400">{t('Giờ Việt Nam (UTC+07:00). Lịch của từng sinh viên phải nằm trong khoảng này.', 'Vietnam time (UTC+07:00). Student schedules must fit within this range.')}</p></div>
         <div className="grid gap-4 sm:grid-cols-2">
           <ExamField label={t('Bắt đầu kỳ thi *', 'Exam starts *')}><input required type="datetime-local" step="any" className={inputClass} value={start} onChange={e => setStart(e.target.value)} /></ExamField>
           <ExamField label={t('Kết thúc kỳ thi *', 'Exam ends *')}><input required type="datetime-local" step="any" className={inputClass} value={end} onChange={e => setEnd(e.target.value)} /></ExamField>
@@ -132,7 +133,7 @@ export function LecturerExamForm({ userId, userRole, detail, language, onClose, 
           {settings.map(s => <ExamField key={s.key} label={t(s.vi, s.en)}><input required type="number" min={s.min} max={s.max} step={1} className={inputClass} value={values[s.key]} onChange={e => setValues(v => ({ ...v, [s.key]: e.target.value }))} /></ExamField>)}
         </fieldset>
       </fieldset>
-      <div className="flex justify-end gap-2"><ExamButton disabled={busy} onClick={onClose}>{t('Hủy', 'Cancel')}</ExamButton><ExamButton primary type="submit" disabled={busy || uncertain || (!exam && (loadingCourses || !!courseError || !courses.length))}>{busy ? t('Đang lưu…', 'Saving…') : t('Lưu kỳ thi', 'Save examination')}</ExamButton></div>
+      <div className="sticky bottom-0 flex justify-end gap-2 border-t border-[var(--line)] bg-[var(--surface)] py-4"><ExamButton disabled={busy} onClick={onClose}>{t('Hủy', 'Cancel')}</ExamButton><ExamButton primary type="submit" disabled={busy || uncertain || (!exam && (loadingCourses || !!courseError || !courses.length))}>{busy ? t('Đang lưu…', 'Saving…') : t('Lưu kỳ thi', 'Save examination')}</ExamButton></div>
     </form>
   </ExamDialog>;
 }

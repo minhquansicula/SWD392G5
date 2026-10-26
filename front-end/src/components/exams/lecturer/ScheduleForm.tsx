@@ -47,6 +47,7 @@ function StudentSearchSelect({
   const [results, setResults] = useState<ExamUserDto[]>([]);
   const [loading, setLoading] = useState(false);
   const [open, setOpen] = useState(false);
+  const [searchError, setSearchError] = useState('');
   const containerRef = useRef<HTMLDivElement>(null);
   const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
@@ -65,18 +66,20 @@ function StudentSearchSelect({
 
     if (timerRef.current) clearTimeout(timerRef.current);
     const controller = new AbortController();
+    setLoading(true);
+    setSearchError('');
 
     timerRef.current = setTimeout(async () => {
       setLoading(true);
       try {
         const data = await lecturerExamService.searchStudents(query.trim(), controller.signal);
-        setResults(data);
+        if (!controller.signal.aborted) setResults(data);
       } catch (err) {
-        if (!axios.isCancel(err)) {
-          console.error('Failed to search students', err);
+        if (!controller.signal.aborted && !axios.isCancel(err)) {
+          setSearchError(t('Không tải được danh sách sinh viên. Hãy thay đổi từ khóa để thử lại.', 'Unable to load students. Change the search text to try again.'));
         }
       } finally {
-        setLoading(false);
+        if (!controller.signal.aborted) setLoading(false);
       }
     }, 250);
 
@@ -108,11 +111,8 @@ function StudentSearchSelect({
             </div>
             <div className="flex items-center gap-2 text-xs text-slate-500 dark:text-slate-400 truncate">
               <span>{value?.email}</span>
-              {value?.email && <span>• {value.email}</span>}
             </div>
-            <div className="text-[11px] font-mono text-slate-400 dark:text-slate-500">
-              UUID: {studentId}
-            </div>
+            <details className="text-xs text-[var(--muted)]"><summary>{t('Thông tin kỹ thuật', 'Technical details')}</summary><p className="mt-1 break-all font-mono">UUID: {studentId}</p></details>
           </div>
         </div>
         {!disabled && (
@@ -136,6 +136,7 @@ function StudentSearchSelect({
         <Search className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400" />
         <input
           type="text"
+          aria-label={t('Tìm sinh viên theo tên, mã hoặc email', 'Search students by name, code or email')}
           disabled={disabled}
           value={query}
           onChange={e => {
@@ -143,6 +144,7 @@ function StudentSearchSelect({
             setOpen(true);
           }}
           onFocus={() => setOpen(true)}
+          onKeyDown={event => { if (event.key === 'Escape') { event.preventDefault(); event.stopPropagation(); setOpen(false); } }}
           placeholder={t('Nhập MSSV, họ tên hoặc email để tìm kiếm...', 'Type student code, full name or email to search...')}
           className={`${inputClass} pl-9 pr-9`}
         />
@@ -165,12 +167,12 @@ function StudentSearchSelect({
 
       {open && (
         <div className="absolute z-30 mt-1 max-h-60 w-full overflow-y-auto rounded-xl border border-slate-200 bg-white p-1.5 shadow-xl dark:border-slate-700 dark:bg-slate-800">
-          {loading && results.length === 0 ? (
+          {loading ? (
             <div className="flex items-center justify-center gap-2 p-4 text-xs text-slate-500">
               <Loader2 className="h-4 w-4 animate-spin" />
               <span>{t('Đang tìm kiếm sinh viên…', 'Searching students…')}</span>
             </div>
-          ) : results.length === 0 ? (
+          ) : searchError ? <p role="alert" className="p-4 text-sm text-rose-700 dark:text-rose-300">{searchError}</p> : results.length === 0 ? (
             <div className="p-4 text-center text-xs text-slate-500">
               {t('Không tìm thấy sinh viên nào phù hợp', 'No matching students found')}
             </div>
@@ -211,7 +213,6 @@ function StudentSearchSelect({
                         </div>
                         <div className="text-slate-500 dark:text-slate-400 truncate mt-0.5">
                           <span>{st.email}</span>
-                          {st.email && <span> • {st.email}</span>}
                         </div>
                       </div>
                       {isEnrolled && (

@@ -1,4 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
+import { useSearchParams } from 'react-router-dom';
+import { ExamConfirmation } from '../exams/lecturer/ExamConfirmation';
 import {
   BookOpen,
   FileText,
@@ -45,11 +47,23 @@ export const CourseMaterialsPage: React.FC<CourseMaterialsPageProps> = ({
 
   // 1. Course Selection State
   const [courses, setCourses] = useState<Course[]>([]);
-  const [selectedCourseId, setSelectedCourseId] = useState<string>('');
+  const [params, setParams] = useSearchParams();
+  const selectedCourseId = params.get('course') || courses[0]?.id || '';
+  const setSelectedCourseId = (course: string) => setParams(previous => { const next = new URLSearchParams(previous); next.set('course', course); return next; });
   const [isLoadingCourses, setIsLoadingCourses] = useState<boolean>(true);
 
   // 2. Tab Navigation ('documents' | 'rubrics')
-  const [activeTab, setActiveTab] = useState<'documents' | 'rubrics'>('documents');
+  const activeTab = params.get('tab') === 'rubrics' ? 'rubrics' : 'documents';
+  const setActiveTab = (tab: 'documents' | 'rubrics') => setParams(previous => { const next = new URLSearchParams(previous); next.set('tab', tab); return next; });
+  const [docsError, setDocsError] = useState('');
+  const [rubricsError, setRubricsError] = useState('');
+  const [courseError, setCourseError] = useState('');
+  const [courseRetry, setCourseRetry] = useState(0);
+  const [deleteTarget, setDeleteTarget] = useState<{ kind: 'document' | 'rubric'; id: string; label: string } | null>(null);
+  const courseRef = useRef(selectedCourseId);
+  courseRef.current = selectedCourseId;
+  const docsRequest = useRef(0);
+  const rubricsRequest = useRef(0);
 
   // 3. Document Management State
   const [documents, setDocuments] = useState<CourseDocument[]>([]);
@@ -86,14 +100,16 @@ export const CourseMaterialsPage: React.FC<CourseMaterialsPageProps> = ({
 
   // Fetch courses on mount (kết nối trực tiếp Python AI, fallback Spring Boot)
   useEffect(() => {
+    let active = true;
     async function loadCourses() {
       setIsLoadingCourses(true);
+      setCourseError('');
       try {
         // Ưu tiên tải trực tiếp từ Python AI API theo thiết kế
         const aiList = await getAiCourses();
+        if (!active) return;
         if (aiList && aiList.length > 0) {
           setCourses(aiList);
-          setSelectedCourseId(aiList[0].id);
           setIsLoadingCourses(false);
           return;
         }
@@ -102,50 +118,53 @@ export const CourseMaterialsPage: React.FC<CourseMaterialsPageProps> = ({
       }
 
       try {
-        const list = await getCourses();
+        const list = await getCourses(true);
+        if (!active) return;
         setCourses(list);
-        if (list.length > 0) {
-          setSelectedCourseId(list[0].id);
-        }
       } catch (err: any) {
-        showNotify('error', err.message || 'Không thể tải danh sách môn học.');
+        if (active) setCourseError(err.message || (isVi ? 'Không thể tải danh sách môn học.' : 'Unable to load courses.'));
       } finally {
-        setIsLoadingCourses(false);
+        if (active) setIsLoadingCourses(false);
       }
     }
     loadCourses();
-  }, []);
+    return () => { active = false; };
+  }, [courseRetry]);
 
   // Fetch documents and rubrics when course changes
   useEffect(() => {
+    setDocuments([]); setRubrics([]); setDocsError(''); setRubricsError('');
     if (!selectedCourseId) return;
-
     loadDocuments(selectedCourseId);
     loadRubrics(selectedCourseId);
+    return () => { docsRequest.current += 1; rubricsRequest.current += 1; };
   }, [selectedCourseId]);
 
   async function loadDocuments(courseId: string) {
+    const request = ++docsRequest.current;
     setIsLoadingDocs(true);
+    setDocsError('');
     try {
       const docs = await getCourseDocuments(courseId);
-      setDocuments(docs);
+      if (request === docsRequest.current && courseId === courseRef.current) setDocuments(docs);
     } catch (err: any) {
-      console.error('Error fetching documents:', err);
-      // Không chặn UI nếu server AI chưa mở
+      if (request === docsRequest.current && courseId === courseRef.current) setDocsError(err.message || (isVi ? 'Không tải được tài liệu.' : 'Unable to load documents.'));
     } finally {
-      setIsLoadingDocs(false);
+      if (request === docsRequest.current && courseId === courseRef.current) setIsLoadingDocs(false);
     }
   }
 
   async function loadRubrics(courseId: string) {
+    const request = ++rubricsRequest.current;
     setIsLoadingRubrics(true);
+    setRubricsError('');
     try {
       const list = await getCourseRubrics(courseId);
-      setRubrics(list);
+      if (request === rubricsRequest.current && courseId === courseRef.current) setRubrics(list);
     } catch (err: any) {
-      console.error('Error fetching rubrics:', err);
+      if (request === rubricsRequest.current && courseId === courseRef.current) setRubricsError(err.message || (isVi ? 'Không tải được rubric.' : 'Unable to load rubrics.'));
     } finally {
-      setIsLoadingRubrics(false);
+      if (request === rubricsRequest.current && courseId === courseRef.current) setIsLoadingRubrics(false);
     }
   }
 
@@ -153,6 +172,7 @@ export const CourseMaterialsPage: React.FC<CourseMaterialsPageProps> = ({
   const handleUploadDocument = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file || !selectedCourseId) return;
+    if (file.size > 20 * 1024 * 1024) { showNotify('error', isVi ? 'Tài liệu không được vượt quá 20MB.' : 'Documents must not exceed 20MB.'); e.target.value = ''; return; }
 
     const allowed = ['.pdf', '.docx', '.txt', '.md'];
     const ext = '.' + file.name.split('.').pop()?.toLowerCase();
@@ -180,18 +200,17 @@ export const CourseMaterialsPage: React.FC<CourseMaterialsPageProps> = ({
   };
 
   // Handle Document Delete
-  const handleDeleteDocument = async (docId: string, filename: string) => {
-    if (!window.confirm(isVi ? `Bạn có chắc muốn xóa tài liệu "${filename}" và các vector chunks liên quan?` : `Delete document "${filename}" and its vector embeddings?`)) {
-      return;
-    }
-
+  const handleDeleteDocument = (id: string, label: string) => setDeleteTarget({ kind: 'document', id, label });
+  const executeDeleteDocument = async (docId: string, filename: string) => {
     setDocDeletingId(docId);
     try {
       await deleteCourseDocument(selectedCourseId, docId);
       showNotify('success', isVi ? `Đã xóa tài liệu "${filename}" thành công.` : `Deleted "${filename}" successfully.`);
       setDocuments((prev) => prev.filter((d) => d.id !== docId));
+      setDeleteTarget(null);
     } catch (err: any) {
       showNotify('error', err.response?.data?.detail || err.message || 'Lỗi khi xóa tài liệu.');
+      throw err;
     } finally {
       setDocDeletingId(null);
     }
@@ -274,18 +293,17 @@ export const CourseMaterialsPage: React.FC<CourseMaterialsPageProps> = ({
   };
 
   // Handle Rubric Delete
-  const handleDeleteRubric = async (rubricId: string, title: string) => {
-    if (!window.confirm(isVi ? `Bạn có chắc muốn xóa rubric "${title}"?` : `Are you sure you want to delete rubric "${title}"?`)) {
-      return;
-    }
-
+  const handleDeleteRubric = (id: string, label: string) => setDeleteTarget({ kind: 'rubric', id, label });
+  const executeDeleteRubric = async (rubricId: string, title: string) => {
     setRubricDeletingId(rubricId);
     try {
       await deleteCourseRubric(selectedCourseId, rubricId);
       showNotify('success', isVi ? `Đã xóa rubric "${title}" thành công.` : `Deleted rubric "${title}" successfully.`);
       setRubrics((prev) => prev.filter((r) => r.id !== rubricId));
+      setDeleteTarget(null);
     } catch (err: any) {
       showNotify('error', err.response?.data?.detail || err.message || 'Lỗi khi xóa rubric.');
+      throw err;
     } finally {
       setRubricDeletingId(null);
     }
@@ -297,36 +315,33 @@ export const CourseMaterialsPage: React.FC<CourseMaterialsPageProps> = ({
   return (
     <div className="space-y-6 pb-12">
       {/* 1. TOP HEADER & COURSE SELECTOR */}
-      <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 p-6 rounded-2xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 shadow-xs">
+      <div className="flex flex-col xl:flex-row xl:items-center justify-between gap-5 pb-2">
         <div>
           <div className="flex items-center gap-2.5">
-            <div className="p-2.5 rounded-xl bg-gradient-to-tr from-indigo-600 to-indigo-700 text-white shadow-xs">
-              <Layers className="w-5 h-5" />
-            </div>
             <div>
-              <h1 className="text-xl font-bold text-slate-900 dark:text-white font-display">
-                {isVi ? 'Quản lý Học liệu & Rubric AI' : 'Course Materials & AI Rubrics'}
+              <h1 className="ui-page-title">
+                {isVi ? 'Học liệu & Rubric' : 'Materials & rubrics'}
               </h1>
               <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">
                 {isVi
-                  ? 'Nạp giáo trình vào Vector Database (Gemini pgvector) và cấu hình tiêu chí chấm điểm tự động.'
-                  : 'Embed course documents into Vector DB and configure AI evaluation rubrics.'}
+                  ? 'Chuẩn bị tài liệu tham chiếu và tiêu chí đánh giá cho từng môn học.'
+                  : 'Prepare reference materials and assessment criteria for each course.'}
               </p>
             </div>
           </div>
         </div>
 
         {/* Course Dropdown */}
-        <div className="flex items-center gap-3">
+        <div className="flex min-w-0 flex-wrap items-center gap-3">
           <label htmlFor="course-select" className="text-xs font-semibold text-slate-600 dark:text-slate-300 whitespace-nowrap">
             {isVi ? 'Chọn môn học:' : 'Select Course:'}
           </label>
-          <div className="relative min-w-56">
+          <div className="relative w-full min-w-0 sm:w-72">
             <select
               id="course-select"
               value={selectedCourseId}
               onChange={(e) => setSelectedCourseId(e.target.value)}
-              disabled={isLoadingCourses}
+              disabled={isLoadingCourses || isUploadingDoc || isParsingRubric || isSavingRubric || showRubricForm || !!deleteTarget}
               className="w-full text-xs font-medium px-3.5 py-2.5 rounded-xl bg-slate-50 dark:bg-slate-800/80 border border-slate-200 dark:border-slate-700 text-slate-800 dark:text-slate-100 focus:outline-hidden focus:ring-2 focus:ring-indigo-500 disabled:opacity-50 transition-all cursor-pointer"
             >
               {isLoadingCourses ? (
@@ -344,6 +359,8 @@ export const CourseMaterialsPage: React.FC<CourseMaterialsPageProps> = ({
           </div>
         </div>
       </div>
+
+      {courseError && <div role="alert" className="ui-panel flex flex-wrap items-center justify-between gap-3 p-4 text-sm text-rose-700 dark:text-rose-300"><span>{courseError}</span><button className="ui-button" onClick={() => setCourseRetry(value => value + 1)}>{isVi ? 'Thử lại' : 'Try again'}</button></div>}
 
       {/* Notification Toast */}
       {notification && (
@@ -382,7 +399,7 @@ export const CourseMaterialsPage: React.FC<CourseMaterialsPageProps> = ({
           }`}
         >
           <FileText className="w-4 h-4" />
-          <span>{isVi ? 'Tài liệu học tập (RAG Vector DB)' : 'Course Documents (RAG)'}</span>
+          <span>{isVi ? 'Tài liệu học tập' : 'Course documents'}</span>
           <span
             className={`px-2 py-0.5 rounded-full text-[10px] font-bold ${
               activeTab === 'documents'
@@ -426,12 +443,12 @@ export const CourseMaterialsPage: React.FC<CourseMaterialsPageProps> = ({
                 <UploadCloud className="w-4 h-4 text-indigo-600" />
                 {isVi ? 'Tải lên tài liệu giáo trình mới' : 'Upload Course Learning Material'}
               </h2>
-              <span className="text-[11px] text-slate-500 dark:text-slate-400">
+              <span className="text-xs text-slate-500 dark:text-slate-400">
                 {isVi ? 'Hỗ trợ PDF, DOCX, TXT, MD (Tối đa 20MB)' : 'Supports PDF, DOCX, TXT, MD (Max 20MB)'}
               </span>
             </div>
 
-            <div
+            <div role="button" tabIndex={isUploadingDoc || !selectedCourseId ? -1 : 0} aria-disabled={isUploadingDoc || !selectedCourseId} aria-label={isVi ? 'Chọn tài liệu để tải lên' : 'Choose a document to upload'} onKeyDown={event => { if ((event.key === 'Enter' || event.key === ' ') && !isUploadingDoc && selectedCourseId) { event.preventDefault(); docInputRef.current?.click(); } }}
               onClick={() => docInputRef.current?.click()}
               className="border-2 border-dashed border-slate-300 dark:border-slate-700 hover:border-indigo-500 dark:hover:border-indigo-400 rounded-2xl p-8 flex flex-col items-center justify-center text-center cursor-pointer transition-all bg-slate-50/50 dark:bg-slate-950/40 hover:bg-indigo-50/30 dark:hover:bg-indigo-950/20"
             >
@@ -449,8 +466,8 @@ export const CourseMaterialsPage: React.FC<CourseMaterialsPageProps> = ({
                   <Loader2 className="w-8 h-8 text-indigo-600 animate-spin" />
                   <p className="text-xs font-semibold text-slate-700 dark:text-slate-300">
                     {isVi
-                      ? 'Đang đọc nội dung, phân đoạn và tạo vector embedding qua Gemini...'
-                      : 'Parsing chunks & generating 768-dim embeddings with Gemini...'}
+                      ? (uploadDocProgress < 100 ? 'Đang tải tài liệu lên…' : 'Đã tải lên. Đang chờ máy chủ xử lý tài liệu…')
+                      : (uploadDocProgress < 100 ? 'Uploading document…' : 'Uploaded. Waiting for the server to process the document…')}
                   </p>
                   <div className="w-48 bg-slate-200 dark:bg-slate-700 rounded-full h-1.5 overflow-hidden">
                     <div
@@ -465,15 +482,15 @@ export const CourseMaterialsPage: React.FC<CourseMaterialsPageProps> = ({
                     <UploadCloud className="w-6 h-6" />
                   </div>
                   <p className="text-xs font-semibold text-slate-800 dark:text-slate-200">
-                    {isVi ? 'Kéo thả file tài liệu vào đây hoặc ' : 'Drag and drop course material here, or '}
+                    {isVi ? 'Bấm để ' : 'Click to '}
                     <span className="text-indigo-600 dark:text-indigo-400 underline">
                       {isVi ? 'chọn từ máy tính' : 'browse computer'}
                     </span>
                   </p>
                   <p className="text-[11px] text-slate-500 dark:text-slate-400 mt-1">
                     {isVi
-                      ? 'AI sẽ tự động đọc hiểu và lưu vào Vector Database để làm tài liệu đối chiếu khi hỏi thi vấn đáp'
-                      : 'AI will chunk and index this into Vector DB as knowledge ground truth for oral examinations'}
+                      ? 'Tài liệu được dùng làm nguồn tham chiếu cho câu hỏi vấn đáp.'
+                      : 'Documents are used as reference materials for oral examination questions.'}
                   </p>
                 </>
               )}
@@ -507,6 +524,8 @@ export const CourseMaterialsPage: React.FC<CourseMaterialsPageProps> = ({
                 <Loader2 className="w-5 h-5 animate-spin text-indigo-600" />
                 <span>{isVi ? 'Đang tải danh sách tài liệu...' : 'Loading indexed documents...'}</span>
               </div>
+            ) : docsError ? (
+              <p role="alert" className="rounded-lg bg-rose-50 p-4 text-sm text-rose-800 dark:bg-rose-950 dark:text-rose-200">{docsError}</p>
             ) : documents.length === 0 ? (
               <div className="py-12 border border-dashed border-slate-200 dark:border-slate-800 rounded-xl flex flex-col items-center justify-center text-center px-4">
                 <FileText className="w-8 h-8 text-slate-300 dark:text-slate-600 mb-2" />
@@ -544,7 +563,7 @@ export const CourseMaterialsPage: React.FC<CourseMaterialsPageProps> = ({
                           </span>
                         </td>
                         <td className="py-3 px-3 text-slate-500 dark:text-slate-400 font-mono text-[11px]">
-                          {doc.embedding_model || 'text-embedding-004'}
+                          {doc.embedding_model || '—'}
                         </td>
                         <td className="py-3 px-3 text-slate-500 dark:text-slate-400">
                           {doc.created_at ? new Date(doc.created_at).toLocaleString(isVi ? 'vi-VN' : 'en-US') : '—'}
@@ -831,6 +850,8 @@ export const CourseMaterialsPage: React.FC<CourseMaterialsPageProps> = ({
                 <Loader2 className="w-5 h-5 animate-spin text-indigo-600" />
                 <span>{isVi ? 'Đang tải danh sách rubric...' : 'Loading rubrics...'}</span>
               </div>
+            ) : rubricsError ? (
+              <p role="alert" className="rounded-lg bg-rose-50 p-4 text-sm text-rose-800 dark:bg-rose-950 dark:text-rose-200">{rubricsError}</p>
             ) : rubrics.length === 0 ? (
               <div className="py-12 border border-dashed border-slate-200 dark:border-slate-800 rounded-xl flex flex-col items-center justify-center text-center px-4">
                 <Award className="w-8 h-8 text-slate-300 dark:text-slate-600 mb-2" />
@@ -894,6 +915,7 @@ export const CourseMaterialsPage: React.FC<CourseMaterialsPageProps> = ({
           </div>
         </div>
       )}
+      {deleteTarget && <ExamConfirmation language={language} danger title={isVi ? 'Xác nhận xóa?' : 'Confirm deletion?'} description={isVi ? `Xóa “${deleteTarget.label}” khỏi môn học hiện tại? ${deleteTarget.kind === 'document' ? 'Các dữ liệu tham chiếu liên quan cũng sẽ bị xóa.' : 'Rubric này sẽ không còn trong danh sách tiêu chí của môn học.'}` : `Delete “${deleteTarget.label}” from this course? ${deleteTarget.kind === 'document' ? 'Related reference data will also be removed.' : 'This rubric will be removed from the course criteria.'}`} confirmLabel={isVi ? 'Xác nhận xóa' : 'Confirm deletion'} onClose={() => setDeleteTarget(null)} onConfirm={() => deleteTarget.kind === 'document' ? executeDeleteDocument(deleteTarget.id, deleteTarget.label) : executeDeleteRubric(deleteTarget.id, deleteTarget.label)} />}
     </div>
   );
 };

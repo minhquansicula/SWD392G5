@@ -1,8 +1,8 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
+import { useLocation, useNavigate } from 'react-router-dom';
 import { AlertCircle, Loader2, RefreshCw } from 'lucide-react';
 import {
   ModuleType,
-  ExamSubView,
   UserAccount,
 } from './types';
 import { Language } from './utils/i18n';
@@ -15,7 +15,6 @@ import { UserManagementPage } from './components/admin/UserManagementPage';
 import { CourseManagementPage } from './components/admin/CourseManagementPage';
 import { QuestionBankPage } from './components/questions/QuestionBankPage';
 import { CourseMaterialsPage } from './components/materials/CourseMaterialsPage';
-import { AuthModal } from './components/auth/AuthModal';
 import { AuthLandingPage } from './components/auth/AuthLandingPage';
 import { SetPasswordPage } from './components/auth/SetPasswordPage';
 import {
@@ -23,38 +22,34 @@ import {
   clearSession,
 } from './services/authService';
 
-// One-time token from an emailed link: /#/set-password?token=...
-function readPasswordLinkToken(): string | null {
-  try {
-    const match = window.location.hash.match(/^#\/set-password\?token=([^&]+)/);
-    return match ? decodeURIComponent(match[1]) : null;
-  } catch {
-    return null;
-  }
-}
-
 export default function App() {
+  const location = useLocation();
+  const navigate = useNavigate();
   // Authentication & Current User Session
   const [currentUser, setCurrentUser] = useState<UserAccount | null>(null);
   const [isSessionLoading, setIsSessionLoading] = useState(true);
   const [sessionError, setSessionError] = useState('');
   const [sessionAttempt, setSessionAttempt] = useState(0);
-  const [isAuthModalOpen, setIsAuthModalOpen] = useState(false);
 
-  const [passwordLinkToken, setPasswordLinkToken] = useState<string | null>(readPasswordLinkToken);
+  const isPasswordLink = location.pathname === '/set-password';
+  const passwordLinkToken = isPasswordLink ? new URLSearchParams(location.search).get('token') || '' : null;
 
   // Navigation & View state
-  const [activeModule, setActiveModule] = useState<ModuleType>('exams');
-  const [examSubView, setExamSubView] = useState<ExamSubView>('list');
-  const [selectedResultExamId, setSelectedResultExamId] = useState<string | null>(null);
-  const [selectedResultScheduleId, setSelectedResultScheduleId] = useState<string | null>(null);
+  const routeModule = location.pathname.split('/')[1] as ModuleType;
+  const activeModule: ModuleType = ['exams', 'questions', 'materials', 'analytics', 'admin', 'courses'].includes(routeModule) ? routeModule : 'exams';
+  const setActiveModule = (module: ModuleType) => navigate(`/${module}`);
+  const resultParams = new URLSearchParams(location.search);
+  const selectedResultExamId = resultParams.get('exam');
+  const selectedResultScheduleId = resultParams.get('schedule');
 
   const handleNavigateToResults = (examId?: string, scheduleId?: string) => {
-    if (examId) setSelectedResultExamId(examId);
-    if (scheduleId) setSelectedResultScheduleId(scheduleId);
-    setActiveModule('analytics');
+    const params = new URLSearchParams();
+    if (examId) params.set('exam', examId);
+    if (scheduleId) params.set('schedule', scheduleId);
+    navigate(`/analytics${params.size ? `?${params}` : ''}`);
   };
   const [isMobileSidebarOpen, setIsMobileSidebarOpen] = useState(false);
+  const closeMobileSidebar = useCallback(() => setIsMobileSidebarOpen(false), []);
   const [isSidebarCollapsed, setIsSidebarCollapsed] = useState<boolean>(() => {
     try {
       return localStorage.getItem('aives_sidebar_collapsed') === 'true';
@@ -83,24 +78,34 @@ export default function App() {
       return false;
     }
   });
-  const [isSoundEnabled, setIsSoundEnabled] = useState(true);
-  const [userRole, setUserRole] = useState<'faculty' | 'student'>('faculty');
-  const [language, setLanguage] = useState<Language>('vi');
-
-  // Sync userRole with currentUser & guard admin routes
+  const [language, setLanguage] = useState<Language>(() => {
+    try { return localStorage.getItem('aives_language') === 'en' ? 'en' : 'vi'; } catch { return 'vi'; }
+  });
   useEffect(() => {
-    if (!currentUser && isSessionLoading) return;
-    if (currentUser) {
-      setUserRole(currentUser.role === 'STUDENT' ? 'student' : 'faculty');
-      if (currentUser.role !== 'ADMIN' && activeModule === 'admin') {
-        setActiveModule('exams');
-        setExamSubView('list');
-      }
-    } else {
-      setActiveModule('exams');
-      setExamSubView('list');
-    }
-  }, [currentUser, activeModule, isSessionLoading]);
+    document.documentElement.lang = language;
+    try { localStorage.setItem('aives_language', language); } catch {}
+  }, [language]);
+
+  useEffect(() => {
+    const labels: Record<ModuleType, string> = { exams: language === 'vi' ? 'Kỳ thi' : 'Examinations', questions: language === 'vi' ? 'Ngân hàng câu hỏi' : 'Question bank', materials: language === 'vi' ? 'Học liệu & Rubric' : 'Materials & rubrics', analytics: language === 'vi' ? 'Kết quả' : 'Results', admin: language === 'vi' ? 'Tài khoản' : 'Accounts', courses: language === 'vi' ? 'Môn học' : 'Courses' };
+    document.title = `${isPasswordLink ? (language === 'vi' ? 'Thiết lập mật khẩu' : 'Set password') : labels[activeModule]} · AIVES`;
+  }, [activeModule, language, isPasswordLink]);
+
+  useEffect(() => {
+    if (!currentUser) return;
+    document.getElementById('main-content')?.focus({ preventScroll: true });
+    window.scrollTo(0, 0);
+    closeMobileSidebar();
+  }, [location.pathname, currentUser?.id, closeMobileSidebar]);
+
+  useEffect(() => {
+    if (!currentUser || isPasswordLink) return;
+    const allowed = currentUser.role === 'ADMIN'
+      ? ['exams', 'questions', 'analytics', 'admin', 'courses']
+      : currentUser.role === 'LECTURER' ? ['exams', 'questions', 'materials', 'analytics'] : ['exams', 'analytics'];
+    if (!allowed.includes(routeModule)) navigate(currentUser.role === 'ADMIN' ? '/admin' : '/exams', { replace: true });
+  }, [currentUser, routeModule, navigate, isPasswordLink]);
+
 
   // Apply dark mode class to root HTML element & persist
   useEffect(() => {
@@ -123,7 +128,6 @@ export default function App() {
     clearSession();
     setCurrentUser(null);
     setActiveModule('exams');
-    setExamSubView('list');
   };
 
   // Recheck identity and permissions after login or account changes.
@@ -148,40 +152,27 @@ export default function App() {
       setCurrentUser(null);
       setSessionError('');
       setIsSessionLoading(false);
-      setIsAuthModalOpen(false);
     };
     window.addEventListener('auth:unauthorized', onUnauthorized);
     return () => window.removeEventListener('auth:unauthorized', onUnauthorized);
   }, []);
 
-  // A link pasted into an already open tab only changes the hash, so the page does not reload.
-  useEffect(() => {
-    const onHashChange = () => {
-      const token = readPasswordLinkToken();
-      if (token) setPasswordLinkToken(token);
-    };
-    window.addEventListener('hashchange', onHashChange);
-    return () => window.removeEventListener('hashchange', onHashChange);
-  }, []);
 
   // Leave the set-password page and drop the token from the URL.
   // A changed password requires a fresh login; an unusable link leaves any current session alone.
   const handlePasswordLinkDone = (passwordChanged: boolean) => {
-    try {
-      window.history.replaceState(null, '', window.location.pathname + window.location.search);
-    } catch {}
+    navigate('/exams', { replace: true });
     if (passwordChanged) {
       clearSession();
       setCurrentUser(null);
     }
-    setPasswordLinkToken(null);
   };
 
-  if (passwordLinkToken) {
+  if (isPasswordLink) {
     return (
       <SetPasswordPage
         key={passwordLinkToken}
-        token={passwordLinkToken}
+        token={passwordLinkToken || ''}
         language={language}
         onDone={handlePasswordLinkDone}
       />
@@ -216,7 +207,7 @@ export default function App() {
     );
   }
 
-  // Dedicated Authentication Landing Page with moving gradient animation
+  // Authentication uses the same semantic theme as the application workspace.
   if (!currentUser) {
     return (
       <div className={isDarkMode ? 'dark' : ''}>
@@ -232,19 +223,18 @@ export default function App() {
   }
 
   return (
-    <div className="min-h-screen bg-slate-50 dark:bg-slate-950 text-slate-900 dark:text-slate-100 flex font-sans transition-colors duration-200">
+    <div className="min-h-screen bg-[var(--canvas)] text-[var(--ink)] flex font-sans transition-colors duration-200">
+      <a href="#main-content" className="skip-link" onClick={event => { event.preventDefault(); document.getElementById('main-content')?.focus(); }}>{language === 'vi' ? 'Đến nội dung chính' : 'Skip to main content'}</a>
       {/* Modern Left Sidebar Navigation */}
       <Sidebar
         activeModule={activeModule}
         setActiveModule={(m) => {
           setActiveModule(m);
-          if (m === 'exams') setExamSubView('list');
         }}
         language={language}
         currentUser={currentUser}
-        onOpenAuthModal={() => setIsAuthModalOpen(true)}
         isOpenMobile={isMobileSidebarOpen}
-        onCloseMobile={() => setIsMobileSidebarOpen(false)}
+        onCloseMobile={closeMobileSidebar}
         isCollapsed={isSidebarCollapsed}
         onToggleCollapse={toggleSidebarCollapse}
       />
@@ -259,19 +249,18 @@ export default function App() {
           setIsDarkMode={setIsDarkMode}
           currentUser={currentUser}
           onLogout={handleLogout}
-          onOpenAuthModal={() => setIsAuthModalOpen(true)}
           onOpenMobileSidebar={() => setIsMobileSidebarOpen(true)}
           isSidebarCollapsed={isSidebarCollapsed}
           onToggleSidebarCollapse={toggleSidebarCollapse}
         />
 
         {/* Main View Container */}
-        <main className="flex-1 max-w-7xl w-full mx-auto px-4 sm:px-6 lg:px-8 py-6">
+        <main id="main-content" tabIndex={-1} className="workspace flex-1 max-w-[1440px] w-full mx-auto px-4 sm:px-7 lg:px-9 py-7 lg:py-9 outline-none">
           <div key={activeModule} className="animate-tab-enter">
           {/* MODULE 1: EXAM & SCHEDULE MANAGEMENT */}
           {activeModule === 'exams' && (currentUser.role === 'LECTURER' || currentUser.role === 'ADMIN') && (
             <LecturerExamManagement
-              key={currentUser.id}
+              key={`${currentUser.id}-exams`}
               currentUser={currentUser}
               language={language}
               onNavigateToResults={handleNavigateToResults}
@@ -327,16 +316,16 @@ export default function App() {
         </main>
 
         {/* Footer */}
-        <footer className="border-t border-slate-200 dark:border-slate-800 bg-white/70 dark:bg-slate-900/70 py-4 text-xs text-slate-500 dark:text-slate-400">
+        <footer className="border-t border-[var(--line)] py-5 text-xs text-[var(--muted)]">
           <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 flex flex-col sm:flex-row items-center justify-between gap-2">
             <div className="flex items-center gap-2">
               <span className="font-bold text-slate-900 dark:text-white font-display">
                 AIVES
               </span>
-              <span>— AI-Powered Oral Viva Voce Examination System</span>
+              <span>· {language === 'vi' ? 'Không gian khảo thí' : 'Examination workspace'}</span>
             </div>
             <div className="flex items-center gap-4">
-              <span>WCAG 2.1 AA Compliant</span>
+              <span>{language === 'vi' ? 'AI hỗ trợ · Giảng viên thẩm định' : 'AI-assisted · Lecturer-reviewed'}</span>
             </div>
           </div>
         </footer>
@@ -344,13 +333,6 @@ export default function App() {
 
       
 
-      {/* Authentication Modal */}
-      <AuthModal
-        isOpen={isAuthModalOpen}
-        onClose={() => setIsAuthModalOpen(false)}
-        language={language}
-        onSuccess={handleRefreshCurrentUser}
-      />
     </div>
   );
 }
