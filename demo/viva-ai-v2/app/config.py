@@ -16,6 +16,8 @@ class Settings(BaseSettings):
     live_max_minutes: int = Field(default=45, ge=1, le=120)
     gemini_embedding_model: str = "gemini-embedding-001"
     database_url: str = "postgresql+psycopg://postgres:postgres@localhost:5432/aives_db"
+    backend_api_url: str = "http://localhost:8080/api"
+    cors_origins: list[str] = ["http://localhost:5173", "http://127.0.0.1:5173"]
     model_timeout_seconds: int = Field(default=120, ge=10, le=600)
     retrieval_top_k: int = Field(default=5, ge=1, le=10)
     max_upload_bytes: int = 10 * 1024 * 1024

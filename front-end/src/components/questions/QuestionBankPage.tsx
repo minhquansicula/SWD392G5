@@ -1,4 +1,6 @@
 import React, { useState, useEffect, useMemo, useRef } from 'react';
+import { useSearchParams } from 'react-router-dom';
+import { Button, ModalSurface } from '../ui';
 import {
   BookOpen,
   Plus,
@@ -44,10 +46,19 @@ export const QuestionBankPage: React.FC<QuestionBankPageProps> = ({
 
   // Data states
   const [courses, setCourses] = useState<Course[]>([]);
+  const [courseLoadError, setCourseLoadError] = useState('');
+  const mounted = useRef(true);
   const [questions, setQuestions] = useState<QuestionDto[]>([]);
-  const [selectedCourseId, setSelectedCourseId] = useState<string>(initialCourseId || '');
-  const [selectedDifficulty, setSelectedDifficulty] = useState<string>('ALL');
-  const [searchQuery, setSearchQuery] = useState<string>('');
+  const [params, setParams] = useSearchParams();
+  const selectedCourseId = params.get('course') || initialCourseId || '';
+  const selectedDifficulty = params.get('difficulty') || 'ALL';
+  const searchQuery = params.get('q') || '';
+  function updateFilter(key: string, value: string, replace = false) { setParams(previous => { const next = new URLSearchParams(previous); if (value) next.set(key, value); else next.delete(key); return next; }, { replace }); }
+  const setSelectedCourseId = (value: string) => updateFilter('course', value);
+  const setSelectedDifficulty = (value: string) => updateFilter('difficulty', value);
+  const setSearchQuery = (value: string) => updateFilter('q', value, true);
+  const listRequest = useRef<AbortController | null>(null);
+  const [loadError, setLoadError] = useState('');
   const [isLoading, setIsLoading] = useState<boolean>(false);
   const [notification, setNotification] = useState<{ msg: string; type: 'success' | 'error' } | null>(null);
 
@@ -107,41 +118,50 @@ export const QuestionBankPage: React.FC<QuestionBankPageProps> = ({
 
   // Load courses on mount
   useEffect(() => {
+    mounted.current = true;
     loadCourses();
+    return () => { mounted.current = false; if (notifyTimer.current) clearTimeout(notifyTimer.current); };
   }, []);
 
   // Load questions when filter changes
   useEffect(() => {
-    loadQuestions();
+    setIsLoading(true);
+    const timer = window.setTimeout(() => { void loadQuestions(); }, searchQuery ? 300 : 0);
+    return () => { window.clearTimeout(timer); listRequest.current?.abort(); };
   }, [selectedCourseId, selectedDifficulty, searchQuery]);
 
   async function loadCourses() {
+    setCourseLoadError('');
     try {
-      const data = await getCourses();
+      const data = await getCourses(true);
+      if (!mounted.current) return;
       setCourses(data);
       if (initialCourseId && data.some(c => c.id === initialCourseId)) {
         setSelectedCourseId(initialCourseId);
       }
     } catch (err: any) {
-      console.error('Failed to load courses', err);
+      if (mounted.current) setCourseLoadError(err?.message || t('Không tải được danh sách môn học.', 'Unable to load courses.'));
     }
   }
 
   async function loadQuestions() {
+    listRequest.current?.abort();
+    const controller = new AbortController();
+    listRequest.current = controller;
     setIsLoading(true);
+    setLoadError('');
     try {
       const params: any = {};
       if (selectedCourseId) params.courseId = selectedCourseId;
       if (selectedDifficulty && selectedDifficulty !== 'ALL') params.difficulty = selectedDifficulty;
       if (searchQuery.trim()) params.query = searchQuery.trim();
 
-      const data = await questionService.getQuestions(params);
-      setQuestions(data);
+      const data = await questionService.getQuestions(params, controller.signal, true);
+      if (!controller.signal.aborted) setQuestions(data);
     } catch (err: any) {
-      console.error('Failed to load questions', err);
-      showToast(err.response?.data?.message || t('Không thể tải danh sách câu hỏi.', 'Failed to load questions.'), 'error');
+      if (!controller.signal.aborted) setLoadError(err.response?.data?.message || t('Không thể tải danh sách câu hỏi.', 'Failed to load questions.'));
     } finally {
-      setIsLoading(false);
+      if (!controller.signal.aborted) setIsLoading(false);
     }
   }
 
@@ -206,8 +226,8 @@ export const QuestionBankPage: React.FC<QuestionBankPageProps> = ({
         await questionService.updateQuestion(editingQuestion.id, {
           content: formContent.trim(),
           difficultyLevel: formDifficulty,
-          topic: formTopic.trim() || undefined,
-          expectedAnswer: formExpectedAnswer.trim() || undefined,
+          topic: formTopic.trim(),
+          expectedAnswer: formExpectedAnswer.trim(),
         });
         showToast(t('Cập nhật câu hỏi thành công!', 'Question updated successfully!'), 'success');
       } else {
@@ -489,6 +509,7 @@ export const QuestionBankPage: React.FC<QuestionBankPageProps> = ({
 
   return (
     <div className="space-y-6">
+      {courseLoadError && <div role="alert" className="ui-panel flex flex-wrap items-center justify-between gap-3 p-4 text-sm text-rose-700 dark:text-rose-300"><span>{courseLoadError}</span><Button onClick={loadCourses}>{t('Tải lại môn học', 'Retry courses')}</Button></div>}
       {/* Toast Notification */}
       {notification && (
         <div
@@ -515,20 +536,11 @@ export const QuestionBankPage: React.FC<QuestionBankPageProps> = ({
       )}
 
       {/* Header Banner */}
-      <div className="rounded-2xl border border-slate-200 bg-white p-6 shadow-xs dark:border-slate-800 dark:bg-slate-900">
+      <div className="pb-2">
         <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
           <div>
-            <div className="flex items-center gap-2">
-              <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-semibold bg-indigo-100 text-indigo-700 dark:bg-indigo-950/80 dark:text-indigo-300">
-                <Sparkles className="h-3.5 w-3.5" />
-                {t('Ngân hàng Đề thi & Câu hỏi Vấn đáp', 'Question Bank & Viva Voce')}
-              </span>
-              <span className="text-xs text-slate-500 dark:text-slate-400">
-                ({currentUser?.role === 'ADMIN' ? t('Quyền Quản trị viên', 'Admin Role') : t('Quyền Giảng viên', 'Lecturer Role')})
-              </span>
-            </div>
-            <h1 className="mt-2 text-2xl font-bold tracking-tight text-slate-900 dark:text-white">
-              {t('Quản lý Ngân hàng Câu hỏi', 'Question Bank Management')}
+            <h1 className="ui-page-title">
+              {t('Ngân hàng câu hỏi', 'Question bank')}
             </h1>
             <p className="mt-1 text-sm text-slate-500 dark:text-slate-400">
               {t(
@@ -541,10 +553,10 @@ export const QuestionBankPage: React.FC<QuestionBankPageProps> = ({
           <div className="flex items-center gap-2.5 flex-wrap">
             <button
               onClick={openAiConfigModal}
-              className="inline-flex items-center gap-2 px-3.5 py-2 rounded-xl text-xs font-bold border border-purple-200 dark:border-purple-800/80 bg-gradient-to-r from-purple-50 to-indigo-50 dark:from-purple-950/40 dark:to-indigo-950/40 text-purple-700 dark:text-purple-300 hover:from-purple-100 hover:to-indigo-100 dark:hover:from-purple-900/50 dark:hover:to-indigo-900/50 transition-all cursor-pointer shadow-2xs"
+              className="ui-button text-purple-700 dark:text-purple-300"
             >
               <Bot className="h-4 w-4 text-purple-600 dark:text-purple-400" />
-              <span>{t('✨ AI Gợi ý câu hỏi từ Học liệu', '✨ AI Question Generator')}</span>
+              <span>{t('Gợi ý bằng AI', 'Generate with AI')}</span>
             </button>
             <button
               onClick={openBatchModal}
@@ -600,6 +612,7 @@ export const QuestionBankPage: React.FC<QuestionBankPageProps> = ({
             <BookOpen className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400" />
             <select
               value={selectedCourseId}
+              aria-label={t('Lọc câu hỏi theo môn học', 'Filter questions by course')}
               onChange={e => setSelectedCourseId(e.target.value)}
               className="w-full appearance-none rounded-xl border border-slate-300 bg-white py-2 pl-9 pr-8 text-xs font-semibold text-slate-900 focus:outline-hidden focus:ring-2 focus:ring-indigo-500 dark:border-slate-700 dark:bg-slate-800 dark:text-white cursor-pointer"
             >
@@ -619,6 +632,7 @@ export const QuestionBankPage: React.FC<QuestionBankPageProps> = ({
             <input
               type="text"
               value={searchQuery}
+              aria-label={t('Tìm nội dung hoặc chủ đề câu hỏi', 'Search question content or topic')}
               onChange={e => setSearchQuery(e.target.value)}
               placeholder={t('Tìm kiếm nội dung, chủ đề câu hỏi...', 'Search questions by content, topic...')}
               className="w-full rounded-xl border border-slate-300 bg-white py-2 pl-9 pr-9 text-xs text-slate-900 focus:outline-hidden focus:ring-2 focus:ring-indigo-500 dark:border-slate-700 dark:bg-slate-800 dark:text-white"
@@ -626,6 +640,7 @@ export const QuestionBankPage: React.FC<QuestionBankPageProps> = ({
             {searchQuery && (
               <button
                 onClick={() => setSearchQuery('')}
+                aria-label={t('Xóa nội dung tìm kiếm', 'Clear search')}
                 className="absolute right-2.5 top-1/2 -translate-y-1/2 p-1 text-slate-400 hover:text-slate-600 dark:hover:text-slate-200"
               >
                 <X className="h-3.5 w-3.5" />
@@ -648,6 +663,7 @@ export const QuestionBankPage: React.FC<QuestionBankPageProps> = ({
               <button
                 key={diff}
                 onClick={() => setSelectedDifficulty(diff)}
+                aria-pressed={active}
                 className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition-all whitespace-nowrap cursor-pointer ${
                   active
                     ? 'bg-slate-900 text-white dark:bg-white dark:text-slate-900 shadow-xs'
@@ -667,6 +683,8 @@ export const QuestionBankPage: React.FC<QuestionBankPageProps> = ({
           <Loader2 className="h-8 w-8 animate-spin text-indigo-600 dark:text-indigo-400" />
           <p className="mt-3 text-sm text-slate-500 dark:text-slate-400">{t('Đang tải danh sách câu hỏi…', 'Loading questions…')}</p>
         </div>
+      ) : loadError ? (
+        <div role="alert" className="ui-panel space-y-4 p-6"><p className="text-sm text-rose-700 dark:text-rose-300">{loadError}</p><Button onClick={loadQuestions}>{t('Thử lại', 'Try again')}</Button></div>
       ) : questions.length === 0 ? (
         <div className="flex flex-col items-center justify-center p-16 rounded-2xl border border-dashed border-slate-300 dark:border-slate-700 bg-white/50 dark:bg-slate-900/50 text-center">
           <div className="h-14 w-14 rounded-2xl bg-indigo-50 dark:bg-indigo-950/60 flex items-center justify-center text-indigo-600 dark:text-indigo-400 mb-3">
@@ -686,7 +704,7 @@ export const QuestionBankPage: React.FC<QuestionBankPageProps> = ({
               className="inline-flex items-center gap-2 px-4 py-2 rounded-xl text-xs font-bold bg-purple-600 hover:bg-purple-700 text-white cursor-pointer shadow-xs"
             >
               <Bot className="h-4 w-4" />
-              {t('✨ AI Gợi ý câu hỏi từ tài liệu', '✨ AI Suggest from Materials')}
+              {t('Gợi ý bằng AI từ tài liệu', 'Generate with AI from materials')}
             </button>
             <button
               onClick={openCreateModal}
@@ -761,7 +779,9 @@ export const QuestionBankPage: React.FC<QuestionBankPageProps> = ({
                   <div className="mt-3 pt-3 border-t border-slate-100 dark:border-slate-800/60">
                     <button
                       type="button"
-                      onClick={() => toggleExpand(q.id)}
+                       onClick={() => toggleExpand(q.id)}
+                       aria-expanded={isExpanded}
+                       aria-controls={`answer-${q.id}`}
                       className="flex items-center gap-1.5 text-xs font-semibold text-indigo-600 dark:text-indigo-400 hover:underline cursor-pointer"
                     >
                       <FileText className="h-3.5 w-3.5" />
@@ -769,7 +789,7 @@ export const QuestionBankPage: React.FC<QuestionBankPageProps> = ({
                       {isExpanded ? <ChevronUp className="h-3.5 w-3.5" /> : <ChevronDown className="h-3.5 w-3.5" />}
                     </button>
                     {isExpanded && (
-                      <div className="mt-2 rounded-xl bg-slate-50 p-3.5 text-xs text-slate-700 dark:bg-slate-800/60 dark:text-slate-300 leading-relaxed whitespace-pre-wrap border border-slate-200/60 dark:border-slate-700/60">
+                      <div id={`answer-${q.id}`} className="mt-2 rounded-xl bg-slate-50 p-4 text-sm text-slate-700 dark:bg-slate-800/60 dark:text-slate-300 leading-7 whitespace-pre-wrap border border-slate-200/60 dark:border-slate-700/60">
                         {q.expectedAnswer}
                       </div>
                     )}
@@ -783,7 +803,7 @@ export const QuestionBankPage: React.FC<QuestionBankPageProps> = ({
 
       {/* Modal: Create or Edit Question */}
       {isModalOpen && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/60 backdrop-blur-xs">
+        <ModalSurface label={editingQuestion ? t('Chỉnh sửa câu hỏi', 'Edit question') : t('Tạo câu hỏi', 'Create question')} onClose={() => setIsModalOpen(false)} busy={isSubmitting || isAiAutofillingSingle}>
           <div className="w-full max-w-xl rounded-2xl border border-slate-200 bg-white p-6 shadow-2xl dark:border-slate-700 dark:bg-slate-900 max-h-[90vh] overflow-y-auto">
             <div className="flex items-center justify-between pb-4 border-b border-slate-100 dark:border-slate-800">
               <h2 className="text-lg font-bold text-slate-900 dark:text-white">
@@ -939,12 +959,12 @@ export const QuestionBankPage: React.FC<QuestionBankPageProps> = ({
               </div>
             </form>
           </div>
-        </div>
+        </ModalSurface>
       )}
 
       {/* Modal: Batch Import Questions */}
       {isBatchModalOpen && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/60 backdrop-blur-xs">
+        <ModalSurface label={t('Nhập danh sách câu hỏi', 'Import questions')} onClose={() => setIsBatchModalOpen(false)} busy={isBatchSubmitting}>
           <div className="w-full max-w-2xl rounded-2xl border border-slate-200 bg-white p-6 shadow-2xl dark:border-slate-700 dark:bg-slate-900 max-h-[90vh] overflow-y-auto">
             <div className="flex items-center justify-between pb-4 border-b border-slate-100 dark:border-slate-800">
               <div>
@@ -1081,12 +1101,12 @@ export const QuestionBankPage: React.FC<QuestionBankPageProps> = ({
               </div>
             </form>
           </div>
-        </div>
+        </ModalSurface>
       )}
 
       {/* Modal: Delete Confirm */}
       {deletingQuestion && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/60 backdrop-blur-xs">
+        <ModalSurface label={t('Xóa câu hỏi', 'Delete question')} onClose={() => setDeletingQuestion(null)} busy={isDeleting}>
           <div className="w-full max-w-md rounded-2xl border border-slate-200 bg-white p-6 shadow-2xl dark:border-slate-700 dark:bg-slate-900">
             <div className="flex items-center gap-3 text-rose-600 dark:text-rose-400">
               <div className="h-10 w-10 rounded-xl bg-rose-50 dark:bg-rose-950/80 flex items-center justify-center">
@@ -1124,12 +1144,12 @@ export const QuestionBankPage: React.FC<QuestionBankPageProps> = ({
               </button>
             </div>
           </div>
-        </div>
+        </ModalSurface>
       )}
 
       {/* Modal: AI Generate Questions Config */}
       {isAiConfigOpen && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/60 backdrop-blur-xs">
+        <ModalSurface label={t('Gợi ý câu hỏi bằng AI', 'Generate questions with AI')} onClose={() => setIsAiConfigOpen(false)} busy={isAiGenerating}>
           <div className="w-full max-w-xl rounded-2xl border border-slate-200 bg-white p-6 shadow-2xl dark:border-slate-700 dark:bg-slate-900 max-h-[90vh] overflow-y-auto">
             <div className="flex items-center justify-between pb-4 border-b border-slate-100 dark:border-slate-800">
               <div className="flex items-center gap-2.5">
@@ -1298,7 +1318,7 @@ export const QuestionBankPage: React.FC<QuestionBankPageProps> = ({
                 <button
                   type="submit"
                   disabled={isAiGenerating || !aiCourseId}
-                  className="inline-flex items-center gap-2 px-5 py-2.5 rounded-xl text-xs font-bold bg-gradient-to-r from-purple-600 to-indigo-600 hover:from-purple-700 hover:to-indigo-700 text-white transition-all cursor-pointer shadow-md disabled:opacity-50"
+                  className="ui-button ui-button-primary"
                 >
                   {isAiGenerating ? (
                     <>
@@ -1315,12 +1335,12 @@ export const QuestionBankPage: React.FC<QuestionBankPageProps> = ({
               </div>
             </form>
           </div>
-        </div>
+        </ModalSurface>
       )}
 
       {/* Modal: AI Review & Approval Table */}
       {isAiReviewOpen && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/60 backdrop-blur-xs">
+        <ModalSurface label={t('Duyệt câu hỏi AI', 'Review AI questions')} onClose={() => setIsAiReviewOpen(false)} busy={isAiBatchSaving}>
           <div className="w-full max-w-4xl rounded-2xl border border-slate-200 bg-white p-6 shadow-2xl dark:border-slate-700 dark:bg-slate-900 max-h-[92vh] flex flex-col">
             {/* Header */}
             <div className="flex items-center justify-between pb-4 border-b border-slate-100 dark:border-slate-800 shrink-0">
@@ -1477,7 +1497,7 @@ export const QuestionBankPage: React.FC<QuestionBankPageProps> = ({
                   type="button"
                   disabled={isAiBatchSaving || selectedAiIndices.size === 0}
                   onClick={handleSaveApprovedAiQuestions}
-                  className="inline-flex items-center gap-2 px-5 py-2.5 rounded-xl text-xs font-bold bg-gradient-to-r from-purple-600 to-indigo-600 hover:from-purple-700 hover:to-indigo-700 text-white transition-all cursor-pointer shadow-md disabled:opacity-50"
+                  className="ui-button ui-button-primary"
                 >
                   {isAiBatchSaving ? (
                     <>
@@ -1499,7 +1519,7 @@ export const QuestionBankPage: React.FC<QuestionBankPageProps> = ({
               </div>
             </div>
           </div>
-        </div>
+        </ModalSurface>
       )}
     </div>
   );

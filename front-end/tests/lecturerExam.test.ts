@@ -7,7 +7,7 @@ import {
 import type { ExamDto, ExamScheduleDto, ExamUserDto } from '../src/types/examApi.ts';
 
 const owner: ExamUserDto = {
-  id: '11111111-1111-4111-8111-111111111111', username: 'lecturer', fullName: 'Lecturer',
+  id: '11111111-1111-4111-8111-111111111111', fullName: 'Lecturer',
   role: 'LECTURER', studentCode: null, email: null, createdAt: null,
 };
 const exam: ExamDto = {

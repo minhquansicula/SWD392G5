@@ -6,7 +6,7 @@ Sinh viên vào phòng, bấm **Bắt đầu**, cho phép dùng mic, nghe AI đ�
 
 ## Đọc trước khi chạy
 
-- Đây là demo local, chưa có đăng nhập/phân quyền nhiều người dùng. Chạy ở `127.0.0.1`.
+- React hiện yêu cầu đăng nhập Spring Boot và phân quyền AI ở server. Xem [React integration and authorization](#react-integration-and-authorization) và `../../front-end/README.md` trước khi chạy; các bước standalone/HTML client bên dưới là hướng dẫn demo cũ, không thay thế quy trình React hiện tại.
 - Cần Python 3.11 trở lên (môi trường kiểm thử: Python 3.12), Gemini API key có quyền dùng model Live và embedding.
 - Cần Internet để gọi Gemini. Upload tài liệu tạo embedding và buổi phỏng vấn tiêu thụ quota theo tài khoản.
 - Có thể dùng Docker Desktop để chạy PostgreSQL đã có pgvector. Python chạy trực tiếp trên máy.
@@ -173,3 +173,21 @@ Tại lần đóng gói này: 40 Python tests đạt; 4 integration tests Postgr
 RAG giảm thiếu ngữ cảnh nhưng không bảo đảm AI luôn hỏi/chấm đúng. Backend bảo đảm có một plan/RAG hợp lệ trước khi chuyển audio; không chứng minh từng câu nói của model được nguồn hỗ trợ. Phụ đề có thể nghe sai thuật ngữ; điểm là gợi ý luyện tập, không phải kết quả thi chính thức. Bộ chấm hiện đánh giá nội dung từ transcript, không đánh giá phát âm/giọng nói.
 
 Chưa lưu file ghi âm. Transcript đang nói được checkpoint theo nhịp khoảng 0,75 giây; crash có thể làm mất phần chưa lưu. Gián đoạn mạng không có cam kết audio exactly-once. Công cụ RAG có thể tăng độ trễ. Giới hạn mặc định 45 phút áp dụng cho một lần mở phòng; mỗi lần mở lại đọc lịch sử DB. Cần đo lại chi phí và độ trễ trên tài liệu thật trước khi dùng lớp học.
+# React integration and authorization
+
+The React frontend uses this service (not `python/server.py`). Set
+`BACKEND_API_URL=http://localhost:8080/api` and `CORS_ORIGINS` to a JSON array of
+allowed frontend origins. HTTP API calls require a Spring Boot Bearer token.
+WebSocket clients must send `{"type":"authenticate","token":"<accessToken>"}`
+as their first frame within 10 seconds; tokens in URLs are not accepted.
+Authorization is checked before reading exam data, changing schedules or invoking
+Gemini. Spring Boot must be available; no anonymous fallback is provided.
+
+Only assigned lecturers/admins can manage course materials. Students access only
+their own schedules. Lecturers may read according to Spring Boot exam access;
+only the exam creator/admin may mutate another student's schedule. Start a
+schedule through Spring Boot before connecting to the voice room.
+
+Run authorization regressions with `python -m pytest tests/test_auth.py -q` after
+installing dev dependencies. These tests use fake authority/DB/AI services and
+never touch real exams. See `../../front-end/README.md` for full setup.

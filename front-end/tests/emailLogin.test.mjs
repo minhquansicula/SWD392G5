@@ -135,7 +135,9 @@ function loadSubmit(component, loginIdentifier, loginPassword) {
   return { state, submit: module.exports };
 }
 
-for (const component of ['AuthLandingPage', 'AuthModal']) {
+// AuthLandingPage is exercised through its rendered form in ui/auth.test.tsx.
+// Keep the extraction harness only for the legacy modal's existing handler.
+for (const component of ['AuthModal']) {
   test(`${component} actual handler forwards raw email/password`, async () => {
     const raw = ' User+Tag@EXAMPLE.COM ';
     const { state, submit } = loadSubmit(component, raw, ' password123 ');

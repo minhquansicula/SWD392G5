@@ -1,4 +1,6 @@
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useEffect, useMemo, useRef } from 'react';
+import { ModalSurface } from '../ui';
+import { useSearchParams } from 'react-router-dom';
 import {
   BookOpen,
   Search,
@@ -42,11 +44,15 @@ export const CourseManagementPage: React.FC<CourseManagementPageProps> = ({
   onNavigateToUsers,
 }) => {
   const isVi = language === 'vi';
+  const creating = useRef(false);
 
   // State
   const [courses, setCourses] = useState<Course[]>([]);
-  const [searchQuery, setSearchQuery] = useState('');
+  const [params, setParams] = useSearchParams();
+  const searchQuery = params.get('q') || '';
+  const setSearchQuery = (query: string) => setParams(previous => { const next = new URLSearchParams(previous); if (query) next.set('q', query); else next.delete('q'); return next; }, { replace: true });
   const [isLoading, setIsLoading] = useState(false);
+  const [listError, setListError] = useState('');
   const [notification, setNotification] = useState<{ msg: string; type: 'success' | 'error' } | null>(null);
 
   // Modal Create
@@ -90,11 +96,12 @@ export const CourseManagementPage: React.FC<CourseManagementPageProps> = ({
   // Fetch Courses
   const loadCourses = async () => {
     setIsLoading(true);
+    setListError('');
     try {
-      const list = await getCourses();
+      const list = await getCourses(true);
       setCourses(list);
     } catch (err: any) {
-      showToast(err.message || (isVi ? 'Lỗi tải danh sách môn học' : 'Failed to load courses'), 'error');
+      setListError(err.message || (isVi ? 'Không tải được danh sách môn học.' : 'Unable to load courses.'));
     } finally {
       setIsLoading(false);
     }
@@ -143,6 +150,7 @@ export const CourseManagementPage: React.FC<CourseManagementPageProps> = ({
   // Handle Create Submit
   const handleCreateSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (creating.current) return;
     setCreateError('');
 
     if (!newCourseCode.trim() || !newCourseName.trim()) {
@@ -150,6 +158,7 @@ export const CourseManagementPage: React.FC<CourseManagementPageProps> = ({
       return;
     }
 
+    creating.current = true;
     setIsSubmitting(true);
     try {
       const created = await createCourse({
@@ -169,6 +178,7 @@ export const CourseManagementPage: React.FC<CourseManagementPageProps> = ({
     } catch (err: any) {
       setCreateError(err.message || (isVi ? 'Tạo môn học thất bại' : 'Failed to create course'));
     } finally {
+      creating.current = false;
       setIsSubmitting(false);
     }
   };
@@ -256,7 +266,7 @@ export const CourseManagementPage: React.FC<CourseManagementPageProps> = ({
     try {
       const [lecturers, users] = await Promise.all([
         getCourseLecturers(course.id),
-        getRegisteredUsers('LECTURER'),
+        getRegisteredUsers('LECTURER', true),
       ]);
       setAssignedLecturers(lecturers);
       setAllLecturers(users);
@@ -399,13 +409,8 @@ export const CourseManagementPage: React.FC<CourseManagementPageProps> = ({
       {/* Header & Subtabs */}
       <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
         <div>
-          <div className="flex items-center gap-2 mb-1">
-            <span className="text-xs font-bold uppercase tracking-wider text-indigo-600 dark:text-indigo-400 bg-indigo-50 dark:bg-indigo-950/60 px-2.5 py-1 rounded-md border border-indigo-200 dark:border-indigo-800">
-              {isVi ? 'Hệ thống AIVES' : 'AIVES System'}
-            </span>
-          </div>
           <h1 className="text-2xl sm:text-3xl font-extrabold text-slate-900 dark:text-white tracking-tight">
-            {isVi ? 'Quản Lý Môn Học & Học Phần' : 'Course & Subject Management'}
+            {isVi ? 'Môn học & Giảng viên' : 'Courses & lecturers'}
           </h1>
           <p className="text-xs sm:text-sm text-slate-500 dark:text-slate-400 mt-1">
             {isVi
@@ -498,6 +503,7 @@ export const CourseManagementPage: React.FC<CourseManagementPageProps> = ({
           <input
             type="text"
             value={searchQuery}
+            aria-label={isVi ? 'Tìm môn học theo mã hoặc tên' : 'Search courses by code or name'}
             onChange={(e) => setSearchQuery(e.target.value)}
             placeholder={
               isVi
@@ -540,6 +546,8 @@ export const CourseManagementPage: React.FC<CourseManagementPageProps> = ({
                     </div>
                   </td>
                 </tr>
+              ) : listError ? (
+                <tr><td colSpan={5} className="p-6"><div role="alert" className="space-y-3 text-sm text-rose-700 dark:text-rose-300"><p>{listError}</p><button className="ui-button" onClick={loadCourses}>{isVi ? 'Thử lại' : 'Try again'}</button></div></td></tr>
               ) : filteredCourses.length === 0 ? (
                 <tr>
                   <td colSpan={5} className="py-12 text-center text-slate-400">
@@ -654,10 +662,11 @@ export const CourseManagementPage: React.FC<CourseManagementPageProps> = ({
       {/* MODAL: CREATE COURSE */}
       {/* ============================================================ */}
       {isCreateModalOpen && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-xs">
+        <ModalSurface label={isVi ? 'Thêm môn học' : 'Create course'} onClose={() => setIsCreateModalOpen(false)} busy={isSubmitting}>
           <div className="relative w-full max-w-md bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl shadow-2xl p-6">
             <button
               onClick={() => setIsCreateModalOpen(false)}
+              aria-label={isVi ? 'Đóng biểu mẫu tạo môn học' : 'Close create course form'}
               className="absolute top-4 right-4 p-2 rounded-xl text-slate-400 hover:text-slate-700 dark:hover:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors"
             >
               <X className="w-5 h-5" />
@@ -691,6 +700,7 @@ export const CourseManagementPage: React.FC<CourseManagementPageProps> = ({
                   type="text"
                   required
                   value={newCourseCode}
+                  aria-label={isVi ? 'Mã môn học' : 'Course code'}
                   onChange={(e) => setNewCourseCode(e.target.value.toUpperCase())}
                   placeholder="SWD392"
                   className="w-full px-3 py-2 text-sm uppercase font-mono rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50/50 dark:bg-slate-800/60 text-slate-900 dark:text-white focus:outline-hidden focus:ring-2 focus:ring-indigo-500"
@@ -705,6 +715,7 @@ export const CourseManagementPage: React.FC<CourseManagementPageProps> = ({
                   type="text"
                   required
                   value={newCourseName}
+                  aria-label={isVi ? 'Tên môn học' : 'Course name'}
                   onChange={(e) => setNewCourseName(e.target.value)}
                   placeholder={isVi ? 'Kiến trúc phần mềm' : 'Software Architecture and Design'}
                   className="w-full px-3 py-2 text-sm rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50/50 dark:bg-slate-800/60 text-slate-900 dark:text-white focus:outline-hidden focus:ring-2 focus:ring-indigo-500"
@@ -735,17 +746,18 @@ export const CourseManagementPage: React.FC<CourseManagementPageProps> = ({
               </div>
             </form>
           </div>
-        </div>
+        </ModalSurface>
       )}
 
       {/* ============================================================ */}
       {/* MODAL: EDIT COURSE */}
       {/* ============================================================ */}
       {isEditModalOpen && editingCourse && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-xs">
+        <ModalSurface label={isVi ? 'Chỉnh sửa môn học' : 'Edit course'} onClose={() => setIsEditModalOpen(false)} busy={isEditSubmitting}>
           <div className="relative w-full max-w-md bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl shadow-2xl p-6">
             <button
               onClick={() => setIsEditModalOpen(false)}
+              aria-label={isVi ? 'Đóng biểu mẫu chỉnh sửa môn học' : 'Close edit course form'}
               className="absolute top-4 right-4 p-2 rounded-xl text-slate-400 hover:text-slate-700 dark:hover:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors"
             >
               <X className="w-5 h-5" />
@@ -779,6 +791,7 @@ export const CourseManagementPage: React.FC<CourseManagementPageProps> = ({
                   type="text"
                   required
                   value={editCourseCode}
+                  aria-label={isVi ? 'Mã môn học' : 'Course code'}
                   onChange={(e) => setEditCourseCode(e.target.value.toUpperCase())}
                   className="w-full px-3 py-2 text-sm uppercase font-mono rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50/50 dark:bg-slate-800/60 text-slate-900 dark:text-white focus:outline-hidden focus:ring-2 focus:ring-indigo-500"
                 />
@@ -792,6 +805,7 @@ export const CourseManagementPage: React.FC<CourseManagementPageProps> = ({
                   type="text"
                   required
                   value={editCourseName}
+                  aria-label={isVi ? 'Tên môn học' : 'Course name'}
                   onChange={(e) => setEditCourseName(e.target.value)}
                   className="w-full px-3 py-2 text-sm rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50/50 dark:bg-slate-800/60 text-slate-900 dark:text-white focus:outline-hidden focus:ring-2 focus:ring-indigo-500"
                 />
@@ -821,17 +835,17 @@ export const CourseManagementPage: React.FC<CourseManagementPageProps> = ({
               </div>
             </form>
           </div>
-        </div>
+        </ModalSurface>
       )}
 
       {/* ============================================================ */}
       {/* MODAL: ALERT CONFIRM DELETE COURSE */}
       {/* ============================================================ */}
       {isDeleteModalOpen && courseToDelete && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-xs animate-in fade-in duration-150">
+        <ModalSurface label={isVi ? 'Xác nhận xóa môn học' : 'Confirm course deletion'} onClose={() => { setIsDeleteModalOpen(false); setCourseToDelete(null); }} busy={isDeleting}>
           <div className="relative w-full max-w-md bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-3xl shadow-2xl p-6 sm:p-7 overflow-hidden text-left">
             {/* Top accent line */}
-            <div className="absolute top-0 left-0 right-0 h-1 bg-gradient-to-r from-rose-500 via-red-500 to-amber-500" />
+            <div className="absolute top-0 left-0 right-0 h-1 bg-rose-600" />
 
             {/* Close Button */}
             <button
@@ -850,7 +864,7 @@ export const CourseManagementPage: React.FC<CourseManagementPageProps> = ({
             {/* Warning Icon & Header */}
             <div className="flex items-start gap-3.5 mb-4">
               <div className="p-3 rounded-2xl bg-rose-50 dark:bg-rose-950/60 border border-rose-200 dark:border-rose-900 text-rose-600 shrink-0">
-                <AlertTriangle className="w-6 h-6 animate-pulse" />
+                <AlertTriangle className="w-6 h-6" />
               </div>
               <div className="pt-0.5">
                 <span className="text-[11px] font-bold text-rose-600 dark:text-rose-400 uppercase tracking-wider">
@@ -872,7 +886,7 @@ export const CourseManagementPage: React.FC<CourseManagementPageProps> = ({
             {/* Target Course Card Preview */}
             <div className="p-3.5 rounded-2xl bg-slate-50 dark:bg-slate-800/60 border border-slate-200 dark:border-slate-800 mb-6">
               <div className="flex items-center gap-3">
-                <div className="w-10 h-10 rounded-xl bg-gradient-to-tr from-rose-500 to-red-600 text-white font-bold flex items-center justify-center text-sm shadow-xs shrink-0 font-mono">
+                <div className="w-10 h-10 rounded-xl bg-rose-100 dark:bg-rose-950 text-rose-700 dark:text-rose-300 font-semibold flex items-center justify-center text-sm shrink-0">
                   {courseToDelete.courseCode.slice(0, 3)}
                 </div>
                 <div className="min-w-0 flex-1">
@@ -919,17 +933,17 @@ export const CourseManagementPage: React.FC<CourseManagementPageProps> = ({
               </button>
             </div>
           </div>
-        </div>
+        </ModalSurface>
       )}
 
       {/* ============================================================ */}
       {/* MODAL: ASSIGN LECTURERS TO COURSE (MULTI-SELECT) */}
       {/* ============================================================ */}
       {isAssignModalOpen && selectedCourseForLecturers && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-xs animate-in fade-in duration-150">
+        <ModalSurface label={isVi ? 'Phân công giảng viên' : 'Assign lecturers'} onClose={() => { setIsAssignModalOpen(false); setSelectedCourseForLecturers(null); }} busy={isAssignActionLoading}>
           <div className="relative w-full max-w-2xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-3xl shadow-2xl overflow-hidden text-left flex flex-col max-h-[90vh]">
             {/* Top accent gradient line */}
-            <div className="absolute top-0 left-0 right-0 h-1.5 bg-gradient-to-r from-purple-500 via-indigo-500 to-blue-500" />
+            <div className="absolute top-0 left-0 right-0 h-1 bg-indigo-600" />
 
             {/* Modal Header */}
             <div className="p-6 pb-4 border-b border-slate-100 dark:border-slate-800/80">
@@ -1159,7 +1173,7 @@ export const CourseManagementPage: React.FC<CourseManagementPageProps> = ({
                               </div>
 
                               {/* Avatar */}
-                              <div className="w-9 h-9 rounded-xl bg-gradient-to-br from-purple-500 to-indigo-600 text-white font-bold flex items-center justify-center text-xs shadow-xs shrink-0">
+                              <div className="w-9 h-9 rounded-full bg-indigo-50 dark:bg-indigo-950 text-indigo-700 dark:text-indigo-300 font-semibold flex items-center justify-center text-xs shrink-0">
                                 {lec.fullName?.charAt(0)?.toUpperCase() || 'L'}
                               </div>
 
@@ -1303,7 +1317,7 @@ export const CourseManagementPage: React.FC<CourseManagementPageProps> = ({
                     type="button"
                     onClick={handleAssignSelectedLecturers}
                     disabled={selectedLecturerIds.length === 0 || isAssignActionLoading}
-                    className="inline-flex items-center gap-2 px-5 py-2.5 rounded-xl bg-gradient-to-r from-purple-600 to-indigo-600 hover:from-purple-700 hover:to-indigo-700 active:scale-[0.99] text-white text-xs font-bold shadow-md shadow-purple-600/20 transition-all disabled:opacity-50 disabled:cursor-not-allowed cursor-pointer"
+                    className="ui-button ui-button-primary"
                   >
                     {isAssignActionLoading ? (
                       <>
@@ -1333,7 +1347,7 @@ export const CourseManagementPage: React.FC<CourseManagementPageProps> = ({
               </div>
             </div>
           </div>
-        </div>
+        </ModalSurface>
       )}
     </div>
   );
