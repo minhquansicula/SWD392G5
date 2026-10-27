@@ -1,7 +1,9 @@
 import 'dart:ui';
 import 'package:flutter/material.dart';
+import 'package:provider/provider.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_text_styles.dart';
+import '../../exam/providers/exam_provider.dart';
 import 'student_home_screen.dart';
 import '../../exam/screens/exam_schedule_screen.dart';
 import '../../profile/screens/profile_settings_screen.dart';
@@ -31,6 +33,14 @@ class _MainNavigationScreenState extends State<MainNavigationScreen> {
   void initState() {
     super.initState();
     _currentIndex = widget.initialIndex.clamp(0, 2);
+
+    // Tự động tải lịch thi ngay khi mở màn hình chính
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      final examProv = context.read<ExamProvider>();
+      if (examProv.exams.isEmpty && !examProv.isLoading) {
+        examProv.refreshExams();
+      }
+    });
   }
 
   @override

@@ -5,9 +5,11 @@ class ApiEndpoints {
   static String defaultBaseUrl = 'https://aives-backend-qbox.onrender.com/api';
   static const String localBaseUrl = 'http://10.0.2.2:8080/api';
 
-  // Python AI Engine / WebSocket Viva Voice Core default
-  // Endpoint format: ws://<host>:8000/ws/viva/{scheduleId}
-  static String defaultWebSocketUrl = 'ws://10.0.2.2:8000/ws/viva/';
+  // Python AI Engine / WebSocket Viva Voice Core (demo/viva-ai-v2)
+  // Endpoint format: ws://<host>:8000/ws/live/sessions/{scheduleId}
+  static String defaultWebSocketUrl = 'ws://10.0.2.2:8000/ws/live/sessions/';
+  static String aiServiceBaseUrl = 'http://10.0.2.2:8000';
+  static const String aiSessionFinish = '/api/v1/sessions'; // + /{id}/finish
 
   // Auth endpoints (AuthController.java)
   static const String login = '/auth/login';

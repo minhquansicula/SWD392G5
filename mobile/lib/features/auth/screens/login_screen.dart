@@ -5,6 +5,7 @@ import '../../../core/theme/app_text_styles.dart';
 import '../../../core/widgets/primary_button.dart';
 import '../../../core/widgets/glass_card.dart';
 import '../providers/auth_provider.dart';
+import '../../exam/providers/exam_provider.dart';
 import '../../home/screens/main_navigation_screen.dart';
 import 'forgot_password_screen.dart';
 
@@ -36,6 +37,7 @@ class _LoginScreenState extends State<LoginScreen> {
     );
 
     if (success && mounted) {
+      context.read<ExamProvider>().refreshExams();
       Navigator.of(context).pushReplacement(
         MaterialPageRoute(builder: (_) => const MainNavigationScreen()),
       );

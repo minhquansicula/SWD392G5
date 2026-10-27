@@ -9,6 +9,12 @@ class ExamProvider extends ChangeNotifier {
   String? _errorMessage;
   ExamScheduleModel? _selectedExam;
 
+  ExamProvider() {
+    if (ApiClient.instance.authToken != null && ApiClient.instance.authToken!.isNotEmpty) {
+      refreshExams();
+    }
+  }
+
   List<ExamScheduleModel> get exams => _exams;
   bool get isLoading => _isLoading;
   String? get errorMessage => _errorMessage;
@@ -65,6 +71,7 @@ class ExamProvider extends ChangeNotifier {
     try {
       final res = await ApiClient.instance.post(
         '${ApiEndpoints.studentScheduleStart}/$scheduleId/start',
+        body: {},
       );
       return res.success;
     } catch (e) {

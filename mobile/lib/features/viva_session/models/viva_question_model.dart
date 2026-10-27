@@ -41,6 +41,34 @@ class VivaQuestionModel {
       expectedKeywords: '',
     );
   }
+
+  VivaQuestionModel copyWith({
+    String? id,
+    int? questionNumber,
+    int? totalQuestions,
+    String? bloomLevel,
+    String? content,
+    bool? isAdaptiveFollowUp,
+    String? parentQuestionId,
+    int? timeLimitSeconds,
+    double? maxScore,
+    List<String>? topicTags,
+    String? expectedKeywords,
+  }) {
+    return VivaQuestionModel(
+      id: id ?? this.id,
+      questionNumber: questionNumber ?? this.questionNumber,
+      totalQuestions: totalQuestions ?? this.totalQuestions,
+      bloomLevel: bloomLevel ?? this.bloomLevel,
+      content: content ?? this.content,
+      isAdaptiveFollowUp: isAdaptiveFollowUp ?? this.isAdaptiveFollowUp,
+      parentQuestionId: parentQuestionId ?? this.parentQuestionId,
+      timeLimitSeconds: timeLimitSeconds ?? this.timeLimitSeconds,
+      maxScore: maxScore ?? this.maxScore,
+      topicTags: topicTags ?? this.topicTags,
+      expectedKeywords: expectedKeywords ?? this.expectedKeywords,
+    );
+  }
 }
 
 class VivaTranscriptEntry {

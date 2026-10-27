@@ -10,8 +10,25 @@ import '../../exam/providers/exam_provider.dart';
 import '../../exam/screens/exam_detail_checklist_screen.dart';
 import '../../report/screens/exam_result_report_screen.dart';
 
-class StudentHomeScreen extends StatelessWidget {
+class StudentHomeScreen extends StatefulWidget {
   const StudentHomeScreen({super.key});
+
+  @override
+  State<StudentHomeScreen> createState() => _StudentHomeScreenState();
+}
+
+class _StudentHomeScreenState extends State<StudentHomeScreen> {
+  @override
+  void initState() {
+    super.initState();
+    // Tự động tải lịch thi ngay khi mở app
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      final examProv = context.read<ExamProvider>();
+      if (examProv.exams.isEmpty && !examProv.isLoading) {
+        examProv.refreshExams();
+      }
+    });
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -38,11 +55,11 @@ class StudentHomeScreen extends StatelessWidget {
               const SizedBox(height: 20),
 
               // Hero Card: Upcoming Viva Exam (from Stitch design)
-              _buildUpcomingExamHero(context, heroExam),
+              _buildUpcomingExamHero(context, heroExam, examProvider),
               const SizedBox(height: 24),
 
               // Section: Học phần của bạn (Horizontal Carousel)
-              _buildCourseModulesSection(context, examProvider.exams),
+              _buildCourseModulesSection(context, examProvider.exams, examProvider.isLoading),
               const SizedBox(height: 24),
 
               // Section: Lịch sử điểm vấn đáp gần đây
@@ -123,9 +140,10 @@ class StudentHomeScreen extends StatelessWidget {
             ],
           ),
         ),
+        const SizedBox(width: 8),
         // Semester Badge
         Container(
-          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+          padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 4),
           decoration: BoxDecoration(
             color: AppColors.surfaceCardHigh,
             borderRadius: BorderRadius.circular(12),
@@ -133,12 +151,14 @@ class StudentHomeScreen extends StatelessWidget {
           ),
           child: Text(
             'Fall 2026',
-            style: AppTextStyles.labelSm.copyWith(color: AppColors.primaryLight),
+            style: AppTextStyles.labelSm.copyWith(color: AppColors.primaryLight, fontSize: 11),
           ),
         ),
-        const SizedBox(width: 8),
+        const SizedBox(width: 4),
         // Notification Icon
         IconButton(
+          padding: EdgeInsets.zero,
+          constraints: const BoxConstraints(minWidth: 36, minHeight: 36),
           icon: const Icon(Icons.notifications_outlined, size: 22, color: Colors.white70),
           onPressed: () {},
         ),
@@ -146,7 +166,78 @@ class StudentHomeScreen extends StatelessWidget {
     );
   }
 
-  Widget _buildUpcomingExamHero(BuildContext context, ExamScheduleModel? exam) {
+  Widget _buildUpcomingExamHero(BuildContext context, ExamScheduleModel? exam, ExamProvider examProvider) {
+    if (examProvider.isLoading && examProvider.exams.isEmpty) {
+      return GlassCard(
+        padding: const EdgeInsets.all(22),
+        borderRadius: 22,
+        border: Border.all(color: AppColors.borderGlow),
+        child: Row(
+          children: [
+            const SizedBox(
+              width: 32,
+              height: 32,
+              child: CircularProgressIndicator(
+                strokeWidth: 2.5,
+                valueColor: AlwaysStoppedAnimation<Color>(AppColors.primaryLight),
+              ),
+            ),
+            const SizedBox(width: 16),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text('Đang tải lịch thi...', style: AppTextStyles.titleMd.copyWith(fontSize: 15)),
+                  const SizedBox(height: 3),
+                  Text(
+                    'Đang đồng bộ dữ liệu ca thi từ máy chủ AIVES',
+                    style: AppTextStyles.bodySm.copyWith(color: AppColors.textMuted, fontSize: 12),
+                  ),
+                ],
+              ),
+            ),
+          ],
+        ),
+      );
+    }
+
+    if (examProvider.errorMessage != null && examProvider.exams.isEmpty) {
+      return GlassCard(
+        padding: const EdgeInsets.all(20),
+        borderRadius: 22,
+        border: Border.all(color: AppColors.warning.withValues(alpha: 0.3)),
+        child: Row(
+          children: [
+            const Icon(Icons.cloud_off_rounded, color: AppColors.warning, size: 30),
+            const SizedBox(width: 14),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text('Chưa thể tải lịch thi', style: AppTextStyles.titleMd.copyWith(fontSize: 14)),
+                  Text(
+                    examProvider.errorMessage ?? 'Vui lòng kiểm tra lại kết nối mạng',
+                    style: AppTextStyles.bodySm.copyWith(color: AppColors.textMuted, fontSize: 11),
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                  ),
+                ],
+              ),
+            ),
+            TextButton(
+              onPressed: () => examProvider.refreshExams(),
+              style: TextButton.styleFrom(
+                backgroundColor: AppColors.primary.withValues(alpha: 0.2),
+                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+              ),
+              child: const Text('Thử lại', style: TextStyle(color: AppColors.primaryLight, fontSize: 12)),
+            ),
+          ],
+        ),
+      );
+    }
+
     if (exam == null) {
       return GlassCard(
         padding: const EdgeInsets.all(20),
@@ -302,7 +393,7 @@ class StudentHomeScreen extends StatelessWidget {
     );
   }
 
-  Widget _buildCourseModulesSection(BuildContext context, List<ExamScheduleModel> exams) {
+  Widget _buildCourseModulesSection(BuildContext context, List<ExamScheduleModel> exams, bool isLoading) {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
@@ -323,7 +414,40 @@ class StudentHomeScreen extends StatelessWidget {
           ],
         ),
         const SizedBox(height: 12),
-        if (exams.isEmpty)
+        if (isLoading && exams.isEmpty)
+          SizedBox(
+            height: 140,
+            child: ListView.separated(
+              scrollDirection: Axis.horizontal,
+              itemCount: 2,
+              separatorBuilder: (context, index) => const SizedBox(width: 14),
+              itemBuilder: (context, index) => Container(
+                width: 200,
+                padding: const EdgeInsets.all(16),
+                decoration: BoxDecoration(
+                  color: AppColors.surfaceCardLow,
+                  borderRadius: BorderRadius.circular(18),
+                  border: Border.all(color: AppColors.borderGlass),
+                ),
+                child: Column(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: const [
+                    SizedBox(
+                      width: 22,
+                      height: 22,
+                      child: CircularProgressIndicator(strokeWidth: 2, color: AppColors.primaryLight),
+                    ),
+                    SizedBox(height: 10),
+                    Text(
+                      'Đang tải học phần...',
+                      style: TextStyle(color: AppColors.textMuted, fontSize: 11),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+          )
+        else if (exams.isEmpty)
           GlassCard(
             padding: const EdgeInsets.all(16),
             borderRadius: 18,
