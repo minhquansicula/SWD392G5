@@ -7,14 +7,14 @@ import type {
 
 // Reuse the existing JWT client. No auth/course/admin/student API duplication.
 export const lecturerExamService = {
-  async list(page = 0, size = 10, sort: ExamSort = 'startDate,desc', signal?: AbortSignal) {
+  async list(page = 0, size = 10, sort: ExamSort = 'startDate,desc', signal?: AbortSignal, fresh = false) {
     const response = await apiClient.get<ApiResponse<ExamPage>>('/exams', {
-      params: { page, size, sort }, signal,
+      params: { page, size, sort }, signal, headers: fresh ? { 'Cache-Control': 'no-cache' } : {},
     });
     return response.data.data;
   },
-  async detail(examId: string, signal?: AbortSignal) {
-    const response = await apiClient.get<ApiResponse<ExamDetailDto>>(`/exams/${examId}`, { signal });
+  async detail(examId: string, signal?: AbortSignal, fresh = false) {
+    const response = await apiClient.get<ApiResponse<ExamDetailDto>>(`/exams/${examId}`, { signal, headers: fresh ? { 'Cache-Control': 'no-cache' } : {} });
     return response.data.data;
   },
   async create(body: CreateExamRequest) {
@@ -28,8 +28,8 @@ export const lecturerExamService = {
   async remove(examId: string): Promise<void> {
     await apiClient.delete(`/lecturer/exams/${examId}`);
   },
-  async schedules(examId: string, signal?: AbortSignal) {
-    const response = await apiClient.get<ApiResponse<ExamScheduleDto[]>>(`/exams/${examId}/schedules`, { signal });
+  async schedules(examId: string, signal?: AbortSignal, fresh = false) {
+    const response = await apiClient.get<ApiResponse<ExamScheduleDto[]>>(`/exams/${examId}/schedules`, { signal, headers: fresh ? { 'Cache-Control': 'no-cache' } : {} });
     return response.data.data;
   },
   async addStudents(examId: string, body: AddStudentsRequest) {

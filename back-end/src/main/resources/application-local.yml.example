@@ -17,9 +17,6 @@ spring:
     password: your-gmail-app-password
 
 aives:
-  ai:
-    openai-api-key: your-openai-api-key-here
-    gemini-api-key: your-gemini-api-key-here
   mail:
     # Ghi link thiết lập mật khẩu ra terminal log để tiện copy test nhanh
     log-links: true

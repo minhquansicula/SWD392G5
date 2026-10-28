@@ -1,18 +1,10 @@
-import React from 'react';
-import {
-  BrainCircuit,
-  CalendarDays,
-  FileQuestion,
-  BarChart3,
-  ShieldCheck,
-  BookOpen,
-  LogIn,
-  X,
-  PanelLeftClose,
-  PanelLeftOpen,
-} from 'lucide-react';
-import { ModuleType, UserAccount } from '../../types';
-import { Language, translations } from '../../utils/i18n';
+import { useEffect, useRef } from 'react';
+import { NavLink } from 'react-router-dom';
+import { BookOpen, BookMarked, CalendarDays, FileQuestion, BarChart3, Users, PanelLeftClose, PanelLeftOpen, GraduationCap, X } from 'lucide-react';
+import type { ModuleType, UserAccount } from '../../types';
+import type { Language } from '../../utils/i18n';
+import { Button } from '../ui';
+import { lockBodyScroll } from '../../utils/scrollLock';
 
 interface SidebarProps {
   activeModule: ModuleType;
@@ -26,257 +18,56 @@ interface SidebarProps {
   onToggleCollapse?: () => void;
 }
 
-export const Sidebar: React.FC<SidebarProps> = ({
-  activeModule,
-  setActiveModule,
-  language,
-  currentUser,
-  onOpenAuthModal,
-  isOpenMobile = false,
-  onCloseMobile,
-  isCollapsed = false,
-  onToggleCollapse,
-}) => {
-  const t = translations[language];
-  const isVi = language === 'vi';
+export function Sidebar({ language, currentUser, isOpenMobile, onCloseMobile, isCollapsed, onToggleCollapse }: SidebarProps) {
+  const vi = language === 'vi';
+  const role = currentUser?.role;
+  const drawer = useRef<HTMLDialogElement>(null);
+  useEffect(() => {
+    if (!isOpenMobile) return;
+    const previous = document.activeElement as HTMLElement | null;
+    const unlock = lockBodyScroll();
+    const dialog = drawer.current;
+    dialog?.showModal();
+    const query = window.matchMedia('(min-width: 768px)');
+    const closeOnDesktop = () => { if (query.matches) onCloseMobile?.(); };
+    query.addEventListener('change', closeOnDesktop);
+    return () => { dialog?.close(); unlock(); if (previous?.isConnected) previous.focus(); query.removeEventListener('change', closeOnDesktop); };
+  }, [isOpenMobile, onCloseMobile]);
 
-  const handleNavClick = (module: ModuleType) => {
-    setActiveModule(module);
-    if (onCloseMobile) onCloseMobile();
-  };
-
-  const navItems = [
-    {
-      id: 'exams' as ModuleType,
-      label: t.navExams,
-      icon: CalendarDays,
-      show: true,
-    },
-    {
-      id: 'questions' as ModuleType,
-      label: t.navQuestions,
-      icon: FileQuestion,
-      show: currentUser?.role === 'LECTURER' || currentUser?.role === 'ADMIN',
-    },
-    {
-      id: 'analytics' as ModuleType,
-      label: t.navAnalytics,
-      icon: BarChart3,
-      show: true,
-    },
+  const items = [
+    { id: 'exams', icon: CalendarDays, label: vi ? (role === 'STUDENT' ? 'Lịch thi của tôi' : 'Kỳ thi & Lịch thi') : (role === 'STUDENT' ? 'My examinations' : 'Examinations'), show: true },
+    { id: 'questions', icon: FileQuestion, label: vi ? 'Ngân hàng câu hỏi' : 'Question bank', show: role !== 'STUDENT' },
+    { id: 'materials', icon: BookMarked, label: vi ? 'Học liệu & Rubric' : 'Materials & rubrics', show: role === 'LECTURER' },
+    { id: 'analytics', icon: BarChart3, label: vi ? (role === 'STUDENT' ? 'Kết quả của tôi' : 'Kết quả & Phân tích') : (role === 'STUDENT' ? 'My results' : 'Results & analytics'), show: true },
   ];
-
-  const adminItems = [
-    {
-      id: 'admin' as ModuleType,
-      label: t.navAdmin,
-      icon: ShieldCheck,
-      badge: 'PRO',
-      show: currentUser?.role === 'ADMIN',
-    },
-    {
-      id: 'courses' as ModuleType,
-      label: isVi ? 'Quản lý môn học' : 'Course Management',
-      icon: BookOpen,
-      show: currentUser?.role === 'ADMIN',
-    },
+  const admin = [
+    { id: 'admin', icon: Users, label: vi ? 'Tài khoản' : 'Accounts', show: role === 'ADMIN' },
+    { id: 'courses', icon: BookOpen, label: vi ? 'Môn học' : 'Courses', show: role === 'ADMIN' },
   ];
-
-  const sidebarContent = (
-    <div
-      className={`flex flex-col h-full bg-white dark:bg-slate-900 border-r border-slate-200 dark:border-slate-800/80 select-none transition-all duration-300 ease-in-out ${
-        isCollapsed ? 'w-20' : 'w-64'
-      }`}
-    >
-      {/* 1. BRAND HEADER */}
-      <div className={`h-18 px-4 border-b border-slate-200 dark:border-slate-800/80 flex items-center ${isCollapsed ? 'justify-center' : 'justify-between'}`}>
-        {!isCollapsed ? (
-          <>
-            <button
-              onClick={() => handleNavClick('exams')}
-              className="flex items-center gap-3 text-left group focus:outline-hidden cursor-pointer min-w-0"
-            >
-              <div className="h-10 w-10 rounded-xl bg-gradient-to-tr from-indigo-600 to-indigo-700 flex items-center justify-center text-white shadow-sm shadow-indigo-500/25 group-hover:scale-105 transition-transform shrink-0">
-                <BrainCircuit className="h-5 w-5" />
-              </div>
-              <div className="leading-tight overflow-hidden transition-all duration-200">
-                <span className="font-bold text-lg tracking-tight text-slate-900 dark:text-white font-display block truncate">
-                  {t.appName}
-                </span>
-                <span className="text-[11px] text-slate-500 dark:text-slate-400 font-medium line-clamp-1 truncate">
-                  {t.appSub}
-                </span>
-              </div>
-            </button>
-
-            {/* Collapse Trigger on Desktop */}
-            {onToggleCollapse && (
-              <button
-                onClick={onToggleCollapse}
-                title={isVi ? 'Thu gọn thanh bên' : 'Collapse sidebar'}
-                className="hidden md:flex p-2 rounded-xl text-slate-400 hover:text-slate-700 dark:hover:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors cursor-pointer shrink-0"
-              >
-                <PanelLeftClose className="w-4 h-4" />
-              </button>
-            )}
-          </>
-        ) : (
-          /* When collapsed: hide logo, show clean centered expand button */
-          onToggleCollapse && (
-            <button
-              onClick={onToggleCollapse}
-              title={isVi ? 'Mở rộng thanh bên' : 'Expand sidebar'}
-              className="hidden md:flex p-2.5 rounded-xl text-slate-500 hover:text-indigo-600 dark:text-slate-400 dark:hover:text-indigo-400 hover:bg-indigo-50 dark:hover:bg-indigo-950/50 transition-all cursor-pointer items-center justify-center"
-            >
-              <PanelLeftOpen className="w-5 h-5" />
-            </button>
-          )
-        )}
-
-        {/* Mobile close button */}
-        {onCloseMobile && (
-          <button
-            onClick={onCloseMobile}
-            className="md:hidden p-1.5 rounded-lg text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-800"
-          >
-            <X className="w-5 h-5" />
-          </button>
-        )}
-      </div>
-
-      {/* 2. NAVIGATION LINKS */}
-      <div className="flex-1 overflow-y-auto px-2.5 sm:px-3 py-4 space-y-1.5">
-        {/* Section 1: Main Modules */}
-        {!isCollapsed ? (
-          <div className="px-3 pb-2 text-[10px] font-bold uppercase tracking-wider text-slate-400 dark:text-slate-500">
-            {isVi ? 'Phân hệ chính' : 'Main Modules'}
-          </div>
-        ) : (
-          <div className="w-6 h-0.5 bg-slate-200 dark:bg-slate-800 mx-auto my-2 rounded-full" />
-        )}
-
-        {navItems
-          .filter((item) => item.show)
-          .map((item) => {
-            const Icon = item.icon;
-            const isActive = activeModule === item.id;
-            return (
-              <button
-                key={item.id}
-                onClick={() => handleNavClick(item.id)}
-                title={isCollapsed ? item.label : undefined}
-                className={`w-full flex items-center transition-all cursor-pointer rounded-xl ${
-                  isCollapsed
-                    ? 'justify-center p-3'
-                    : 'gap-3 px-3 py-2.5 text-xs font-semibold'
-                } ${
-                  isActive
-                    ? 'bg-indigo-50 dark:bg-indigo-950/60 text-indigo-700 dark:text-indigo-300 font-bold shadow-2xs'
-                    : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white hover:bg-slate-100 dark:hover:bg-slate-800/60'
-                }`}
-              >
-                <Icon
-                  className={`h-4 w-4 shrink-0 transition-transform ${
-                    isActive ? 'text-indigo-600 dark:text-indigo-400 scale-110' : 'text-slate-400'
-                  }`}
-                />
-                {!isCollapsed && <span className="truncate">{item.label}</span>}
-              </button>
-            );
-          })}
-
-        {/* Section 2: System Admin */}
-        {currentUser?.role === 'ADMIN' && (
-          <div className="pt-3">
-            {!isCollapsed ? (
-              <div className="px-3 pb-2 text-[10px] font-bold uppercase tracking-wider text-purple-600 dark:text-purple-400">
-                {isVi ? 'Quản trị hệ thống' : 'System Admin'}
-              </div>
-            ) : (
-              <div className="w-6 h-0.5 bg-purple-200 dark:bg-purple-900/60 mx-auto my-2 rounded-full" />
-            )}
-
-            {adminItems
-              .filter((item) => item.show)
-              .map((item) => {
-                const Icon = item.icon;
-                const isActive = activeModule === item.id;
-                return (
-                  <button
-                    key={item.id}
-                    onClick={() => handleNavClick(item.id)}
-                    title={isCollapsed ? item.label : undefined}
-                    className={`w-full flex items-center transition-all cursor-pointer rounded-xl ${
-                      isCollapsed
-                        ? 'justify-center p-3'
-                        : 'justify-between px-3 py-2.5 text-xs font-semibold'
-                    } ${
-                      isActive
-                        ? 'bg-purple-50 dark:bg-purple-950/60 text-purple-700 dark:text-purple-300 font-bold shadow-2xs'
-                        : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white hover:bg-slate-100 dark:hover:bg-slate-800/60'
-                    }`}
-                  >
-                    <div className="flex items-center gap-3 truncate">
-                      <Icon
-                        className={`h-4 w-4 shrink-0 ${
-                          isActive
-                            ? 'text-purple-600 dark:text-purple-400'
-                            : 'text-purple-500/80'
-                        }`}
-                      />
-                      {!isCollapsed && <span className="truncate">{item.label}</span>}
-                    </div>
-                    {!isCollapsed && item.badge && (
-                      <span className="text-[10px] font-bold px-1.5 py-0.5 rounded-md bg-purple-100 dark:bg-purple-900/80 text-purple-700 dark:text-purple-300">
-                        {item.badge}
-                      </span>
-                    )}
-                  </button>
-                );
-              })}
-          </div>
-        )}
-      </div>
-
-      {/* 3. SIDEBAR FOOTER: Log out is removed per user request */}
-      {!currentUser && (
-        <div className="p-3 border-t border-slate-200 dark:border-slate-800/80">
-          <button
-            onClick={() => onOpenAuthModal && onOpenAuthModal('login')}
-            title={isCollapsed ? (isVi ? 'Đăng nhập' : 'Sign In') : undefined}
-            className={`w-full py-2.5 rounded-xl bg-indigo-600 hover:bg-indigo-700 active:scale-[0.99] text-white text-xs font-semibold shadow-xs flex items-center justify-center transition-all cursor-pointer ${
-              isCollapsed ? 'px-0' : 'px-3 gap-2'
-            }`}
-          >
-            <LogIn className="w-4 h-4 shrink-0" />
-            {!isCollapsed && <span>{isVi ? 'Đăng nhập' : 'Sign In'}</span>}
-          </button>
-        </div>
-      )}
+  const content = (collapsed: boolean, mobile = false) => <div className={`flex h-full flex-col bg-[var(--surface)] ${collapsed ? 'w-20' : 'w-64'}`}>
+    <div className={`flex h-20 shrink-0 items-center gap-3 px-5 ${collapsed ? 'justify-center px-2' : ''}`}>
+      <NavLink to="/exams" onClick={mobile ? onCloseMobile : undefined} aria-label={vi ? 'AIVES · Trang kỳ thi' : 'AIVES · Examinations'} className="flex min-w-0 items-center gap-3 rounded-lg">
+        <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-[#172b3a] text-white"><GraduationCap aria-hidden="true" className="h-6 w-6" /></div>
+        {!collapsed && <div><span className="block text-xl font-bold tracking-tight">AIVES<span className="text-[var(--primary)]">.</span></span><span className="text-xs text-[var(--muted)]">{vi ? 'Không gian khảo thí' : 'Examination workspace'}</span></div>}
+      </NavLink>
+      {mobile && <Button className="ui-icon-button ml-auto" aria-label={vi ? 'Đóng điều hướng' : 'Close navigation'} onClick={onCloseMobile}><X aria-hidden="true" className="h-4 w-4" /></Button>}
     </div>
-  );
+    <nav aria-label={vi ? 'Điều hướng chính' : 'Main navigation'} className="flex-1 space-y-6 overflow-y-auto px-3 py-5">
+      {[{ label: vi ? 'Không gian làm việc' : 'Workspace', links: items }, { label: vi ? 'Quản trị' : 'Administration', links: admin }].filter(group => group.links.some(item => item.show)).map(group => <div key={group.label}>
+        {!collapsed && <p className="mb-3 px-3 text-xs font-medium text-[var(--muted)]">{group.label}</p>}
+        <div className="space-y-1">{group.links.filter(item => item.show).map(({ id, label, icon: Icon }) => <NavLink key={id} to={`/${id}`} onClick={mobile ? onCloseMobile : undefined} title={collapsed ? label : undefined} aria-label={collapsed ? label : undefined} className={({ isActive }) => `flex min-h-12 items-center gap-3 rounded-lg px-3 text-sm font-medium transition-colors ${collapsed ? 'justify-center' : ''} ${isActive ? 'bg-[var(--primary-soft)] text-[var(--primary)]' : 'text-[var(--muted)] hover:bg-[var(--surface-muted)] hover:text-[var(--ink)]'}`}>
+          <Icon aria-hidden="true" className="h-[18px] w-[18px] shrink-0" />{!collapsed && <span>{label}</span>}
+        </NavLink>)}</div>
+      </div>)}
+    </nav>
+    <div className="border-t border-[var(--line)] p-3">
+      {!collapsed && <p className="px-3 pb-4 pt-2 text-xs leading-relaxed text-[var(--muted)]">{vi ? 'AI hỗ trợ đánh giá. Giảng viên quyết định điểm chính thức.' : 'AI assists evaluation. Lecturers determine official grades.'}</p>}
+      {!mobile && <button onClick={onToggleCollapse} aria-label={vi ? (collapsed ? 'Mở rộng thanh bên' : 'Thu gọn thanh bên') : (collapsed ? 'Expand sidebar' : 'Collapse sidebar')} className="flex min-h-11 w-full items-center justify-center gap-2 rounded-lg text-xs text-[var(--muted)] hover:bg-[var(--surface-muted)]">{collapsed ? <PanelLeftOpen aria-hidden="true" className="h-4 w-4" /> : <><PanelLeftClose aria-hidden="true" className="h-4 w-4" /><span>{vi ? 'Thu gọn thanh bên' : 'Collapse sidebar'}</span></>}</button>}
+    </div>
+  </div>;
 
-  return (
-    <>
-      {/* Desktop Fixed Sidebar */}
-      <aside className="hidden md:flex flex-col shrink-0 h-screen sticky top-0 z-30 transition-all duration-300 ease-in-out">
-        {sidebarContent}
-      </aside>
-
-      {/* Mobile Slide-Over Drawer */}
-      {isOpenMobile && (
-        <div className="fixed inset-0 z-50 md:hidden flex">
-          {/* Backdrop */}
-          <div
-            className="fixed inset-0 bg-slate-900/60 backdrop-blur-xs transition-opacity"
-            onClick={onCloseMobile}
-          />
-          {/* Drawer content */}
-          <div className="relative z-10 animate-in slide-in-from-left duration-200 h-full">
-            {sidebarContent}
-          </div>
-        </div>
-      )}
-    </>
-  );
-};
+  return <>
+    <aside className="sticky top-0 hidden h-dvh shrink-0 border-r border-[var(--line)] md:block">{content(!!isCollapsed)}</aside>
+    {isOpenMobile && <dialog ref={drawer} aria-label={vi ? 'Điều hướng' : 'Navigation'} onCancel={event => { event.preventDefault(); onCloseMobile?.(); }} onClick={event => { if (event.target === event.currentTarget) onCloseMobile?.(); }} className="fixed inset-y-0 left-0 m-0 h-dvh max-h-none max-w-[90vw] border-0 bg-transparent p-0 text-[var(--ink)]">{content(false, true)}</dialog>}
+  </>;
+}

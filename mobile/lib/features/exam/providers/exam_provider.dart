@@ -9,6 +9,12 @@ class ExamProvider extends ChangeNotifier {
   String? _errorMessage;
   ExamScheduleModel? _selectedExam;
 
+  ExamProvider() {
+    if (ApiClient.instance.authToken != null && ApiClient.instance.authToken!.isNotEmpty) {
+      refreshExams();
+    }
+  }
+
   List<ExamScheduleModel> get exams => _exams;
   bool get isLoading => _isLoading;
   String? get errorMessage => _errorMessage;
@@ -46,6 +52,7 @@ class ExamProvider extends ChangeNotifier {
             .map((item) => ExamScheduleModel.fromJson(item as Map<String, dynamic>))
             .toList();
         debugPrint('[ExamProvider] Loaded ${_exams.length} schedules from Spring Boot Backend.');
+      } else {
         _exams = [];
         _errorMessage = res.message.isNotEmpty ? res.message : 'Không thể tải lịch thi từ máy chủ.';
       }
@@ -64,6 +71,7 @@ class ExamProvider extends ChangeNotifier {
     try {
       final res = await ApiClient.instance.post(
         '${ApiEndpoints.studentScheduleStart}/$scheduleId/start',
+        body: {},
       );
       return res.success;
     } catch (e) {

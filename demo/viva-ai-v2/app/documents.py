@@ -12,7 +12,7 @@ from starlette.concurrency import run_in_threadpool
 
 from app.config import Settings
 from app.errors import AppError
-from app.models import Chunk, Course, Document
+from app.models import AiDocument, AiDocumentChunk, Course
 
 
 class DocumentParser:
@@ -89,16 +89,16 @@ class IngestionService:
             if not await db.get(Course, course_id):
                 raise AppError("Không tìm thấy môn học.", 404)
             existing = await db.scalar(
-                select(Document).where(
-                    Document.course_id == course_id,
-                    Document.sha256 == digest,
-                    Document.embedding_model == self.settings.gemini_embedding_model,
+                select(AiDocument).where(
+                    AiDocument.course_id == course_id,
+                    AiDocument.sha256 == digest,
+                    AiDocument.embedding_model == self.settings.gemini_embedding_model,
                 )
             )
             if existing:
                 return document_dict(existing) | {"duplicate": True}
             count = await db.scalar(
-                select(func.count()).select_from(Document).where(Document.course_id == course_id)
+                select(func.count()).select_from(AiDocument).where(AiDocument.course_id == course_id)
             )
             if count >= 20:
                 raise AppError("Bản demo giới hạn 20 tài liệu mỗi môn. Hãy tạo môn mới.")
@@ -115,7 +115,7 @@ class IngestionService:
             )
         # Publish all chunks in one transaction: failures never create a partially indexed document.
         async with self.db.sessions() as db:
-            document = Document(
+            document = AiDocument(
                 course_id=course_id,
                 filename=filename,
                 sha256=digest,
@@ -127,7 +127,7 @@ class IngestionService:
                 await db.flush()
                 db.add_all(
                     [
-                        Chunk(
+                        AiDocumentChunk(
                             document_id=document.id,
                             course_id=course_id,
                             position=i,
@@ -143,10 +143,10 @@ class IngestionService:
             except IntegrityError:
                 await db.rollback()
                 existing = await db.scalar(
-                    select(Document).where(
-                        Document.course_id == course_id,
-                        Document.sha256 == digest,
-                        Document.embedding_model == self.settings.gemini_embedding_model,
+                    select(AiDocument).where(
+                        AiDocument.course_id == course_id,
+                        AiDocument.sha256 == digest,
+                        AiDocument.embedding_model == self.settings.gemini_embedding_model,
                     )
                 )
                 if existing:
@@ -154,7 +154,7 @@ class IngestionService:
                 raise
 
 
-def document_dict(document: Document) -> dict:
+def document_dict(document: AiDocument) -> dict:
     return {
         "id": str(document.id),
         "filename": document.filename,

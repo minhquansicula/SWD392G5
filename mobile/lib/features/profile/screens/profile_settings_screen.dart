@@ -7,6 +7,7 @@ import '../../../core/widgets/primary_button.dart';
 import '../../../core/widgets/status_badge.dart';
 import '../../auth/providers/auth_provider.dart';
 import '../../auth/screens/login_screen.dart';
+import '../../auth/screens/forgot_password_screen.dart';
 
 class ProfileSettingsScreen extends StatefulWidget {
   const ProfileSettingsScreen({super.key});
@@ -202,6 +203,98 @@ class _ProfileSettingsScreenState extends State<ProfileSettingsScreen> {
                     iconColor: AppColors.success,
                     label: 'Trạng thái học tập',
                     value: 'Đang theo học (Active)',
+                  ),
+                ],
+              ),
+            ),
+            const SizedBox(height: 24),
+
+            // Security & Password Section
+            Text('Tài Khoản & Bảo Mật', style: AppTextStyles.titleMd),
+            const SizedBox(height: 10),
+            GlassCard(
+              padding: const EdgeInsets.all(16),
+              borderRadius: 18,
+              child: Column(
+                children: [
+                  InkWell(
+                    borderRadius: BorderRadius.circular(10),
+                    onTap: () {
+                      Navigator.of(context).push(
+                        MaterialPageRoute(
+                          builder: (_) => ForgotPasswordScreen(
+                            prefilledEmail: userEmail,
+                            initialTabIndex: 0,
+                            isFromProfile: true,
+                          ),
+                        ),
+                      );
+                    },
+                    child: Padding(
+                      padding: const EdgeInsets.symmetric(vertical: 4),
+                      child: Row(
+                        children: [
+                          const Icon(Icons.lock_reset_rounded, size: 20, color: AppColors.secondaryLight),
+                          const SizedBox(width: 12),
+                          Expanded(
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Text(
+                                  'Yêu cầu gửi link đổi mật khẩu',
+                                  style: AppTextStyles.bodyMd.copyWith(color: Colors.white),
+                                ),
+                                Text(
+                                  'Gửi link bảo mật đến $userEmail',
+                                  style: AppTextStyles.bodySm.copyWith(color: AppColors.textMuted, fontSize: 11),
+                                ),
+                              ],
+                            ),
+                          ),
+                          const Icon(Icons.chevron_right_rounded, color: AppColors.textMuted),
+                        ],
+                      ),
+                    ),
+                  ),
+                  const Divider(color: AppColors.borderGlass),
+                  InkWell(
+                    borderRadius: BorderRadius.circular(10),
+                    onTap: () {
+                      Navigator.of(context).push(
+                        MaterialPageRoute(
+                          builder: (_) => ForgotPasswordScreen(
+                            prefilledEmail: userEmail,
+                            initialTabIndex: 1,
+                            isFromProfile: true,
+                          ),
+                        ),
+                      );
+                    },
+                    child: Padding(
+                      padding: const EdgeInsets.symmetric(vertical: 4),
+                      child: Row(
+                        children: [
+                          const Icon(Icons.key_rounded, size: 20, color: AppColors.primaryLight),
+                          const SizedBox(width: 12),
+                          Expanded(
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Text(
+                                  'Nhập Token & Đặt mật khẩu mới',
+                                  style: AppTextStyles.bodyMd.copyWith(color: Colors.white),
+                                ),
+                                Text(
+                                  'Cập nhật mật khẩu ngay khi đã có mã từ email',
+                                  style: AppTextStyles.bodySm.copyWith(color: AppColors.textMuted, fontSize: 11),
+                                ),
+                              ],
+                            ),
+                          ),
+                          const Icon(Icons.chevron_right_rounded, color: AppColors.textMuted),
+                        ],
+                      ),
+                    ),
                   ),
                 ],
               ),

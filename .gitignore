@@ -7,8 +7,14 @@
 
 # Environment & secrets
 .env
-.env.local
-*.env.*.local
+.env.*
+*.env
+*.env.*
+!.env.example
+!*.env.example
+*local.yml
+*local.yaml
+*local.properties
 
 # Logs
 *.log

@@ -1,14 +1,15 @@
-import { useEffect, useId, useRef } from 'react';
+import { useEffect, useRef } from 'react';
 import type { ButtonHTMLAttributes, ReactNode } from 'react';
-import { AlertCircle, Loader2, X } from 'lucide-react';
+import { AlertCircle, Loader2 } from 'lucide-react';
 import axios from 'axios';
+import { Button, Dialog } from '../../ui';
 import type { ExamApiError, ScheduleStatus } from '../../../types/examApi';
 
-export const inputClass = 'w-full min-w-0 rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm text-slate-900 focus:outline-none focus:ring-2 focus:ring-indigo-500 disabled:opacity-60 dark:border-slate-600 dark:bg-slate-800 dark:text-white';
-export const panelClass = 'rounded-2xl border border-slate-200 bg-white p-5 shadow-xs dark:border-slate-800 dark:bg-slate-900';
+export const inputClass = 'ui-input disabled:opacity-60';
+export const panelClass = 'ui-panel p-5 sm:p-6';
 
 export function ExamButton({ children, primary, danger, className = '', ...props }: ButtonHTMLAttributes<HTMLButtonElement> & { primary?: boolean; danger?: boolean }) {
-  return <button type="button" {...props} className={`inline-flex min-h-10 items-center justify-center gap-2 rounded-lg px-3 py-2 text-sm font-semibold transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500 focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50 ${primary ? 'bg-indigo-600 text-white hover:bg-indigo-700' : danger ? 'bg-rose-50 text-rose-700 hover:bg-rose-100 dark:bg-rose-950 dark:text-rose-300' : 'bg-slate-100 text-slate-700 hover:bg-slate-200 dark:bg-slate-800 dark:text-slate-200 dark:hover:bg-slate-700'} ${className}`}>{children}</button>;
+  return <Button {...props} variant={primary ? 'primary' : danger ? 'danger' : 'secondary'} className={className}>{children}</Button>;
 }
 
 export function ExamField({ label, children, hint }: { label: string; children: ReactNode; hint?: string }) {
@@ -36,18 +37,7 @@ export function ExamLoading({ language }: { language: 'vi' | 'en' }) {
 }
 
 export function ExamDialog({ title, children, onClose, busy = false, language }: { title: string; children: ReactNode; onClose: () => void; busy?: boolean; language: 'vi' | 'en' }) {
-  const ref = useRef<HTMLDialogElement>(null);
-  const titleId = useId();
-  useEffect(() => {
-    const dialog = ref.current;
-    const previous = document.activeElement as HTMLElement | null;
-    dialog?.showModal();
-    return () => { dialog?.close(); previous?.focus(); };
-  }, []);
-  return <dialog ref={ref} aria-labelledby={titleId} onCancel={e => { e.preventDefault(); if (!busy) onClose(); }} className="m-auto max-h-[90dvh] w-[calc(100%-2rem)] max-w-3xl overflow-y-auto rounded-2xl border border-slate-200 bg-white p-0 text-slate-900 shadow-xl backdrop:bg-slate-950/60 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-100">
-    <div className="flex items-center justify-between gap-4 border-b border-slate-200 p-5 dark:border-slate-700"><h2 id={titleId} className="text-lg font-bold">{title}</h2><ExamButton disabled={busy} aria-label={language === 'vi' ? 'Đóng' : 'Close'} onClick={onClose}><X aria-hidden="true" className="h-4 w-4" /></ExamButton></div>
-    <div className="space-y-4 p-5">{children}</div>
-  </dialog>;
+  return <Dialog title={title} onClose={onClose} busy={busy} closeLabel={language === 'vi' ? 'Đóng' : 'Close'} className="max-w-3xl">{children}</Dialog>;
 }
 
 export function ScheduleBadge({ status, language }: { status: ScheduleStatus | null; language: 'vi' | 'en' }) {

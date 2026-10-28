@@ -1,4 +1,6 @@
 import React, { useState, useEffect, useMemo, useRef } from 'react';
+import { ModalSurface } from '../ui';
+import { useSearchParams } from 'react-router-dom';
 import {
   Users,
   ShieldCheck,
@@ -56,13 +58,18 @@ export const UserManagementPage: React.FC<UserManagementPageProps> = ({
   onNavigateToCourses,
 }) => {
   const isVi = language === 'vi';
+  const creating = useRef(false);
 
   // Core user list & search
   const [users, setUsers] = useState<UserAccount[]>([]);
-  const [searchQuery, setSearchQuery] = useState('');
-  const [selectedRoleFilter, setSelectedRoleFilter] = useState<'ALL' | UserRole>('ALL');
+  const [params, setParams] = useSearchParams();
+  const searchQuery = params.get('q') || '';
+  const selectedRoleFilter = ['ADMIN', 'LECTURER', 'STUDENT'].includes(params.get('role') || '') ? params.get('role') as UserRole : 'ALL';
+  const setSearchQuery = (query: string) => setParams(previous => { const next = new URLSearchParams(previous); if (query) next.set('q', query); else next.delete('q'); return next; }, { replace: true });
+  const setSelectedRoleFilter = (role: 'ALL' | UserRole) => setParams(previous => { const next = new URLSearchParams(previous); next.set('role', role); return next; });
   const [notification, setNotification] = useState<{ msg: string; type: 'success' | 'error' } | null>(null);
   const [isLoading, setIsLoading] = useState(false);
+  const [listError, setListError] = useState('');
 
   // Modal create user state
   const [isCreateModalOpen, setIsCreateModalOpen] = useState(false);
@@ -112,11 +119,12 @@ export const UserManagementPage: React.FC<UserManagementPageProps> = ({
   // Load all users directly from backend API (ADMIN permission is enforced by the backend)
   const loadUsers = async () => {
     setIsLoading(true);
+    setListError('');
     try {
-      const list = await getRegisteredUsers();
+      const list = await getRegisteredUsers(undefined, true);
       setUsers(list);
     } catch (err: any) {
-      showToast(err.message || (isVi ? 'Lỗi tải danh sách người dùng' : 'Failed to load users'), 'error');
+      setListError(err.message || (isVi ? 'Không tải được danh sách tài khoản.' : 'Unable to load accounts.'));
     } finally {
       setIsLoading(false);
     }
@@ -378,6 +386,7 @@ export const UserManagementPage: React.FC<UserManagementPageProps> = ({
   // Handle create user by admin
   const handleCreateSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (creating.current) return;
     setCreateError('');
 
     if (!newFullName.trim() || !newEmail.trim() || (newRole === 'STUDENT' && !newStudentCode.trim())) {
@@ -385,6 +394,7 @@ export const UserManagementPage: React.FC<UserManagementPageProps> = ({
       return;
     }
 
+    creating.current = true;
     setIsSubmitting(true);
     try {
       const created = await createUserByAdmin({
@@ -418,6 +428,7 @@ export const UserManagementPage: React.FC<UserManagementPageProps> = ({
     } catch (err: any) {
       setCreateError(err.message || (isVi ? 'Tạo tài khoản thất bại' : 'Create failed'));
     } finally {
+      creating.current = false;
       setIsSubmitting(false);
     }
   };
@@ -596,8 +607,7 @@ export const UserManagementPage: React.FC<UserManagementPageProps> = ({
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <div>
           <h1 className="text-2xl sm:text-3xl font-bold font-display text-slate-900 dark:text-white tracking-tight flex items-center gap-2.5">
-            <ShieldCheck className="w-7 h-7 text-indigo-600 dark:text-indigo-400" />
-            {isVi ? 'Quản lý Người dùng & Phân quyền' : 'User & Role Management'}
+            {isVi ? 'Tài khoản & Phân quyền' : 'Accounts & access'}
           </h1>
           <p className="text-sm text-slate-600 dark:text-slate-400 mt-1">
             {isVi
@@ -619,7 +629,7 @@ export const UserManagementPage: React.FC<UserManagementPageProps> = ({
             className="inline-flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl border border-emerald-500/30 bg-emerald-50 dark:bg-emerald-950/40 hover:bg-emerald-100 dark:hover:bg-emerald-900/50 text-emerald-700 dark:text-emerald-300 text-sm font-semibold shadow-xs transition-all cursor-pointer"
           >
             <FileSpreadsheet className="w-4 h-4 text-emerald-600 dark:text-emerald-400" />
-            <span>{isVi ? 'Thêm bằng XLSX' : 'Add with XLSX'}</span>
+              <span>{isVi ? 'Nhập danh sách' : 'Import accounts'}</span>
           </button>
 
           <button
@@ -721,6 +731,7 @@ export const UserManagementPage: React.FC<UserManagementPageProps> = ({
           <input
             type="text"
             value={searchQuery}
+            aria-label={isVi ? 'Tìm tài khoản theo tên, mã sinh viên hoặc email' : 'Search accounts by name, student code or email'}
             onChange={(e) => setSearchQuery(e.target.value)}
             placeholder={
               isVi
@@ -732,6 +743,7 @@ export const UserManagementPage: React.FC<UserManagementPageProps> = ({
           {searchQuery && (
             <button
               onClick={() => setSearchQuery('')}
+              aria-label={isVi ? 'Xóa nội dung tìm kiếm' : 'Clear search'}
               className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600"
             >
               <X className="w-3.5 h-3.5" />
@@ -805,6 +817,8 @@ export const UserManagementPage: React.FC<UserManagementPageProps> = ({
                     </div>
                   </td>
                 </tr>
+              ) : listError ? (
+                <tr><td colSpan={4} className="p-6"><div role="alert" className="space-y-3 text-sm text-rose-700 dark:text-rose-300"><p>{listError}</p><button className="ui-button" onClick={loadUsers}>{isVi ? 'Thử lại' : 'Try again'}</button></div></td></tr>
               ) : filteredUsers.length === 0 ? (
                 <tr>
                   <td colSpan={4} className="py-12 text-center text-slate-400">
@@ -833,7 +847,7 @@ export const UserManagementPage: React.FC<UserManagementPageProps> = ({
                       {/* User Info */}
                       <td className="py-3.5 px-4 sm:px-6">
                         <div className="flex items-center gap-3">
-                          <div className="w-10 h-10 rounded-xl bg-gradient-to-tr from-indigo-500 to-purple-600 text-white font-bold flex items-center justify-center text-sm shadow-xs shrink-0">
+                          <div className="w-10 h-10 rounded-full bg-indigo-50 dark:bg-indigo-950 text-indigo-700 dark:text-indigo-300 font-semibold flex items-center justify-center text-sm shrink-0">
                             {(user.fullName || user.email).slice(0, 2).toUpperCase()}
                           </div>
                           <div>
@@ -999,10 +1013,11 @@ export const UserManagementPage: React.FC<UserManagementPageProps> = ({
       {/* MODAL: CREATE USER MANUALLY BY ADMIN */}
       {/* ============================================================ */}
       {isCreateModalOpen && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-xs">
+        <ModalSurface label={isVi ? 'Tạo tài khoản' : 'Create account'} onClose={() => setIsCreateModalOpen(false)} busy={isSubmitting}>
           <div className="relative w-full max-w-md bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl shadow-2xl p-6">
             <button
               onClick={() => setIsCreateModalOpen(false)}
+              aria-label={isVi ? 'Đóng biểu mẫu tạo tài khoản' : 'Close create account form'}
               className="absolute top-4 right-4 p-2 rounded-xl text-slate-400 hover:text-slate-700 dark:hover:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors"
             >
               <X className="w-5 h-5" />
@@ -1157,17 +1172,18 @@ export const UserManagementPage: React.FC<UserManagementPageProps> = ({
               </fieldset>
             </form>
           </div>
-        </div>
+        </ModalSurface>
       )}
 
       {/* ============================================================ */}
       {/* MODAL: EDIT USER */}
       {/* ============================================================ */}
       {isEditModalOpen && editingUser && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-xs">
+        <ModalSurface label={isVi ? 'Chỉnh sửa tài khoản' : 'Edit account'} onClose={() => setIsEditModalOpen(false)} busy={isEditSubmitting}>
           <div className="relative w-full max-w-md bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl shadow-2xl p-6">
             <button
               onClick={() => setIsEditModalOpen(false)}
+              aria-label={isVi ? 'Đóng biểu mẫu chỉnh sửa tài khoản' : 'Close edit account form'}
               className="absolute top-4 right-4 p-2 rounded-xl text-slate-400 hover:text-slate-700 dark:hover:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors"
             >
               <X className="w-5 h-5" />
@@ -1275,17 +1291,18 @@ export const UserManagementPage: React.FC<UserManagementPageProps> = ({
               </fieldset>
             </form>
           </div>
-        </div>
+        </ModalSurface>
       )}
 
       {/* ============================================================ */}
       {/* MODAL: ADD WITH XLSX (IMPORT STUDENTS BATCH) */}
       {/* ============================================================ */}
       {isImportModalOpen && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-xs">
+        <ModalSurface label={isVi ? 'Nhập danh sách tài khoản' : 'Import accounts'} onClose={() => setIsImportModalOpen(false)} busy={isImporting}>
           <div className={`relative w-full ${importResult ? 'max-w-3xl' : 'max-w-xl'} bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl shadow-2xl p-6 max-h-[90vh] flex flex-col`}>
             <button
               onClick={() => setIsImportModalOpen(false)}
+              aria-label={isVi ? 'Đóng nhập danh sách' : 'Close import'}
               className="absolute top-4 right-4 p-2 rounded-xl text-slate-400 hover:text-slate-700 dark:hover:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors"
             >
               <X className="w-5 h-5" />
@@ -1532,17 +1549,17 @@ export const UserManagementPage: React.FC<UserManagementPageProps> = ({
               </button>
             </div>
           </div>
-        </div>
+        </ModalSurface>
       )}
 
       {/* ============================================================ */}
       {/* MODAL: ALERT CONFIRM DELETE USER */}
       {/* ============================================================ */}
       {isDeleteModalOpen && userToDelete && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-xs animate-in fade-in duration-150">
+        <ModalSurface label={isVi ? 'Xác nhận xóa tài khoản' : 'Confirm account deletion'} onClose={() => { setIsDeleteModalOpen(false); setUserToDelete(null); }} busy={isDeleting}>
           <div className="relative w-full max-w-md bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-3xl shadow-2xl p-6 sm:p-7 overflow-hidden text-left">
             {/* Top accent line */}
-            <div className="absolute top-0 left-0 right-0 h-1 bg-gradient-to-r from-rose-500 via-red-500 to-amber-500" />
+            <div className="absolute top-0 left-0 right-0 h-1 bg-rose-600" />
 
             {/* Close Button */}
             <button
@@ -1561,7 +1578,7 @@ export const UserManagementPage: React.FC<UserManagementPageProps> = ({
             {/* Warning Icon & Header */}
             <div className="flex items-start gap-3.5 mb-4">
               <div className="p-3 rounded-2xl bg-rose-50 dark:bg-rose-950/60 border border-rose-200 dark:border-rose-900 text-rose-600 shrink-0">
-                <AlertTriangle className="w-6 h-6 animate-pulse" />
+                <AlertTriangle className="w-6 h-6" />
               </div>
               <div className="pt-0.5">
                 <span className="text-[11px] font-bold text-rose-600 dark:text-rose-400 uppercase tracking-wider">
@@ -1583,7 +1600,7 @@ export const UserManagementPage: React.FC<UserManagementPageProps> = ({
             {/* Target User Card Preview */}
             <div className="p-3.5 rounded-2xl bg-slate-50 dark:bg-slate-800/60 border border-slate-200 dark:border-slate-800 mb-6">
               <div className="flex items-center gap-3">
-                <div className="w-10 h-10 rounded-xl bg-gradient-to-tr from-rose-500 to-red-600 text-white font-bold flex items-center justify-center text-sm shadow-xs shrink-0">
+                <div className="w-10 h-10 rounded-xl bg-rose-100 dark:bg-rose-950 text-rose-700 dark:text-rose-300 font-semibold flex items-center justify-center text-sm shrink-0">
                   {(userToDelete.fullName || userToDelete.email).slice(0, 2).toUpperCase()}
                 </div>
                 <div className="min-w-0 flex-1">
@@ -1641,7 +1658,7 @@ export const UserManagementPage: React.FC<UserManagementPageProps> = ({
               </button>
             </div>
           </div>
-        </div>
+        </ModalSurface>
       )}
     </div>
   );

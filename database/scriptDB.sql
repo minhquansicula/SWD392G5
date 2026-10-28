@@ -1,71 +1,204 @@
--- ==========================================
--- TẠO BẢNG & RÀNG BUỘC (TABLES & CONSTRAINTS)
--- ==========================================
-
-CREATE TABLE users (
-    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-    email VARCHAR(255) UNIQUE NOT NULL,
-    password_hash VARCHAR(255) NOT NULL,
-    full_name VARCHAR(255) NOT NULL,
-    role VARCHAR(50) NOT NULL CHECK (role IN ('ADMIN', 'LECTURER', 'STUDENT')),
-    username VARCHAR(255)
+CREATE SCHEMA "public";
+CREATE TABLE "ai_document_chunks" (
+	"id" uuid PRIMARY KEY,
+	"document_id" uuid NOT NULL,
+	"course_id" uuid NOT NULL,
+	"position" integer NOT NULL,
+	"page" integer,
+	"text" text NOT NULL,
+	"embedding" vector(768) NOT NULL
 );
-
-CREATE TABLE courses (
-    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-    course_code VARCHAR(50) UNIQUE NOT NULL,
-    course_name VARCHAR(255) NOT NULL
+CREATE TABLE "ai_documents" (
+	"id" uuid PRIMARY KEY,
+	"course_id" uuid NOT NULL,
+	"filename" varchar(255) NOT NULL,
+	"sha256" varchar(64) NOT NULL,
+	"embedding_model" varchar(120) NOT NULL,
+	"chunk_count" integer NOT NULL,
+	"created_at" timestamp with time zone NOT NULL,
+	CONSTRAINT "ai_documents_course_id_sha256_embedding_model_key" UNIQUE("course_id","sha256","embedding_model")
 );
-
-CREATE TABLE course_lecturers (
-    course_id UUID NOT NULL REFERENCES courses(id) ON DELETE CASCADE,
-    lecturer_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
-    PRIMARY KEY (course_id, lecturer_id)
+CREATE TABLE "ai_voice_sessions" (
+	"schedule_id" uuid PRIMARY KEY,
+	"live_model" varchar(120) NOT NULL,
+	"state" jsonb NOT NULL
 );
-
-CREATE TABLE questions (
-    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-    course_id UUID REFERENCES courses(id) ON DELETE CASCADE,
-    content TEXT NOT NULL,
-    difficulty_level VARCHAR(50)
+CREATE TABLE "assigned_questions" (
+	"id" uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+	"exam_schedule_id" uuid NOT NULL,
+	"question_id" uuid NOT NULL,
+	"question_order" integer NOT NULL,
+	"content_snapshot" text NOT NULL,
+	"assigned_at" timestamp with time zone DEFAULT CURRENT_TIMESTAMP NOT NULL,
+	CONSTRAINT "uq_assigned_question" UNIQUE("exam_schedule_id","question_id"),
+	CONSTRAINT "uq_assigned_question_order" UNIQUE("exam_schedule_id","question_order"),
+	CONSTRAINT "assigned_questions_question_order_check" CHECK ((question_order > 0))
 );
-
-CREATE TABLE exams (
-    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-    course_id UUID REFERENCES courses(id) ON DELETE CASCADE,
-    title VARCHAR(255) NOT NULL,
-    start_date TIMESTAMP WITH TIME ZONE NOT NULL,
-    end_date TIMESTAMP WITH TIME ZONE NOT NULL,
-    max_main_questions INT DEFAULT 0,
-    max_followup_questions INT DEFAULT 0,
-    created_by UUID REFERENCES users(id) ON DELETE SET NULL
+CREATE TABLE "course_lecturers" (
+	"course_id" uuid,
+	"lecturer_id" uuid,
+	"assigned_at" timestamp with time zone DEFAULT CURRENT_TIMESTAMP,
+	"assigned_by" uuid,
+	CONSTRAINT "course_lecturers_pkey" PRIMARY KEY("course_id","lecturer_id")
 );
-
-CREATE TABLE exam_schedules (
-    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-    exam_id UUID REFERENCES exams(id) ON DELETE CASCADE,
-    student_id UUID REFERENCES users(id) ON DELETE CASCADE,
-    scheduled_start_time TIMESTAMP WITH TIME ZONE,
-    scheduled_end_time TIMESTAMP WITH TIME ZONE,
-    status VARCHAR(50) DEFAULT 'PENDING' CHECK (status IN ('PENDING', 'IN_PROGRESS', 'COMPLETED')),
-    final_score DECIMAL(5, 2)
+CREATE TABLE "courses" (
+	"id" uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+	"course_code" varchar(50) NOT NULL CONSTRAINT "courses_course_code_key" UNIQUE,
+	"course_name" varchar(255) NOT NULL
 );
-
-CREATE TABLE transcripts (
-    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-    exam_schedule_id UUID REFERENCES exam_schedules(id) ON DELETE CASCADE,
-    question_id UUID REFERENCES questions(id) ON DELETE SET NULL,
-    parent_transcript_id UUID REFERENCES transcripts(id) ON DELETE CASCADE,
-    role VARCHAR(50) NOT NULL CHECK (role IN ('AI', 'STUDENT')),
-    text_content TEXT NOT NULL,
-    audio_url VARCHAR(255),
-    created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
+CREATE TABLE "exam_schedules" (
+	"id" uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+	"exam_id" uuid,
+	"student_id" uuid,
+	"scheduled_start_time" timestamp with time zone,
+	"scheduled_end_time" timestamp with time zone,
+	"status" varchar(50) DEFAULT 'PENDING',
+	"final_score" numeric(5, 2),
+	"is_connected" boolean DEFAULT false,
+	"full_recording_url" varchar(500),
+	"graded_by" uuid,
+	"actual_start_time" timestamp with time zone,
+	"actual_end_time" timestamp with time zone,
+	CONSTRAINT "uq_exam_schedule_student" UNIQUE("exam_id","student_id"),
+	CONSTRAINT "chk_exam_schedule_final_score" CHECK (((final_score IS NULL) OR ((final_score >= (0)::numeric) AND (final_score <= (10)::numeric)))),
+	CONSTRAINT "exam_schedules_status_check" CHECK (((status)::text = ANY ((ARRAY['PENDING'::character varying, 'IN_PROGRESS'::character varying, 'COMPLETED'::character varying])::text[])))
 );
-
-CREATE TABLE question_results (
-    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-    exam_schedule_id UUID REFERENCES exam_schedules(id) ON DELETE CASCADE,
-    question_id UUID REFERENCES questions(id) ON DELETE CASCADE,
-    ai_score DECIMAL(5, 2),
-    ai_feedback TEXT
+CREATE TABLE "exams" (
+	"id" uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+	"course_id" uuid,
+	"title" varchar(255) NOT NULL,
+	"start_date" timestamp with time zone NOT NULL,
+	"end_date" timestamp with time zone NOT NULL,
+	"max_main_questions" integer DEFAULT 0,
+	"max_followup_questions" integer DEFAULT 0,
+	"created_by" uuid,
+	"max_followups_per_main" integer DEFAULT 2,
+	"main_answer_time_limit_seconds" integer DEFAULT 120,
+	"followup_answer_time_limit_seconds" integer DEFAULT 60
 );
+CREATE TABLE "flyway_schema_history" (
+	"installed_rank" integer,
+	"version" varchar(50),
+	"description" varchar(200) NOT NULL,
+	"type" varchar(20) NOT NULL,
+	"script" varchar(1000) NOT NULL,
+	"checksum" integer,
+	"installed_by" varchar(100) NOT NULL,
+	"installed_on" timestamp DEFAULT now() NOT NULL,
+	"execution_time" integer NOT NULL,
+	"success" boolean NOT NULL,
+	CONSTRAINT "flyway_schema_history_pk" PRIMARY KEY("installed_rank")
+);
+CREATE TABLE "question_results" (
+	"id" uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+	"exam_schedule_id" uuid,
+	"question_id" uuid,
+	"ai_score" numeric(5, 2),
+	"ai_feedback" text,
+	"max_score" numeric(5, 2) DEFAULT '10.0',
+	"lecturer_score" numeric(5, 2),
+	"lecturer_feedback" text,
+	"graded_at" timestamp with time zone DEFAULT CURRENT_TIMESTAMP
+);
+CREATE TABLE "questions" (
+	"id" uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+	"course_id" uuid,
+	"content" text NOT NULL,
+	"difficulty_level" varchar(50),
+	"topic" varchar(255),
+	"expected_answer" text
+);
+CREATE TABLE "rubrics" (
+	"id" uuid PRIMARY KEY,
+	"course_id" uuid NOT NULL,
+	"title" varchar(150) NOT NULL,
+	"data" jsonb NOT NULL,
+	"created_at" timestamp with time zone NOT NULL
+);
+CREATE TABLE "transcripts" (
+	"id" uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+	"exam_schedule_id" uuid,
+	"question_id" uuid,
+	"parent_transcript_id" uuid,
+	"role" varchar(50) NOT NULL,
+	"text_content" text NOT NULL,
+	"audio_url" varchar(500),
+	"created_at" timestamp with time zone DEFAULT CURRENT_TIMESTAMP,
+	"transcript_type" varchar(50) DEFAULT 'MAIN',
+	"stream_session_id" varchar(100),
+	"speech_duration_ms" integer,
+	"latency_ms" integer,
+	CONSTRAINT "transcripts_role_check" CHECK (((role)::text = ANY ((ARRAY['AI'::character varying, 'STUDENT'::character varying])::text[])))
+);
+CREATE TABLE "users" (
+	"id" uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+	"password_hash" varchar(255) NOT NULL,
+	"full_name" varchar(255) NOT NULL,
+	"role" varchar(50) NOT NULL,
+	"created_at" timestamp DEFAULT CURRENT_TIMESTAMP,
+	"student_code" varchar(50) CONSTRAINT "users_student_code_key" UNIQUE,
+	"email" text NOT NULL CONSTRAINT "users_email_key" UNIQUE,
+	"email_normalized" text NOT NULL CONSTRAINT "users_email_normalized_key" UNIQUE,
+	"password_set_at" timestamp with time zone,
+	"password_token_hash" varchar(64) CONSTRAINT "users_password_token_hash_key" UNIQUE,
+	"password_token_expires_at" timestamp with time zone,
+	"password_mail_status" varchar(20),
+	"is_system_admin" boolean DEFAULT false NOT NULL,
+	CONSTRAINT "users_email_length_check" CHECK (((email IS NULL) OR (char_length(email) <= 255))),
+	CONSTRAINT "users_email_normalized_length_check" CHECK (((email_normalized IS NULL) OR ((char_length(email_normalized) >= 1) AND (char_length(email_normalized) <= 255)))),
+	CONSTRAINT "users_password_mail_status_check" CHECK (((password_mail_status IS NULL) OR ((password_mail_status)::text = ANY ((ARRAY['SENT'::character varying, 'FAILED'::character varying])::text[])))),
+	CONSTRAINT "users_role_check" CHECK (((role)::text = ANY ((ARRAY['ADMIN'::character varying, 'LECTURER'::character varying, 'STUDENT'::character varying])::text[]))),
+	CONSTRAINT "users_student_code_role_check" CHECK (((((role)::text = 'STUDENT'::text) AND (student_code IS NOT NULL) AND (btrim((student_code)::text) <> ''::text)) OR (((role)::text <> 'STUDENT'::text) AND (student_code IS NULL))))
+);
+CREATE UNIQUE INDEX "ai_document_chunks_pkey" ON "ai_document_chunks" ("id");
+CREATE INDEX "ix_ai_document_chunks_course_id" ON "ai_document_chunks" ("course_id");
+CREATE INDEX "ix_ai_document_chunks_document_id" ON "ai_document_chunks" ("document_id");
+CREATE UNIQUE INDEX "ai_documents_course_id_sha256_embedding_model_key" ON "ai_documents" ("course_id","sha256","embedding_model");
+CREATE UNIQUE INDEX "ai_documents_pkey" ON "ai_documents" ("id");
+CREATE INDEX "ix_ai_documents_course_id" ON "ai_documents" ("course_id");
+CREATE UNIQUE INDEX "ai_voice_sessions_pkey" ON "ai_voice_sessions" ("schedule_id");
+CREATE UNIQUE INDEX "assigned_questions_pkey" ON "assigned_questions" ("id");
+CREATE INDEX "ix_assigned_questions_question_id" ON "assigned_questions" ("question_id");
+CREATE UNIQUE INDEX "uq_assigned_question" ON "assigned_questions" ("exam_schedule_id","question_id");
+CREATE UNIQUE INDEX "uq_assigned_question_order" ON "assigned_questions" ("exam_schedule_id","question_order");
+CREATE UNIQUE INDEX "course_lecturers_pkey" ON "course_lecturers" ("course_id","lecturer_id");
+CREATE INDEX "idx_course_lecturers_course" ON "course_lecturers" ("course_id");
+CREATE INDEX "idx_course_lecturers_lecturer" ON "course_lecturers" ("lecturer_id");
+CREATE UNIQUE INDEX "courses_course_code_key" ON "courses" ("course_code");
+CREATE UNIQUE INDEX "courses_pkey" ON "courses" ("id");
+CREATE UNIQUE INDEX "exam_schedules_pkey" ON "exam_schedules" ("id");
+CREATE UNIQUE INDEX "uq_exam_schedule_student" ON "exam_schedules" ("exam_id","student_id");
+CREATE UNIQUE INDEX "exams_pkey" ON "exams" ("id");
+CREATE UNIQUE INDEX "flyway_schema_history_pk" ON "flyway_schema_history" ("installed_rank");
+CREATE INDEX "flyway_schema_history_s_idx" ON "flyway_schema_history" ("success");
+CREATE UNIQUE INDEX "question_results_pkey" ON "question_results" ("id");
+CREATE UNIQUE INDEX "questions_pkey" ON "questions" ("id");
+CREATE INDEX "ix_rubrics_course_id" ON "rubrics" ("course_id");
+CREATE UNIQUE INDEX "rubrics_pkey" ON "rubrics" ("id");
+CREATE UNIQUE INDEX "transcripts_pkey" ON "transcripts" ("id");
+CREATE UNIQUE INDEX "users_email_key" ON "users" ("email");
+CREATE UNIQUE INDEX "users_email_normalized_key" ON "users" ("email_normalized");
+CREATE UNIQUE INDEX "users_password_token_hash_key" ON "users" ("password_token_hash");
+CREATE UNIQUE INDEX "users_pkey" ON "users" ("id");
+CREATE UNIQUE INDEX "users_student_code_key" ON "users" ("student_code");
+ALTER TABLE "ai_document_chunks" ADD CONSTRAINT "ai_document_chunks_course_id_fkey" FOREIGN KEY ("course_id") REFERENCES "courses"("id");
+ALTER TABLE "ai_document_chunks" ADD CONSTRAINT "ai_document_chunks_document_id_fkey" FOREIGN KEY ("document_id") REFERENCES "ai_documents"("id");
+ALTER TABLE "ai_documents" ADD CONSTRAINT "ai_documents_course_id_fkey" FOREIGN KEY ("course_id") REFERENCES "courses"("id");
+ALTER TABLE "ai_voice_sessions" ADD CONSTRAINT "ai_voice_sessions_schedule_id_fkey" FOREIGN KEY ("schedule_id") REFERENCES "exam_schedules"("id");
+ALTER TABLE "assigned_questions" ADD CONSTRAINT "assigned_questions_exam_schedule_id_fkey" FOREIGN KEY ("exam_schedule_id") REFERENCES "exam_schedules"("id") ON DELETE RESTRICT;
+ALTER TABLE "assigned_questions" ADD CONSTRAINT "assigned_questions_question_id_fkey" FOREIGN KEY ("question_id") REFERENCES "questions"("id") ON DELETE RESTRICT;
+ALTER TABLE "course_lecturers" ADD CONSTRAINT "course_lecturers_assigned_by_fkey" FOREIGN KEY ("assigned_by") REFERENCES "users"("id") ON DELETE SET NULL;
+ALTER TABLE "course_lecturers" ADD CONSTRAINT "fk_course_lecturers_course" FOREIGN KEY ("course_id") REFERENCES "courses"("id") ON DELETE CASCADE;
+ALTER TABLE "course_lecturers" ADD CONSTRAINT "fk_course_lecturers_lecturer" FOREIGN KEY ("lecturer_id") REFERENCES "users"("id") ON DELETE CASCADE;
+ALTER TABLE "exam_schedules" ADD CONSTRAINT "exam_schedules_exam_id_fkey" FOREIGN KEY ("exam_id") REFERENCES "exams"("id") ON DELETE CASCADE;
+ALTER TABLE "exam_schedules" ADD CONSTRAINT "exam_schedules_graded_by_fkey" FOREIGN KEY ("graded_by") REFERENCES "users"("id") ON DELETE SET NULL;
+ALTER TABLE "exam_schedules" ADD CONSTRAINT "exam_schedules_student_id_fkey" FOREIGN KEY ("student_id") REFERENCES "users"("id") ON DELETE CASCADE;
+ALTER TABLE "exams" ADD CONSTRAINT "exams_course_id_fkey" FOREIGN KEY ("course_id") REFERENCES "courses"("id") ON DELETE CASCADE;
+ALTER TABLE "exams" ADD CONSTRAINT "exams_created_by_fkey" FOREIGN KEY ("created_by") REFERENCES "users"("id") ON DELETE SET NULL;
+ALTER TABLE "question_results" ADD CONSTRAINT "question_results_exam_schedule_id_fkey" FOREIGN KEY ("exam_schedule_id") REFERENCES "exam_schedules"("id") ON DELETE CASCADE;
+ALTER TABLE "question_results" ADD CONSTRAINT "question_results_question_id_fkey" FOREIGN KEY ("question_id") REFERENCES "questions"("id") ON DELETE CASCADE;
+ALTER TABLE "questions" ADD CONSTRAINT "questions_course_id_fkey" FOREIGN KEY ("course_id") REFERENCES "courses"("id") ON DELETE CASCADE;
+ALTER TABLE "rubrics" ADD CONSTRAINT "rubrics_course_id_fkey" FOREIGN KEY ("course_id") REFERENCES "courses"("id");
+ALTER TABLE "transcripts" ADD CONSTRAINT "transcripts_exam_schedule_id_fkey" FOREIGN KEY ("exam_schedule_id") REFERENCES "exam_schedules"("id") ON DELETE CASCADE;
+ALTER TABLE "transcripts" ADD CONSTRAINT "transcripts_parent_transcript_id_fkey" FOREIGN KEY ("parent_transcript_id") REFERENCES "transcripts"("id") ON DELETE CASCADE;
+ALTER TABLE "transcripts" ADD CONSTRAINT "transcripts_question_id_fkey" FOREIGN KEY ("question_id") REFERENCES "questions"("id") ON DELETE SET NULL;

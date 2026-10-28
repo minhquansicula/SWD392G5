@@ -29,13 +29,13 @@ export interface UpdateCourseRequest {
  * Fetch all courses
  * GET /api/courses
  */
-export async function getCourses(): Promise<Course[]> {
+export async function getCourses(fresh = false): Promise<Course[]> {
   try {
     const response = await apiClient.get<{
       success: boolean;
       message: string;
       data: Course[];
-    }>('/courses');
+    }>('/courses', { headers: fresh ? { 'Cache-Control': 'no-cache' } : {} });
 
     return response.data?.data || [];
   } catch (err: any) {

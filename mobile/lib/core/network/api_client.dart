@@ -55,7 +55,7 @@ class ApiClient {
   Future<ApiResponseData<dynamic>> post(
     String endpoint, {
     Map<String, dynamic>? body,
-    Duration timeout = const Duration(seconds: 5),
+    Duration timeout = const Duration(seconds: 15),
   }) async {
     final url = Uri.parse('$_baseUrl$endpoint');
     try {
@@ -96,7 +96,7 @@ class ApiClient {
   Future<ApiResponseData<dynamic>> get(
     String endpoint, {
     Map<String, String>? queryParams,
-    Duration timeout = const Duration(seconds: 5),
+    Duration timeout = const Duration(seconds: 15),
   }) async {
     var uri = Uri.parse('$_baseUrl$endpoint');
     if (queryParams != null && queryParams.isNotEmpty) {

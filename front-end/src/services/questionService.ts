@@ -46,12 +46,12 @@ export interface QuestionFilterParams {
 }
 
 export const questionService = {
-  async getQuestions(params?: QuestionFilterParams, signal?: AbortSignal): Promise<QuestionDto[]> {
+  async getQuestions(params?: QuestionFilterParams, signal?: AbortSignal, fresh = false): Promise<QuestionDto[]> {
     const response = await apiClient.get<{
       success: boolean;
       message: string;
       data: QuestionDto[];
-    }>('/questions', { params, signal });
+    }>('/questions', { params, signal, headers: fresh ? { 'Cache-Control': 'no-cache' } : {} });
     return response.data?.data || [];
   },
 

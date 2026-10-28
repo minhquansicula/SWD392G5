@@ -22,6 +22,17 @@ class _ExamScheduleScreenState extends State<ExamScheduleScreen> {
   int _selectedFilter = 0;
 
   @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      final examProv = context.read<ExamProvider>();
+      if (examProv.exams.isEmpty && !examProv.isLoading) {
+        examProv.refreshExams();
+      }
+    });
+  }
+
+  @override
   Widget build(BuildContext context) {
     final examProvider = context.watch<ExamProvider>();
     final allExams = examProvider.exams;
@@ -76,7 +87,13 @@ class _ExamScheduleScreenState extends State<ExamScheduleScreen> {
 
           // Exams List
           Expanded(
-            child: filteredExams.isEmpty
+            child: examProvider.isLoading && allExams.isEmpty
+                ? const Center(
+                    child: CircularProgressIndicator(
+                      valueColor: AlwaysStoppedAnimation<Color>(AppColors.primaryLight),
+                    ),
+                  )
+                : filteredExams.isEmpty
                 ? Center(
                     child: Padding(
                       padding: const EdgeInsets.all(32),
