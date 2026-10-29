@@ -17,7 +17,7 @@ class ApiEndpoints {
   // Spring Boot Java Backend URL
   static const String defaultBaseUrl = 'http://$_host:8080/api';
 
-  // Python AI Engine / WebSocket Viva Voice Core (demo/viva-ai-v2)
+  // Python AI Engine / WebSocket Viva Voice Core (python/)
   static const String defaultWebSocketUrl = 'ws://$_host:8000/ws/live/sessions/';
   static const String aiServiceBaseUrl = 'http://$_host:8000';
   static const String aiSessionFinish = '/api/v1/sessions'; // + /{id}/finish

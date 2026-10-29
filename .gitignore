@@ -26,3 +26,7 @@ yarn-error.log*
 .DS_Store
 Thumbs.db
 
+
+# AI Agent folders
+.agents/
+.agent/

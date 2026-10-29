@@ -1,0 +1,26 @@
+# ==============================================================================
+# DOCKER DATABASE PROFILE (Kích hoạt khi chạy: -Dspring-boot.run.profiles=docker)
+# ==============================================================================
+
+spring:
+  datasource:
+    url: jdbc:postgresql://localhost:5432/aives_db
+    username: postgres
+    password: postgres
+    driver-class-name: org.postgresql.Driver
+
+  flyway:
+    enabled: true
+    baseline-on-migrate: true
+    baseline-version: 4
+    locations: classpath:db/migration
+
+  jpa:
+    hibernate:
+      ddl-auto: validate
+    show-sql: false
+
+aives:
+  mail:
+    log-links: true
+

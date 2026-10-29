@@ -1,41 +1,26 @@
 services:
   # =========================================================================
-  # 🎙️ LiveKit WebRTC Server (Open-source Media Engine)
+  # 🐘 PostgreSQL 16 with pgvector Extension (AIVES Database)
   # =========================================================================
-  livekit:
-    image: livekit/livekit-server:latest
-    container_name: aives-livekit-server
+  # Tự động nạp toàn bộ Schema và Seed Data từ thư mục database/docker-init/
+  # Mỗi lần chạy down -v và up lại sẽ tự động drop/create dữ liệu hoàn toàn mới.
+  postgres:
+    image: pgvector/pgvector:pg16
+    container_name: aives-postgres
     restart: unless-stopped
-    command: --dev
     ports:
-      - "7880:7880"         # HTTP API, Webhooks & WebSocket Signaling
-      - "7881:7881"         # WebRTC TCP Fallback
-      - "7882:7882/udp"     # WebRTC UDP Media (Audio & Video Streaming)
+      - "${POSTGRES_PORT:-5432}:5432"
     environment:
-      LIVEKIT_KEYS: "devkey: secret"
-    networks:
-      - aives-network
-
-  # =========================================================================
-  # 🤖 Python LiveKit Agent Worker (AI Examiner Core 3)
-  # =========================================================================
-  # Mẹo: Trong lúc phát triển code hàng ngày, bạn có thể chạy Agent trực tiếp 
-  # bằng Python local (.venv) để hỗ trợ hot-reload nhanh.
-  # Khi muốn chạy đóng gói toàn bộ hệ thống, chỉ cần bật service này lên.
-  agent:
-    build:
-      context: ./python
-      dockerfile: Dockerfile
-    container_name: aives-python-agent
-    restart: unless-stopped
-    environment:
-      - LIVEKIT_URL=ws://livekit:7880
-      - LIVEKIT_API_KEY=devkey
-      - LIVEKIT_API_SECRET=secret
-    env_file:
-      - ./python/.env
-    depends_on:
-      - livekit
+      POSTGRES_DB: aives_db
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+    volumes:
+      - ./database/docker-init:/docker-entrypoint-initdb.d:ro
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres -d aives_db"]
+      interval: 3s
+      timeout: 3s
+      retries: 20
     networks:
       - aives-network
 
