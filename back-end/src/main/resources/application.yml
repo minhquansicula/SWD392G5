@@ -11,11 +11,20 @@ spring:
   profiles:
     active: ${SPRING_PROFILES_ACTIVE:local}
 
-  # DataSource (PostgreSQL 16)
+  # ==============================================================================
+  # CẤU HÌNH DATABASE (Chỉnh sửa trực tiếp tại đây)
+  # ==============================================================================
   datasource:
-    url: ${SPRING_DATASOURCE_URL:jdbc:postgresql://localhost:5432/aives_db}
-    username: ${SPRING_DATASOURCE_USERNAME:postgres}
-    password: ${SPRING_DATASOURCE_PASSWORD:postgres}
+    # --- LỰA CHỌN 1: Database Cloud (Neon PostgreSQL) [ĐANG BẬT] ---
+    url: ${SPRING_DATASOURCE_URL:jdbc:postgresql://ep-dry-block-b3yhbez5-pooler.c-4.ap-southeast-1.aws.neon.tech:5432/neondb?sslmode=require}
+    username: ${SPRING_DATASOURCE_USERNAME:neondb_owner}
+    password: ${SPRING_DATASOURCE_PASSWORD:npg_P7CZhEKTy2Dp}
+
+    # --- LỰA CHỌN 2: Database Local (Docker / PostgreSQL máy tính) ---
+    # url: ${SPRING_DATASOURCE_URL:jdbc:postgresql://localhost:5432/aives_db}
+    # username: ${SPRING_DATASOURCE_USERNAME:postgres}
+    # password: ${SPRING_DATASOURCE_PASSWORD:postgres}
+
     driver-class-name: org.postgresql.Driver
 
   # Flyway Migration Configuration
