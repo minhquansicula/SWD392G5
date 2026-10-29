@@ -23,8 +23,8 @@ class PrimaryButton extends StatelessWidget {
     this.isLoading = false,
     this.gradient,
     this.backgroundColor,
-    this.height = 50,
-    this.borderRadius = 14,
+    this.height = 48,
+    this.borderRadius = 12,
     this.isOutlined = false,
     this.textColor,
     this.padding,
@@ -32,7 +32,7 @@ class PrimaryButton extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final effectivePadding = padding ?? const EdgeInsets.symmetric(horizontal: 12);
+    final effectivePadding = padding ?? const EdgeInsets.symmetric(horizontal: 14);
 
     if (isOutlined) {
       return SizedBox(
@@ -40,7 +40,8 @@ class PrimaryButton extends StatelessWidget {
         child: OutlinedButton(
           onPressed: isLoading ? null : onPressed,
           style: OutlinedButton.styleFrom(
-            side: const BorderSide(color: AppColors.borderGlow, width: 1.5),
+            side: const BorderSide(color: AppColors.borderGlass, width: 1.2),
+            backgroundColor: AppColors.surfaceCard.withValues(alpha: 0.5),
             shape: RoundedRectangleBorder(
               borderRadius: BorderRadius.circular(borderRadius),
             ),
@@ -56,16 +57,22 @@ class PrimaryButton extends StatelessWidget {
     return Container(
       height: height,
       decoration: BoxDecoration(
-        gradient: onPressed == null ? null : effGradient,
-        color: onPressed == null ? AppColors.surfaceCardHigh : null,
+        gradient: onPressed == null ? null : (backgroundColor != null ? null : effGradient),
+        color: onPressed == null
+            ? AppColors.surfaceCardHigh
+            : (backgroundColor ?? AppColors.primary),
         borderRadius: BorderRadius.circular(borderRadius),
+        border: Border.all(
+          color: onPressed == null ? AppColors.borderGlass : AppColors.borderGlow,
+          width: 1,
+        ),
         boxShadow: onPressed == null
             ? null
             : [
                 BoxShadow(
-                  color: AppColors.primary.withValues(alpha: 0.35),
-                  blurRadius: 14,
-                  offset: const Offset(0, 4),
+                  color: (backgroundColor ?? AppColors.primary).withValues(alpha: 0.25),
+                  blurRadius: 10,
+                  offset: const Offset(0, 3),
                 ),
               ],
       ),

@@ -122,10 +122,10 @@ class _OrbPainter extends CustomPainter {
         final opacity = (1.0 - progress) * (0.35 + audioLevel * 0.4);
 
         final wavePaint = Paint()
-          ..color = (state == OrbState.listening ? AppColors.tertiary : AppColors.secondary)
+          ..color = (state == OrbState.listening ? AppColors.primaryLight : AppColors.secondary)
               .withValues(alpha: opacity.clamp(0.0, 1.0))
           ..style = PaintingStyle.stroke
-          ..strokeWidth = 2.0;
+          ..strokeWidth = 1.8;
 
         canvas.drawCircle(center, waveRadius, wavePaint);
       }
@@ -137,9 +137,9 @@ class _OrbPainter extends CustomPainter {
       ..shader = RadialGradient(
         colors: [
           state == OrbState.listening
-              ? AppColors.tertiary.withValues(alpha: 0.6)
-              : AppColors.secondary.withValues(alpha: 0.6),
-          AppColors.primary.withValues(alpha: 0.2),
+              ? AppColors.primaryLight.withValues(alpha: 0.5)
+              : AppColors.primary.withValues(alpha: 0.45),
+          AppColors.primarySoft.withValues(alpha: 0.2),
           Colors.transparent,
         ],
         stops: const [0.2, 0.7, 1.0],
@@ -151,9 +151,9 @@ class _OrbPainter extends CustomPainter {
     if (state == OrbState.listening || state == OrbState.aiSpeaking) {
       final barCount = 36;
       final ringPaint = Paint()
-        ..color = state == OrbState.listening ? AppColors.tertiary : AppColors.secondaryLight
+        ..color = state == OrbState.listening ? AppColors.primaryGlow : AppColors.primaryLight
         ..strokeCap = StrokeCap.round
-        ..strokeWidth = 3.0;
+        ..strokeWidth = 2.5;
 
       for (int i = 0; i < barCount; i++) {
         final angle = (i * 2 * math.pi / barCount) + (animationValue * math.pi);
@@ -169,13 +169,13 @@ class _OrbPainter extends CustomPainter {
       }
     }
 
-    // Core Orb sphere with gradient
+    // Core Orb sphere with academic teal gradient
     final orbPaint = Paint()
       ..shader = RadialGradient(
         center: const Alignment(-0.3, -0.3),
         colors: state == OrbState.listening
-            ? [const Color(0xFF22D3EE), AppColors.tertiary, AppColors.primary]
-            : [AppColors.secondaryLight, AppColors.secondary, AppColors.primary],
+            ? [const Color(0xFFABE1D2), AppColors.primaryLight, AppColors.primary]
+            : [AppColors.primaryLight, AppColors.primary, const Color(0xFF134E48)],
       ).createShader(Rect.fromCircle(center: center, radius: baseRadius));
 
     canvas.drawCircle(center, baseRadius, orbPaint);

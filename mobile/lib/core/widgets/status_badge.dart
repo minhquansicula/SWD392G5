@@ -32,28 +32,28 @@ class StatusBadge extends StatelessWidget {
 
     switch (type) {
       case BadgeType.success:
-        bg = AppColors.success.withValues(alpha: 0.15);
+        bg = AppColors.success.withValues(alpha: 0.16);
         border = AppColors.success.withValues(alpha: 0.35);
-        text = AppColors.success;
+        text = const Color(0xFF34D399);
         break;
       case BadgeType.warning:
-        bg = AppColors.warning.withValues(alpha: 0.15);
+        bg = AppColors.warning.withValues(alpha: 0.16);
         border = AppColors.warning.withValues(alpha: 0.35);
-        text = AppColors.warning;
+        text = const Color(0xFFFBBF24);
         break;
       case BadgeType.danger:
-        bg = AppColors.danger.withValues(alpha: 0.15);
+        bg = AppColors.danger.withValues(alpha: 0.16);
         border = AppColors.danger.withValues(alpha: 0.35);
-        text = AppColors.danger;
+        text = const Color(0xFFF87171);
         break;
       case BadgeType.purple:
-        bg = AppColors.secondary.withValues(alpha: 0.15);
-        border = AppColors.secondaryLight.withValues(alpha: 0.4);
-        text = AppColors.secondaryLight;
+        bg = AppColors.primarySoft;
+        border = AppColors.primaryLight.withValues(alpha: 0.35);
+        text = AppColors.primaryLight;
         break;
       case BadgeType.info:
-        bg = AppColors.primary.withValues(alpha: 0.15);
-        border = AppColors.primaryLight.withValues(alpha: 0.35);
+        bg = AppColors.primary.withValues(alpha: 0.2);
+        border = AppColors.borderGlass;
         text = AppColors.primaryLight;
         break;
     }
