@@ -1,18 +1,12 @@
-# Python & Bytecode
+.env
+.venv/
 __pycache__/
 *.py[cod]
-*$py.class
-*.so
-
-# Environments
-.venv/
-venv/
-ENV/
-env/
-
-# Environment Variables & Secrets (NEVER COMMIT)
-.env
-*.local
-
-# Logs
+.pytest_cache/
+.ruff_cache/
+*.egg-info/
+dist/
+.DS_Store
+qa/*.png
+qa/__pycache__/
 *.log
