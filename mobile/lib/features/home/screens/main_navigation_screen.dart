@@ -67,7 +67,7 @@ class _MainNavigationScreenState extends State<MainNavigationScreen> {
               backgroundColor: Colors.transparent,
               elevation: 0,
               type: BottomNavigationBarType.fixed,
-              selectedItemColor: AppColors.secondaryLight,
+              selectedItemColor: AppColors.primaryLight,
               unselectedItemColor: AppColors.textMuted,
               selectedLabelStyle: AppTextStyles.labelSm.copyWith(fontWeight: FontWeight.w700),
               unselectedLabelStyle: AppTextStyles.labelSm,

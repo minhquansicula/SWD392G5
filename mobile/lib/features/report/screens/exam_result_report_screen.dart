@@ -216,7 +216,7 @@ class _ExamResultReportScreenState extends State<ExamResultReportScreen> {
                 ),
                 Text(
                   '/10',
-                  style: AppTextStyles.labelBold.copyWith(color: AppColors.primaryGlow, fontSize: 13),
+                  style: AppTextStyles.labelBold.copyWith(color: AppColors.primaryLight, fontSize: 13),
                 ),
               ],
             ),
@@ -335,7 +335,7 @@ class _ExamResultReportScreenState extends State<ExamResultReportScreen> {
         children: [
           Row(
             children: [
-              const Icon(Icons.auto_awesome_rounded, color: AppColors.secondaryLight, size: 20),
+              const Icon(Icons.auto_awesome_rounded, color: AppColors.primaryLight, size: 20),
               const SizedBox(width: 8),
               Text('Nhận xét chi tiết từ AI Examiner', style: AppTextStyles.titleMd),
             ],
@@ -362,7 +362,7 @@ class _ExamResultReportScreenState extends State<ExamResultReportScreen> {
       children: [
         Row(
           children: [
-            const Icon(Icons.auto_awesome_rounded, color: AppColors.secondaryLight, size: 20),
+            const Icon(Icons.auto_awesome_rounded, color: AppColors.primaryLight, size: 20),
             const SizedBox(width: 8),
             Text('Nhận xét chi tiết từ AI Examiner', style: AppTextStyles.titleMd),
           ],
@@ -515,11 +515,11 @@ class _ExamResultReportScreenState extends State<ExamResultReportScreen> {
                   const SizedBox(height: 12),
                   const Divider(color: AppColors.borderGlass),
                   const SizedBox(height: 8),
-                  Text('Câu hỏi AI đặt:', style: AppTextStyles.labelSm.copyWith(color: AppColors.secondaryLight)),
+                  Text('Câu hỏi AI đặt:', style: AppTextStyles.labelSm.copyWith(color: AppColors.primaryLight)),
                   const SizedBox(height: 4),
                   Text(q.fullQuestion, style: AppTextStyles.bodyMd),
                   const SizedBox(height: 10),
-                  Text('Câu trả lời của bạn:', style: AppTextStyles.labelSm.copyWith(color: AppColors.tertiary)),
+                  Text('Câu trả lời của bạn:', style: AppTextStyles.labelSm.copyWith(color: AppColors.primaryLight)),
                   const SizedBox(height: 4),
                   Text(q.studentAnswer, style: AppTextStyles.bodyMd.copyWith(color: Colors.white70)),
                   const SizedBox(height: 12),
@@ -533,7 +533,7 @@ class _ExamResultReportScreenState extends State<ExamResultReportScreen> {
                         ),
                         child: Row(
                           children: [
-                            const Icon(Icons.play_arrow_rounded, size: 16, color: AppColors.secondaryLight),
+                            const Icon(Icons.play_arrow_rounded, size: 16, color: AppColors.primaryLight),
                             const SizedBox(width: 4),
                             Text('Nghe lại âm thanh • ${q.audioDuration}', style: AppTextStyles.bodySm),
                           ],
@@ -569,7 +569,7 @@ class _ExamResultReportScreenState extends State<ExamResultReportScreen> {
       desc = 'Thí sinh đang trong phòng thi vấn đáp trực tiếp với AI. Kết quả sẽ được tổng hợp ngay sau khi ca thi kết thúc.';
     } else if (isCompleted) {
       badgeLabel = 'ĐANG CHỜ CHỐT ĐIỂM';
-      badgeColor = AppColors.secondaryLight;
+      badgeColor = AppColors.primaryLight;
       statusIcon = Icons.hourglass_top_rounded;
       title = 'Ca thi đã hoàn thành — Chờ thẩm định';
       desc = 'Thí sinh đã hoàn thành phần thi vấn đáp. Biên bản hội thoại đang được AI và Hội đồng Giảng viên thẩm định trước khi công bố điểm chính thức.';

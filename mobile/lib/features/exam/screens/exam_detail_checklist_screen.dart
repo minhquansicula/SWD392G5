@@ -247,7 +247,7 @@ class _ExamDetailChecklistScreenState extends State<ExamDetailChecklistScreen> {
                 color: AppColors.surfaceCard,
                 borderRadius: BorderRadius.circular(16),
                 border: Border.all(
-                  color: _rulesAgreed ? AppColors.primaryGlow.withValues(alpha: 0.4) : AppColors.borderGlass,
+                  color: _rulesAgreed ? AppColors.primaryLight.withValues(alpha: 0.5) : AppColors.borderGlass,
                 ),
               ),
               child: CheckboxListTile(
@@ -302,7 +302,7 @@ class _ExamDetailChecklistScreenState extends State<ExamDetailChecklistScreen> {
 
   Widget _buildExamHeroCard() {
     return GlassCard(
-      borderRadius: 22,
+      borderRadius: 16,
       backgroundColor: AppColors.surfaceCardLow,
       border: Border.all(color: AppColors.borderGlow),
       child: Column(
@@ -351,7 +351,7 @@ class _ExamDetailChecklistScreenState extends State<ExamDetailChecklistScreen> {
           const SizedBox(height: 4),
           Text(
             widget.exam.examTitle,
-            style: AppTextStyles.bodyMd.copyWith(color: AppColors.secondaryLight),
+            style: AppTextStyles.bodyMd.copyWith(color: AppColors.primaryLight),
           ),
           const SizedBox(height: 16),
           const Divider(color: AppColors.borderGlass),
@@ -378,7 +378,7 @@ class _ExamDetailChecklistScreenState extends State<ExamDetailChecklistScreen> {
               Expanded(
                 child: Row(
                   children: [
-                    const Icon(Icons.psychology_outlined, size: 16, color: AppColors.primaryGlow),
+                    const Icon(Icons.psychology_outlined, size: 16, color: AppColors.primaryLight),
                     const SizedBox(width: 6),
                     Flexible(
                       child: Text(

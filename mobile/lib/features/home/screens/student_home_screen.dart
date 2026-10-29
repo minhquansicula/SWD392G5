@@ -127,7 +127,7 @@ class _StudentHomeScreenState extends State<StudentHomeScreen> {
                     ),
                   ),
                   const SizedBox(width: 4),
-                  const Text('👋', style: TextStyle(fontSize: 16)),
+                  const SizedBox.shrink(),
                 ],
               ),
               const SizedBox(height: 2),
@@ -170,7 +170,7 @@ class _StudentHomeScreenState extends State<StudentHomeScreen> {
     if (examProvider.isLoading && examProvider.exams.isEmpty) {
       return GlassCard(
         padding: const EdgeInsets.all(22),
-        borderRadius: 22,
+        borderRadius: 16,
         border: Border.all(color: AppColors.borderGlow),
         child: Row(
           children: [
@@ -204,7 +204,7 @@ class _StudentHomeScreenState extends State<StudentHomeScreen> {
     if (examProvider.errorMessage != null && examProvider.exams.isEmpty) {
       return GlassCard(
         padding: const EdgeInsets.all(20),
-        borderRadius: 22,
+        borderRadius: 16,
         border: Border.all(color: AppColors.warning.withValues(alpha: 0.3)),
         child: Row(
           children: [
@@ -241,7 +241,7 @@ class _StudentHomeScreenState extends State<StudentHomeScreen> {
     if (exam == null) {
       return GlassCard(
         padding: const EdgeInsets.all(20),
-        borderRadius: 22,
+        borderRadius: 16,
         child: Row(
           children: [
             Container(
@@ -274,7 +274,7 @@ class _StudentHomeScreenState extends State<StudentHomeScreen> {
 
     return GlassCard(
       padding: const EdgeInsets.all(20),
-      borderRadius: 22,
+      borderRadius: 16,
       border: Border.all(color: AppColors.borderGlow, width: 1.5),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -402,14 +402,14 @@ class _StudentHomeScreenState extends State<StudentHomeScreen> {
           children: [
             Row(
               children: [
-                const Icon(Icons.school_outlined, size: 18, color: AppColors.primaryGlow),
+                const Icon(Icons.school_outlined, size: 18, color: AppColors.primaryLight),
                 const SizedBox(width: 8),
                 Text('Học phần của bạn', style: AppTextStyles.titleMd),
               ],
             ),
             Text(
               'Xem tất cả (${exams.length})',
-              style: AppTextStyles.bodySm.copyWith(color: AppColors.secondaryLight, fontWeight: FontWeight.w600),
+              style: AppTextStyles.bodySm.copyWith(color: AppColors.primaryLight, fontWeight: FontWeight.w600),
             ),
           ],
         ),
@@ -571,7 +571,7 @@ class _StudentHomeScreenState extends State<StudentHomeScreen> {
       width: 20,
       height: 20,
       decoration: BoxDecoration(
-        color: AppColors.secondary,
+        color: AppColors.primarySoft,
         shape: BoxShape.circle,
         border: Border.all(color: AppColors.surfaceCard, width: 1.5),
       ),
@@ -615,7 +615,7 @@ class _StudentHomeScreenState extends State<StudentHomeScreen> {
                 },
                 child: Text(
                   'Chi tiết',
-                  style: AppTextStyles.bodySm.copyWith(color: AppColors.secondaryLight, fontWeight: FontWeight.w600),
+                  style: AppTextStyles.bodySm.copyWith(color: AppColors.primaryLight, fontWeight: FontWeight.w600),
                 ),
               ),
             ],

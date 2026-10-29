@@ -271,7 +271,7 @@ class _ExamScheduleScreenState extends State<ExamScheduleScreen> {
               decoration: BoxDecoration(
                 color: AppColors.surfaceCardHigh,
                 borderRadius: BorderRadius.circular(12),
-                border: Border.all(color: AppColors.secondary.withValues(alpha: 0.3)),
+                border: Border.all(color: AppColors.primaryLight.withValues(alpha: 0.35)),
               ),
               child: Row(
                 children: [
@@ -283,7 +283,7 @@ class _ExamScheduleScreenState extends State<ExamScheduleScreen> {
                       Text(
                         '${exam.finalScore} / 10',
                         style: AppTextStyles.headlineMd.copyWith(
-                          color: AppColors.secondaryLight,
+                          color: AppColors.primaryLight,
                           fontWeight: FontWeight.w800,
                         ),
                       ),
@@ -301,7 +301,7 @@ class _ExamScheduleScreenState extends State<ExamScheduleScreen> {
                     icon: const Icon(Icons.analytics_outlined, size: 16),
                     label: const Text('Xem nhận xét & Rubric', style: TextStyle(fontSize: 12)),
                     style: ElevatedButton.styleFrom(
-                      backgroundColor: AppColors.secondary,
+                      backgroundColor: AppColors.primary,
                       foregroundColor: Colors.white,
                       padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
                       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),

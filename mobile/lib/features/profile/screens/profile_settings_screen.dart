@@ -179,7 +179,7 @@ class _ProfileSettingsScreenState extends State<ProfileSettingsScreen> {
                 children: [
                   _buildInfoRow(
                     icon: Icons.alternate_email_rounded,
-                    iconColor: AppColors.secondaryLight,
+                    iconColor: AppColors.primaryLight,
                     label: 'Email FPT',
                     value: userEmail,
                   ),
@@ -234,7 +234,7 @@ class _ProfileSettingsScreenState extends State<ProfileSettingsScreen> {
                       padding: const EdgeInsets.symmetric(vertical: 4),
                       child: Row(
                         children: [
-                          const Icon(Icons.lock_reset_rounded, size: 20, color: AppColors.secondaryLight),
+                          const Icon(Icons.lock_reset_rounded, size: 20, color: AppColors.primaryLight),
                           const SizedBox(width: 12),
                           Expanded(
                             child: Column(
@@ -439,7 +439,7 @@ class _ProfileSettingsScreenState extends State<ProfileSettingsScreen> {
                       padding: const EdgeInsets.symmetric(vertical: 4),
                       child: Row(
                         children: [
-                          const Icon(Icons.support_agent_rounded, size: 20, color: AppColors.secondaryLight),
+                          const Icon(Icons.support_agent_rounded, size: 20, color: AppColors.primaryLight),
                           const SizedBox(width: 12),
                           Expanded(
                             child: Text(

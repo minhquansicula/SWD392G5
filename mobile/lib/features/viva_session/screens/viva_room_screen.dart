@@ -508,7 +508,7 @@ class _VivaRoomScreenState extends State<VivaRoomScreen> with TickerProviderStat
         decoration: BoxDecoration(
           color: isSelected ? AppColors.primary : AppColors.surfaceCard,
           borderRadius: BorderRadius.circular(10),
-          border: Border.all(color: isSelected ? AppColors.primaryGlow : AppColors.borderGlass),
+          border: Border.all(color: isSelected ? AppColors.primaryLight : AppColors.borderGlass),
         ),
         child: Text(
           label,
@@ -610,10 +610,10 @@ class _VivaRoomScreenState extends State<VivaRoomScreen> with TickerProviderStat
   Widget _buildQuestionCard(Map<String, dynamic> q, bool isAdaptive) {
     return GlassCard(
       padding: const EdgeInsets.all(16),
-      borderRadius: 20,
+      borderRadius: 16,
       backgroundColor: AppColors.surfaceCard,
       border: Border.all(
-        color: isAdaptive ? AppColors.secondaryLight.withValues(alpha: 0.6) : AppColors.borderGlass,
+        color: isAdaptive ? AppColors.primaryLight.withValues(alpha: 0.6) : AppColors.borderGlass,
         width: isAdaptive ? 1.5 : 1,
       ),
       child: Column(
@@ -627,7 +627,7 @@ class _VivaRoomScreenState extends State<VivaRoomScreen> with TickerProviderStat
                   color: AppColors.primary.withValues(alpha: 0.2),
                   borderRadius: BorderRadius.circular(8),
                 ),
-                child: const Icon(Icons.psychology_rounded, size: 18, color: AppColors.primaryGlow),
+                child: const Icon(Icons.psychology_rounded, size: 18, color: AppColors.primaryLight),
               ),
               const SizedBox(width: 10),
               Expanded(
@@ -637,7 +637,7 @@ class _VivaRoomScreenState extends State<VivaRoomScreen> with TickerProviderStat
                     Text(
                       isAdaptive ? 'Giám Khảo AI • Hỏi Xoáy Socratic (RAG)' : 'Giám Khảo AI • Câu Hỏi #${q['questionNumber']}',
                       style: AppTextStyles.labelBold.copyWith(
-                        color: isAdaptive ? AppColors.secondaryLight : Colors.white,
+                        color: isAdaptive ? AppColors.primaryLight : Colors.white,
                         fontSize: 13.5,
                       ),
                     ),
@@ -652,13 +652,13 @@ class _VivaRoomScreenState extends State<VivaRoomScreen> with TickerProviderStat
                 Container(
                   padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
                   decoration: BoxDecoration(
-                    color: AppColors.secondary.withValues(alpha: 0.15),
+                    color: AppColors.primarySoft,
                     borderRadius: BorderRadius.circular(8),
-                    border: Border.all(color: AppColors.secondaryLight.withValues(alpha: 0.4)),
+                    border: Border.all(color: AppColors.primaryLight.withValues(alpha: 0.35)),
                   ),
                   child: Text(
                     'Đào Sâu',
-                    style: AppTextStyles.labelSm.copyWith(color: AppColors.secondaryLight, fontSize: 10.5),
+                    style: AppTextStyles.labelSm.copyWith(color: AppColors.primaryLight, fontSize: 10.5),
                   ),
                 ),
             ],
@@ -931,7 +931,7 @@ class _VivaRoomScreenState extends State<VivaRoomScreen> with TickerProviderStat
                   setState(() => _voiceState = VivaVoiceState.aiSpeaking);
                   ScaffoldMessenger.of(context).showSnackBar(
                     const SnackBar(
-                      backgroundColor: AppColors.secondary,
+                      backgroundColor: AppColors.primary,
                       duration: Duration(milliseconds: 1500),
                       content: Text('Giám khảo AI đang xướng lại câu hỏi...'),
                     ),
@@ -952,7 +952,7 @@ class _VivaRoomScreenState extends State<VivaRoomScreen> with TickerProviderStat
                 shape: BoxShape.circle,
                 gradient: (viva.isRecording || _isMicActive)
                     ? const LinearGradient(
-                        colors: [Color(0xFF06B6D4), AppColors.primary],
+                        colors: [AppColors.secondary, AppColors.primary],
                         begin: Alignment.topLeft,
                         end: Alignment.bottomRight,
                       )
@@ -980,7 +980,7 @@ class _VivaRoomScreenState extends State<VivaRoomScreen> with TickerProviderStat
               IconButton(
                 padding: EdgeInsets.zero,
                 constraints: const BoxConstraints(minWidth: 44, minHeight: 44),
-                icon: const Icon(Icons.send_rounded, size: 26, color: AppColors.secondaryLight),
+                icon: const Icon(Icons.send_rounded, size: 26, color: AppColors.primaryLight),
                 onPressed: _voiceState == VivaVoiceState.socraticProbing ? null : _submitCurrentAnswer,
               ),
               Text('Nộp câu', style: AppTextStyles.bodySm.copyWith(fontSize: 11)),
