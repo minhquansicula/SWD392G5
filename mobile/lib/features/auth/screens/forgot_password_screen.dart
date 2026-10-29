@@ -546,7 +546,7 @@ class _ForgotPasswordScreenState extends State<ForgotPasswordScreen>
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 const Icon(Icons.shield_outlined,
-                    color: AppColors.secondaryLight, size: 20),
+                    color: AppColors.primaryLight, size: 20),
                 const SizedBox(width: 12),
                 Expanded(
                   child: Column(
@@ -635,7 +635,7 @@ class _ForgotPasswordScreenState extends State<ForgotPasswordScreen>
                     hintStyle: AppTextStyles.bodySm
                         .copyWith(color: AppColors.textMuted, fontSize: 11),
                     prefixIcon: const Icon(Icons.key_rounded,
-                        color: AppColors.secondaryLight, size: 20),
+                        color: AppColors.primaryLight, size: 20),
                     suffixIcon: _isCheckingToken
                         ? const Padding(
                             padding: EdgeInsets.all(12),
@@ -834,7 +834,7 @@ class _ForgotPasswordScreenState extends State<ForgotPasswordScreen>
                   decoration: InputDecoration(
                     hintText: 'Xác nhận lại mật khẩu...',
                     prefixIcon: const Icon(Icons.lock_clock_outlined,
-                        color: AppColors.secondaryLight, size: 20),
+                        color: AppColors.primaryLight, size: 20),
                     suffixIcon: IconButton(
                       icon: Icon(
                         _obscureConfirmPass

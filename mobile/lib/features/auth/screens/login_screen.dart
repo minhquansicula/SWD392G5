@@ -2,8 +2,8 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_text_styles.dart';
-import '../../../core/widgets/primary_button.dart';
 import '../../../core/widgets/glass_card.dart';
+import '../../../core/widgets/primary_button.dart';
 import '../providers/auth_provider.dart';
 import '../../exam/providers/exam_provider.dart';
 import '../../home/screens/main_navigation_screen.dart';
@@ -42,10 +42,12 @@ class _LoginScreenState extends State<LoginScreen> {
         MaterialPageRoute(builder: (_) => const MainNavigationScreen()),
       );
     } else if (mounted && auth.errorMessage != null) {
+      ScaffoldMessenger.of(context).hideCurrentSnackBar();
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
           backgroundColor: AppColors.danger,
           behavior: SnackBarBehavior.floating,
+          duration: const Duration(seconds: 4),
           shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
           content: Row(
             children: [
@@ -164,7 +166,7 @@ class _LoginScreenState extends State<LoginScreen> {
                     // Login Card
                     GlassCard(
                       padding: const EdgeInsets.all(22),
-                      borderRadius: 22,
+                      borderRadius: 18,
                       border: Border.all(color: AppColors.borderGlass),
                       child: Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
@@ -177,7 +179,7 @@ class _LoginScreenState extends State<LoginScreen> {
                           TextField(
                             controller: _emailController,
                             keyboardType: TextInputType.emailAddress,
-                            style: AppTextStyles.bodyMd.copyWith(color: Colors.white),
+                            style: AppTextStyles.bodyMd.copyWith(color: AppColors.textPrimary),
                             decoration: const InputDecoration(
                               hintText: 'Nhập email FPT',
                               prefixIcon: Icon(Icons.email_outlined, color: AppColors.primaryLight, size: 20),
@@ -192,7 +194,7 @@ class _LoginScreenState extends State<LoginScreen> {
                           TextField(
                             controller: _passwordController,
                             obscureText: _obscurePassword,
-                            style: AppTextStyles.bodyMd.copyWith(color: Colors.white),
+                            style: AppTextStyles.bodyMd.copyWith(color: AppColors.textPrimary),
                             decoration: InputDecoration(
                               hintText: 'Nhập mật khẩu...',
                               prefixIcon: const Icon(Icons.lock_outline_rounded, color: AppColors.primaryLight, size: 20),
@@ -214,30 +216,6 @@ class _LoginScreenState extends State<LoginScreen> {
                           Row(
                             mainAxisAlignment: MainAxisAlignment.end,
                             children: [
-                              // GestureDetector(
-                              //   onTap: () => setState(() => _rememberMe = !_rememberMe),
-                              //   child: Row(
-                              //     children: [
-                              //       SizedBox(
-                              //         width: 20,
-                              //         height: 20,
-                              //         child: Checkbox(
-                              //           value: _rememberMe,
-                              //           activeColor: AppColors.primary,
-                              //           checkColor: Colors.white,
-                              //           shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(4)),
-                              //           side: const BorderSide(color: AppColors.borderGlass, width: 1.5),
-                              //           onChanged: (v) => setState(() => _rememberMe = v ?? true),
-                              //         ),
-                              //       ),
-                              //       const SizedBox(width: 8),
-                              //       Text(
-                              //         'Ghi nhớ đăng nhập',
-                              //         style: AppTextStyles.bodySm.copyWith(color: AppColors.textMuted),
-                              //       ),
-                              //     ],
-                              //   ),
-                              // ),
                               TextButton(
                                 onPressed: () {
                                   Navigator.of(context).push(
@@ -254,7 +232,7 @@ class _LoginScreenState extends State<LoginScreen> {
                                 child: Text(
                                   'Quên mật khẩu?',
                                   style: AppTextStyles.bodySm.copyWith(
-                                    color: AppColors.secondaryLight,
+                                    color: AppColors.primaryLight,
                                     fontWeight: FontWeight.w600,
                                   ),
                                 ),
@@ -269,75 +247,11 @@ class _LoginScreenState extends State<LoginScreen> {
                             icon: Icons.login_rounded,
                             isLoading: auth.isLoading,
                             onPressed: _handleLogin,
-
                           ),
-                          const SizedBox(height: 14),
-
-                          // Quick Demo Student Button (1-tap login for easy testing)
-                          // Container(
-                          //   width: double.infinity,
-                          //   decoration: BoxDecoration(
-                          //     color: AppColors.surfaceCardHigh.withValues(alpha: 0.6),
-                          //     borderRadius: BorderRadius.circular(14),
-                          //     border: Border.all(color: AppColors.borderGlow),
-                          //   ),
-                          //   child: Material(
-                          //     color: Colors.transparent,
-                          //     child: InkWell(
-                          //       borderRadius: BorderRadius.circular(14),
-                          //       onTap: _handleQuickDemoLogin,
-                          //       child: Padding(
-                          //         padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 16),
-                          //         child: Row(
-                          //           mainAxisAlignment: MainAxisAlignment.center,
-                          //           children: [
-                          //             const Icon(Icons.flash_on_rounded, size: 18, color: AppColors.warning),
-                          //             const SizedBox(width: 8),
-                          //             Text(
-                          //               'Đăng nhập nhanh mẫu (SE170245)',
-                          //               style: AppTextStyles.labelBold.copyWith(
-                          //                 color: Colors.white,
-                          //                 fontSize: 13,
-                          //               ),
-                          //             ),
-                          //           ],
-                          //         ),
-                          //       ),
-                          //     ),
-                          //   ),
-                          // ),
                         ],
                       ),
                     ),
-                    const SizedBox(height: 20),
-
-                    // Lecturer / Admin notice
-                    // Container(
-                    //   padding: const EdgeInsets.all(12),
-                    //   decoration: BoxDecoration(
-                    //     color: AppColors.surfaceCardLow.withValues(alpha: 0.7),
-                    //     borderRadius: BorderRadius.circular(14),
-                    //     border: Border.all(color: AppColors.borderGlass),
-                    //   ),
-                    //   child: Row(
-                    //     children: [
-                    //       const Icon(Icons.info_outline_rounded, size: 18, color: AppColors.primaryLight),
-                    //       const SizedBox(width: 10),
-                    //       Expanded(
-                    //         child: Text(
-                    //           'Giảng viên & Admin vui lòng sử dụng Web Portal AIVES để quản lý ngân hàng câu hỏi & ca thi.',
-                    //           style: AppTextStyles.bodySm.copyWith(
-                    //             color: AppColors.textMuted,
-                    //             fontSize: 11,
-                    //             height: 1.3,
-                    //           ),
-                    //         ),
-                    //       ),
-                    //     ],
-                    //   ),
-                    // ),
                     const SizedBox(height: 24),
-
                     // University Branding Footer
                     Row(
                       mainAxisAlignment: MainAxisAlignment.center,
