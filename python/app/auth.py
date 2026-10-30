@@ -98,8 +98,8 @@ class BackendAuthorization:
                         raise AppError("Chỉ giảng viên tạo kỳ thi được thay đổi ca thi.", 403, "access_denied")
             elif principal.role != "ADMIN":
                 raise AppError("Bạn không có quyền truy cập.", 403, "access_denied")
-            # Starting and question assignment remain Spring Boot responsibilities.
-            if write and schedule.status not in {"IN_PROGRESS", "COMPLETED"}:
+            # Cho phép trạng thái IN_PROGRESS, COMPLETED và PENDING (VoiceRoom.load sẽ tự chuyển PENDING sang IN_PROGRESS)
+            if write and schedule.status not in {"IN_PROGRESS", "COMPLETED", "PENDING"}:
                 raise AppError("Ca thi chưa được bắt đầu qua hệ thống lịch thi.", 409, "schedule_not_started")
 
 

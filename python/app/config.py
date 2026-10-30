@@ -10,12 +10,12 @@ class Settings(BaseSettings):
     model_config = SettingsConfigDict(env_file=".env", env_file_encoding="utf-8", extra="ignore")
 
     gemini_api_key: SecretStr = SecretStr("")
-    gemini_model: str = "gemini-3.5-flash-lite"
-    gemini_live_model: str = "gemini-3.8-live"
+    gemini_model: str = "gemini-2.5-flash"
+    gemini_live_model: str = "gemini-2.5-flash-native-audio-latest"
     live_silence_ms: int = Field(default=1000, ge=300, le=3000)
     live_max_minutes: int = Field(default=45, ge=1, le=120)
     gemini_embedding_model: str = "gemini-embedding-001"
-    database_url: str = "postgresql+psycopg://postgres:postgres@localhost:5432/aives_db"
+    database_url: str = "postgresql+psycopg://postgres:postgres@127.0.0.1:5432/aives_db"
     backend_api_url: str = "http://localhost:8080/api"
     cors_origins: list[str] = ["http://localhost:5173", "http://127.0.0.1:5173"]
     model_timeout_seconds: int = Field(default=120, ge=10, le=600)

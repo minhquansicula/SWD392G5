@@ -374,7 +374,10 @@ def create_app(settings=None, gateway=None, auth_transport=None) -> FastAPI:
     async def live_audio_socket(websocket: WebSocket, schedule_id: UUID):
         """Kết nối WebSocket Audio hai chiều giữa thí sinh và Gemini Live."""
         origin = websocket.headers.get("origin")
-        if origin and origin not in settings.cors_origins:
+        # Mobile native apps (Android/iOS) thường không gửi Origin header,
+        # hoặc gửi "null". Chỉ chặn khi origin rõ ràng là browser origin không hợp lệ.
+        # Wildcard "*" trong cors_origins cho phép tất cả.
+        if origin and origin != "null" and "*" not in settings.cors_origins and origin not in settings.cors_origins:
             await websocket.close(code=1008)
             return
         await websocket.accept()
@@ -395,10 +398,20 @@ def create_app(settings=None, gateway=None, auth_transport=None) -> FastAPI:
             except (ValueError, KeyError, TimeoutError, AppError) as exc:
                 status = exc.status if isinstance(exc, AppError) else 401
                 code = 4401 if status == 401 else 4403 if status in (403, 404) else 1013
+                logger.error(
+                    "❌ [WebSocket Auth Failed] Schedule: %s | Error: %s (status=%s, close_code=%s)",
+                    schedule_id, exc, status, code,
+                    exc_info=True
+                )
                 await websocket.close(code=code)
                 return
             if not app.state.db_ready:
-                raise AppError("Cơ sở dữ liệu chưa sẵn sàng.", 503)
+                try:
+                    await database.initialize()
+                    app.state.db_ready = True
+                    logger.info("AI Service re-connected to database successfully.")
+                except Exception as exc:
+                    raise AppError(f"Cơ sở dữ liệu chưa sẵn sàng: {exc}", 503)
             room = VoiceRoom(interviews, websocket, schedule_id)
             await room.run()
         except WebSocketDisconnect:
