@@ -12,15 +12,14 @@ if (-not $containerStatus) {
     Start-Sleep -Seconds 4
 }
 
-# 2. Chay file khoi tao schema (01_init_schema.sql)
+# 2. Nap Schema & Seed Data truc tiep tu mount /docker-entrypoint-initdb.d (dam bao 100% UTF-8 tieng Viet)
 Write-Host " -> [1/2] Dang nap lai Schema & Extensions (01_init_schema.sql)..." -ForegroundColor Yellow
-Get-Content -Raw "database\docker-init\01_init_schema.sql" -Encoding utf8 | docker exec -i aives-postgres psql -U postgres -d aives_db -q
+docker exec -i aives-postgres psql -U postgres -d aives_db -f /docker-entrypoint-initdb.d/01_init_schema.sql -q
 
-# 3. Chay file seed data moi (02_seed_data.sql)
-Write-Host " -> [2/2] Dang nap Seed Data mau (02_seed_data.sql)..." -ForegroundColor Yellow
-Get-Content -Raw "database\docker-init\02_seed_data.sql" -Encoding utf8 | docker exec -i aives-postgres psql -U postgres -d aives_db -q
+Write-Host " -> [2/2] Dang nap Seed Data mau chuan UTF-8 (02_seed_data.sql)..." -ForegroundColor Yellow
+docker exec -i aives-postgres psql -U postgres -d aives_db -f /docker-entrypoint-initdb.d/02_seed_data.sql -q
 
-Write-Host "`n [AIVES] THANH CONG! Database Docker da duoc DROP va TAO MOI 100%!" -ForegroundColor Green
+Write-Host "`n [AIVES] THANH CONG! Database Docker da duoc DROP va TAO MOI 100% (Tieng Viet UTF-8)!" -ForegroundColor Green
 Write-Host "==============================================================================" -ForegroundColor DarkGray
 Write-Host " Tai khoan kiem thu:" -ForegroundColor Cyan
 Write-Host "  - Quan tri vien: admin@aives.edu.vn       | Pass: Admin@123"

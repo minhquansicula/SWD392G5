@@ -16,14 +16,14 @@ spring:
   # ==============================================================================
   datasource:
     # --- LỰA CHỌN 1: Database Cloud (Neon PostgreSQL) [ĐANG BẬT] ---
-    url: ${SPRING_DATASOURCE_URL:jdbc:postgresql://ep-dry-block-b3yhbez5-pooler.c-4.ap-southeast-1.aws.neon.tech:5432/neondb?sslmode=require}
-    username: ${SPRING_DATASOURCE_USERNAME:neondb_owner}
-    password: ${SPRING_DATASOURCE_PASSWORD:npg_P7CZhEKTy2Dp}
+    # url: ${SPRING_DATASOURCE_URL:jdbc:postgresql://ep-dry-block-b3yhbez5-pooler.c-4.ap-southeast-1.aws.neon.tech:5432/neondb?sslmode=require}
+    # username: ${SPRING_DATASOURCE_USERNAME:neondb_owner}
+    # password: ${SPRING_DATASOURCE_PASSWORD:npg_P7CZhEKTy2Dp}
 
     # --- LỰA CHỌN 2: Database Local (Docker / PostgreSQL máy tính) ---
-    # url: ${SPRING_DATASOURCE_URL:jdbc:postgresql://localhost:5432/aives_db}
-    # username: ${SPRING_DATASOURCE_USERNAME:postgres}
-    # password: ${SPRING_DATASOURCE_PASSWORD:postgres}
+    url: ${SPRING_DATASOURCE_URL:jdbc:postgresql://localhost:5432/aives_db}
+    username: ${SPRING_DATASOURCE_USERNAME:postgres}
+    password: ${SPRING_DATASOURCE_PASSWORD:postgres}
 
     driver-class-name: org.postgresql.Driver
 
@@ -97,6 +97,9 @@ aives:
 
 # Logging Configuration
 logging:
+  charset:
+    console: UTF-8
+    file: UTF-8
   level:
     root: INFO
     com.backend: DEBUG
