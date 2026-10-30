@@ -11,6 +11,8 @@ import '../../../core/widgets/voice_wave_visualizer.dart';
 import '../../auth/providers/auth_provider.dart';
 import '../models/exam_schedule_model.dart';
 import '../../viva_session/screens/viva_room_screen.dart';
+import '../../viva_session/services/audio_recorder_service.dart';
+import '../../report/screens/exam_result_report_screen.dart';
 
 class ExamDetailChecklistScreen extends StatefulWidget {
   final ExamScheduleModel exam;
@@ -34,10 +36,11 @@ class _ExamDetailChecklistScreenState extends State<ExamDetailChecklistScreen> {
   // Cam kết nội quy phòng thi (duy nhất thí sinh xác nhận)
   bool _rulesAgreed = true;
 
-  // Trạng thái kiểm tra giọng nói trực tiếp qua mic
+  // Trạng thái kiểm tra giọng nói thật qua microphone phần cứng
+  final AudioRecorderService _audioRecorder = AudioRecorderService();
   bool _isTestingMic = false;
-  double _testAudioLevel = 0.65;
-  Timer? _testMicTimer;
+  double _testAudioLevel = 0.0;
+  StreamSubscription<double>? _amplitudeSubscription;
 
   @override
   void initState() {
@@ -47,7 +50,8 @@ class _ExamDetailChecklistScreenState extends State<ExamDetailChecklistScreen> {
 
   @override
   void dispose() {
-    _testMicTimer?.cancel();
+    _amplitudeSubscription?.cancel();
+    _audioRecorder.dispose();
     super.dispose();
   }
 
@@ -88,29 +92,55 @@ class _ExamDetailChecklistScreenState extends State<ExamDetailChecklistScreen> {
     }
   }
 
-  void _toggleMicTest() {
-    setState(() {
-      _isTestingMic = !_isTestingMic;
-    });
-
+  Future<void> _toggleMicTest() async {
     if (_isTestingMic) {
-      _testMicTimer?.cancel();
-      _testMicTimer = Timer.periodic(const Duration(milliseconds: 250), (t) {
-        if (!mounted) return;
+      // Dừng thu thử mic thật
+      await _amplitudeSubscription?.cancel();
+      _amplitudeSubscription = null;
+      await _audioRecorder.stopRecording();
+      if (mounted) {
         setState(() {
-          _testAudioLevel = 0.35 + (DateTime.now().millisecond % 65) / 100.0;
+          _isTestingMic = false;
+          _testAudioLevel = 0.0;
         });
-      });
+      }
     } else {
-      _testMicTimer?.cancel();
+      // Khởi động mic thật
+      final initialized = await _audioRecorder.init();
+      if (!initialized) {
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(content: Text('Không thể truy cập Microphone. Vui lòng cấp quyền.')),
+          );
+        }
+        return;
+      }
+
+      await _amplitudeSubscription?.cancel();
+      _amplitudeSubscription = _audioRecorder.amplitudeStream.listen((level) {
+        if (mounted) {
+          setState(() {
+            _testAudioLevel = level;
+          });
+        }
+      });
+
+      await _audioRecorder.startRecording();
+      if (mounted) {
+        setState(() {
+          _isTestingMic = true;
+          _micPermissionGranted = true;
+        });
+      }
     }
   }
 
   @override
   Widget build(BuildContext context) {
     final currentUser = context.watch<AuthProvider>().currentUser;
+    final isCompleted = widget.exam.status == ExamStatus.completed;
     final allSystemReady = _micPermissionGranted && _serverConnectionReady && _profileVerified;
-    final canEnter = allSystemReady && _rulesAgreed;
+    final canEnter = !isCompleted && allSystemReady && _rulesAgreed;
 
     return Scaffold(
       backgroundColor: AppColors.background,
@@ -242,14 +272,15 @@ class _ExamDetailChecklistScreenState extends State<ExamDetailChecklistScreen> {
             const SizedBox(height: 16),
 
             // Cam kết nội quy phòng thi (Thao tác xác nhận duy nhất của thí sinh)
-            Container(
-              decoration: BoxDecoration(
-                color: AppColors.surfaceCard,
+            Material(
+              color: AppColors.surfaceCard,
+              shape: RoundedRectangleBorder(
                 borderRadius: BorderRadius.circular(16),
-                border: Border.all(
+                side: BorderSide(
                   color: _rulesAgreed ? AppColors.primaryLight.withValues(alpha: 0.5) : AppColors.borderGlass,
                 ),
               ),
+              clipBehavior: Clip.antiAlias,
               child: CheckboxListTile(
                 value: _rulesAgreed,
                 onChanged: (v) => setState(() => _rulesAgreed = v ?? false),
@@ -278,21 +309,42 @@ class _ExamDetailChecklistScreenState extends State<ExamDetailChecklistScreen> {
             const SizedBox(height: 28),
 
             // Enter Exam Action Button
-            PrimaryButton(
-              text: canEnter ? 'Vào Phòng Thi AI Viva' : 'Vui lòng hoàn tất điều kiện dự thi',
-              icon: Icons.arrow_forward_rounded,
-              height: 54,
-              onPressed: canEnter
-                  ? () {
-                      _testMicTimer?.cancel();
-                      Navigator.of(context).push(
-                        MaterialPageRoute(
-                          builder: (_) => VivaRoomScreen(exam: widget.exam),
-                        ),
-                      );
-                    }
-                  : null,
-            ),
+            if (isCompleted) ...[
+              PrimaryButton(
+                text: 'Xem Báo Cáo Kết Quả Thi',
+                icon: Icons.assignment_turned_in_rounded,
+                height: 54,
+                onPressed: () {
+                  Navigator.of(context).pushReplacement(
+                    MaterialPageRoute(
+                      builder: (_) => ExamResultReportScreen(exam: widget.exam),
+                    ),
+                  );
+                },
+              ),
+            ] else ...[
+              PrimaryButton(
+                text: canEnter ? 'Vào Phòng Thi AI Viva' : 'Vui lòng hoàn tất điều kiện dự thi',
+                icon: Icons.arrow_forward_rounded,
+                height: 54,
+                onPressed: canEnter
+                    ? () async {
+                        if (_isTestingMic) {
+                          await _amplitudeSubscription?.cancel();
+                          _amplitudeSubscription = null;
+                          await _audioRecorder.stopRecording();
+                        }
+                        if (context.mounted) {
+                          Navigator.of(context).push(
+                            MaterialPageRoute(
+                              builder: (_) => VivaRoomScreen(exam: widget.exam),
+                            ),
+                          );
+                        }
+                      }
+                    : null,
+              ),
+            ],
             const SizedBox(height: 32),
           ],
         ),
@@ -481,7 +533,11 @@ class _ExamDetailChecklistScreenState extends State<ExamDetailChecklistScreen> {
               decoration: BoxDecoration(
                 color: AppColors.surfaceDeep,
                 borderRadius: BorderRadius.circular(12),
-                border: Border.all(color: AppColors.tertiary.withValues(alpha: 0.25)),
+                border: Border.all(
+                  color: _testAudioLevel > 0.15
+                      ? AppColors.success.withValues(alpha: 0.4)
+                      : AppColors.primaryLight.withValues(alpha: 0.25),
+                ),
               ),
               child: Row(
                 children: [
@@ -490,7 +546,7 @@ class _ExamDetailChecklistScreenState extends State<ExamDetailChecklistScreen> {
                     level: _testAudioLevel,
                     height: 28,
                     barCount: 9,
-                    color: AppColors.tertiary,
+                    color: _testAudioLevel > 0.15 ? AppColors.success : AppColors.primaryLight,
                   ),
                   const SizedBox(width: 16),
                   Expanded(
@@ -498,11 +554,18 @@ class _ExamDetailChecklistScreenState extends State<ExamDetailChecklistScreen> {
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
                         Text(
-                          'Tín hiệu giọng nói: RÕ RÀNG & ỔN ĐỊNH',
-                          style: AppTextStyles.labelSm.copyWith(color: AppColors.success, fontSize: 11),
+                          _testAudioLevel > 0.15
+                              ? 'Tín hiệu: ĐANG THU ÂM TỐT (${(_testAudioLevel * 100).toInt()}%)'
+                              : 'Đang lắng nghe... Hãy nói thử vào micro',
+                          style: AppTextStyles.labelSm.copyWith(
+                            color: _testAudioLevel > 0.15 ? AppColors.success : AppColors.primaryLight,
+                            fontSize: 11,
+                          ),
                         ),
                         Text(
-                          'Microphone thu nhận âm thanh tốt, sẵn sàng cho buổi thi',
+                          _testAudioLevel > 0.15
+                              ? 'Biên độ sóng âm phản hồi trực tiếp từ phần cứng'
+                              : 'Sóng âm sẽ nhảy khi phát hiện giọng nói của bạn',
                           style: AppTextStyles.bodySm.copyWith(color: AppColors.textMuted, fontSize: 10.5),
                         ),
                       ],

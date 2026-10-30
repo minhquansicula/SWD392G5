@@ -41,7 +41,7 @@ class GlassCard extends StatelessWidget {
           ),
         ];
 
-    final cardContent = ClipRRect(
+    Widget result = ClipRRect(
       borderRadius: BorderRadius.circular(borderRadius),
       child: BackdropFilter(
         filter: ImageFilter.blur(sigmaX: 10, sigmaY: 10),
@@ -58,27 +58,24 @@ class GlassCard extends StatelessWidget {
       ),
     );
 
-    if (margin != null) {
-      return Container(
-        margin: margin,
-        child: onTap != null
-            ? InkWell(
-                onTap: onTap,
-                borderRadius: BorderRadius.circular(borderRadius),
-                child: cardContent,
-              )
-            : cardContent,
-      );
-    }
-
     if (onTap != null) {
-      return InkWell(
-        onTap: onTap,
-        borderRadius: BorderRadius.circular(borderRadius),
-        child: cardContent,
+      result = Material(
+        color: Colors.transparent,
+        child: InkWell(
+          onTap: onTap,
+          borderRadius: BorderRadius.circular(borderRadius),
+          child: result,
+        ),
       );
     }
 
-    return cardContent;
+    if (margin != null) {
+      result = Padding(
+        padding: margin!,
+        child: result,
+      );
+    }
+
+    return result;
   }
 }

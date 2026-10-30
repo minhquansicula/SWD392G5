@@ -20,13 +20,20 @@ class ExamProvider extends ChangeNotifier {
   String? get errorMessage => _errorMessage;
   ExamScheduleModel? get selectedExam => _selectedExam ?? (_exams.isNotEmpty ? _exams.first : null);
 
-  ExamScheduleModel? get upcomingHeroExam {
-    try {
-      return _exams.firstWhere((e) => e.status == ExamStatus.upcoming);
-    } catch (_) {
-      return null;
+  /// Ca thi đang hoạt động (Đang thi dở dang hoặc Sắp diễn ra) cần hiển thị trên Hero Card
+  ExamScheduleModel? get activeHeroExam {
+    final inProgress = _exams.where((e) => e.status == ExamStatus.inProgress).toList();
+    if (inProgress.isNotEmpty) {
+      return inProgress.first;
     }
+    final upcoming = _exams.where((e) => e.status == ExamStatus.upcoming).toList();
+    if (upcoming.isNotEmpty) {
+      return upcoming.first;
+    }
+    return null;
   }
+
+  ExamScheduleModel? get upcomingHeroExam => activeHeroExam;
 
   List<ExamScheduleModel> get completedExams {
     return _exams.where((e) => e.status == ExamStatus.completed).toList();

@@ -34,8 +34,7 @@ class _StudentHomeScreenState extends State<StudentHomeScreen> {
   Widget build(BuildContext context) {
     final user = context.watch<AuthProvider>().currentUser;
     final examProvider = context.watch<ExamProvider>();
-    final heroExam = examProvider.upcomingHeroExam ??
-        (examProvider.exams.isNotEmpty ? examProvider.exams.first : null);
+    final heroExam = examProvider.activeHeroExam;
 
     return Scaffold(
       backgroundColor: AppColors.background,
@@ -272,10 +271,15 @@ class _StudentHomeScreenState extends State<StudentHomeScreen> {
       );
     }
 
+    final isInProgress = exam.status == ExamStatus.inProgress;
+
     return GlassCard(
       padding: const EdgeInsets.all(20),
       borderRadius: 16,
-      border: Border.all(color: AppColors.borderGlow, width: 1.5),
+      border: Border.all(
+        color: isInProgress ? AppColors.secondary.withValues(alpha: 0.6) : AppColors.borderGlow,
+        width: 1.5,
+      ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
@@ -288,16 +292,19 @@ class _StudentHomeScreenState extends State<StudentHomeScreen> {
                     Container(
                       width: 8,
                       height: 8,
-                      decoration: const BoxDecoration(
-                        color: AppColors.warning,
+                      decoration: BoxDecoration(
+                        color: isInProgress ? AppColors.success : AppColors.warning,
                         shape: BoxShape.circle,
                       ),
                     ),
                     const SizedBox(width: 6),
                     Expanded(
                       child: Text(
-                        'Kỳ thi vấn đáp sắp diễn ra',
-                        style: AppTextStyles.labelBold.copyWith(color: AppColors.warning, fontSize: 13),
+                        isInProgress ? 'Ca thi đang diễn ra ngay lúc này' : 'Kỳ thi vấn đáp sắp diễn ra',
+                        style: AppTextStyles.labelBold.copyWith(
+                          color: isInProgress ? AppColors.success : AppColors.warning,
+                          fontSize: 13,
+                        ),
                         maxLines: 1,
                         overflow: TextOverflow.ellipsis,
                       ),
@@ -307,9 +314,9 @@ class _StudentHomeScreenState extends State<StudentHomeScreen> {
               ),
               const SizedBox(width: 8),
               StatusBadge(
-                label: exam.timeRemainingText,
-                type: BadgeType.warning,
-                icon: Icons.timer_outlined,
+                label: isInProgress ? 'Đang thi' : exam.timeRemainingText,
+                type: isInProgress ? BadgeType.success : BadgeType.warning,
+                icon: isInProgress ? Icons.sensors_rounded : Icons.timer_outlined,
               ),
             ],
           ),
@@ -347,7 +354,7 @@ class _StudentHomeScreenState extends State<StudentHomeScreen> {
           ),
           const SizedBox(height: 18),
 
-          // Primary CTA Button: Vào phòng thi ngay
+          // Primary CTA Button: Tiếp tục vào phòng thi hoặc Vào phòng thi ngay
           Container(
             height: 50,
             decoration: BoxDecoration(
@@ -375,10 +382,10 @@ class _StudentHomeScreenState extends State<StudentHomeScreen> {
                 child: Row(
                   mainAxisAlignment: MainAxisAlignment.center,
                   children: [
-                    const Icon(Icons.mic_rounded, size: 20, color: Colors.white),
+                    Icon(isInProgress ? Icons.sensors_rounded : Icons.mic_rounded, size: 20, color: Colors.white),
                     const SizedBox(width: 8),
                     Text(
-                      'Vào phòng thi ngay',
+                      isInProgress ? 'Tiếp tục vào phòng thi' : 'Vào phòng thi ngay',
                       style: AppTextStyles.labelBold.copyWith(fontSize: 15, color: Colors.white),
                     ),
                     const SizedBox(width: 6),
