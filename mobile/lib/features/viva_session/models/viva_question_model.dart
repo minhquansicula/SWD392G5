@@ -31,12 +31,19 @@ class VivaQuestionModel {
   });
 
   factory VivaQuestionModel.fromAssignedQuestion(Map<String, dynamic> json, int total) {
+    final qData = json['question'] is Map ? json['question'] as Map<String, dynamic> : json;
+    final order = json['orderIndex'] ?? json['questionOrder'] ?? 1;
+    final bloom = qData['bloomTaxonomy'] ?? qData['bloomLevel'] ?? json['difficultyLevel']?.toString() ?? 'Vận dụng';
+    final contentText = qData['content'] ?? qData['questionText'] ?? json['contentSnapshot']?.toString() ?? '';
+    final isFollowUp = json['isFollowUp'] == true;
+
     return VivaQuestionModel(
       id: json['id']?.toString() ?? '',
-      questionNumber: json['questionOrder'] is int ? json['questionOrder'] : 1,
+      questionNumber: order is int ? order : 1,
       totalQuestions: total > 0 ? total : 1,
-      bloomLevel: json['difficultyLevel']?.toString() ?? 'Vận dụng',
-      content: json['contentSnapshot']?.toString() ?? '',
+      bloomLevel: bloom.toString(),
+      content: contentText.toString(),
+      isAdaptiveFollowUp: isFollowUp,
       topicTags: const [],
       expectedKeywords: '',
     );

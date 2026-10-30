@@ -113,8 +113,8 @@ class VivaSessionProvider extends ChangeNotifier {
     }
 
     if (_questions.isEmpty) {
-      _questions = const [
-        VivaQuestionModel(
+      _questions = [
+        const VivaQuestionModel(
           id: 'q-live-01',
           questionNumber: 1,
           totalQuestions: 1,
@@ -127,7 +127,7 @@ class VivaSessionProvider extends ChangeNotifier {
     // 2. Khởi tạo microphone thu âm PCM 16kHz & loa phát PCM 24kHz (Gemini Live)
     await _recorderService.init();
     await _playerService.init();
-    await _playerService.startStreamPlayer(sampleRate: 24000, numChannels: 1);
+    // Loa ngoài sẽ tự động kích hoạt stream ngay khi chunk âm thanh đầu tiên từ AI tới để tránh cạn buffer
 
     // 3. Kết nối WebSocket viva-ai-v2 với Token xác thực
     final authToken = token ?? ApiClient.instance.authToken ?? '';
@@ -140,7 +140,13 @@ class VivaSessionProvider extends ChangeNotifier {
 
     // 4. Lắng nghe luồng audio từ micro và gửi binary chunks lên server
     _audioChunkSub = _recorderService.audioChunkStream.listen((chunk) {
-      _wsService.sendBinaryPcmChunk(chunk);
+      // BẢO VỆ CHỐNG TIẾNG VỌNG (Acoustic Echo Loop):
+      // CHỈ gửi audio lên WebSocket khi thực sự ở trạng thái listening (lượt nói của thí sinh).
+      // Khi AI đang nói (aiSpeaking) hoặc đang xử lý (processing), toàn bộ dữ liệu micro
+      // đều bị chặn lại để loa ngoài không phát âm thanh của AI dội thẳng vào mic rồi gửi ngược về Gemini Live.
+      if (_sessionState == VivaSessionState.listening) {
+        _wsService.sendBinaryPcmChunk(chunk);
+      }
     });
 
     // 5. Lắng nghe biên độ âm thanh cho quả cầu 3D Orb Visualizer
@@ -171,10 +177,14 @@ class VivaSessionProvider extends ChangeNotifier {
   }
 
   void _startAutoListening() async {
-    await _playerService.stop();
-    await _recorderService.startRecording();
-    _sessionState = VivaSessionState.listening;
-    notifyListeners();
+    // Chờ 800ms để các chunk âm thanh cuối cùng phát trọn vẹn ra loa ngoài
+    // và tiếng vang phòng tiêu tán hoàn toàn trước khi bật mic
+    await Future.delayed(const Duration(milliseconds: 800));
+    if (_sessionState == VivaSessionState.aiSpeaking) {
+      await _recorderService.startRecording();
+      _sessionState = VivaSessionState.listening;
+      notifyListeners();
+    }
   }
 
   void toggleMicrophone() async {
@@ -231,9 +241,11 @@ class VivaSessionProvider extends ChangeNotifier {
 
   /// Xử lý các sự kiện từ demo/viva-ai-v2
   void _handleIncomingWsMessage(Map<String, dynamic> msg) {
-    final type = msg['type']?.toString();
+    try {
+      final type = msg['type']?.toString();
+      _questions = List<VivaQuestionModel>.from(_questions);
 
-    // 1. Sự kiện Ready: Server xác thực thành công và báo thông tin ca thi
+      // 1. Sự kiện Ready: Server xác thực thành công và báo thông tin ca thi
     if (type == 'ready') {
       _sessionState = VivaSessionState.aiSpeaking;
       final timeLimit = msg['main_answer_time_limit_seconds'];
@@ -274,6 +286,10 @@ class VivaSessionProvider extends ChangeNotifier {
       }
 
       _sessionState = VivaSessionState.aiSpeaking;
+      // Khi có câu hỏi mới, đảm bảo dừng mic ngay
+      if (_recorderService.isRecording) {
+        _recorderService.stopRecording();
+      }
       notifyListeners();
     }
     // 3. Sự kiện Transcript: Phụ đề thời gian thực (Giám khảo AI hoặc Thí sinh)
@@ -324,10 +340,14 @@ class VivaSessionProvider extends ChangeNotifier {
     else if (type == 'audio_chunk') {
       final chunk = msg['data'];
       if (chunk is Uint8List) {
-        _playerService.feedPcmChunk(chunk);
         if (_sessionState != VivaSessionState.aiSpeaking) {
           _sessionState = VivaSessionState.aiSpeaking;
+          // Dập tắt micro ngay lập tức khi âm thanh AI bắt đầu phát để chống vọng âm loa ngoài vào mic
+          if (_recorderService.isRecording) {
+            _recorderService.stopRecording();
+          }
         }
+        _playerService.feedPcmChunk(chunk);
         // Tính biên độ âm thanh cho quả cầu 3D Orb khi AI nói
         if (chunk.isNotEmpty) {
           _currentAudioLevel = 0.4 + ((chunk[0].abs() % 50) / 100.0);
@@ -337,11 +357,8 @@ class VivaSessionProvider extends ChangeNotifier {
     }
     // 5. Sự kiện Turn Complete: Giám khảo AI đọc xong câu hỏi -> Mở mic cho thí sinh
     else if (type == 'turn_complete') {
-      _playerService.stop();
       if (_sessionState == VivaSessionState.aiSpeaking) {
-        _sessionState = VivaSessionState.listening;
         _startAutoListening();
-        notifyListeners();
       }
     }
     // 6. Sự kiện Clear Audio: Thí sinh ngắt lời AI (Barge-in)
@@ -364,7 +381,10 @@ class VivaSessionProvider extends ChangeNotifier {
       debugPrint('[VivaSessionProvider] All questions answered. Ready to finish.');
       finishExamSession();
     }
+  } catch (e, stack) {
+    debugPrint('[VivaSessionProvider] Error handling incoming WS message: $e\n$stack');
   }
+}
 
   @override
   void dispose() {

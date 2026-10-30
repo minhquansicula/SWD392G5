@@ -17,10 +17,10 @@ import '../services/viva_websocket_service.dart';
 
 /// Các trạng thái tương tác giọng nói trong phòng thi vấn đáp
 enum VivaVoiceState {
-  aiSpeaking,    // Giám khảo AI đang đọc câu hỏi (TTS)
-  listening,     // Sinh viên đang phát biểu trả lời qua Microphone
+  aiSpeaking,      // Giám khảo AI đang đọc câu hỏi (TTS)
+  listening,       // Sinh viên đang phát biểu trả lời qua Microphone
   socraticProbing, // AI đang đối chiếu Rubric & sinh câu hỏi phản biện / đào sâu
-  completed,     // Ca thi hoàn tất
+  completed,       // Ca thi hoàn tất
 }
 
 class VivaRoomScreen extends StatefulWidget {
@@ -37,54 +37,13 @@ class VivaRoomScreen extends StatefulWidget {
 
 class _VivaRoomScreenState extends State<VivaRoomScreen> with TickerProviderStateMixin {
   final ScrollController _scrollController = ScrollController();
-
-  // Trạng thái giọng nói phòng thi
-  VivaVoiceState _voiceState = VivaVoiceState.aiSpeaking;
-  int _currentQuestionIndex = 0;
-  bool _isMicActive = false;
-  double _audioInputLevel = 0.5;
-  Timer? _audioSimulationTimer;
-
-  // Đồng hồ đếm lùi phòng thi (14:52)
-  int _remainingSeconds = 14 * 60 + 52;
-  Timer? _countdownTimer;
-
-  // Danh sách câu hỏi trong ca thi (Khởi tạo mặc định và tự động nạp từ Backend API nếu có)
-  List<Map<String, dynamic>> _questions = [
-    {
-      'questionNumber': 1,
-      'bloomLevel': 'Vận dụng (Applying)',
-      'isFollowUp': false,
-      'content': 'Em hãy giải thích sự khác biệt giữa Monolithic Architecture và Microservices Architecture? Khi nào hệ thống thực tế của doanh nghiệp nên chuyển đổi sang Microservices?',
-      'tags': ['#SoftwareArchitecture', '#Microservices', '#Scalability'],
-      'aiSpeakerText': 'Chào bạn. Tôi là Giám khảo AI phụ trách buổi vấn đáp hôm nay. Chúng ta bắt đầu với câu hỏi số 1: Em hãy giải thích sự khác biệt giữa Monolithic Architecture và Microservices Architecture? Khi nào hệ thống thực tế của doanh nghiệp nên chuyển đổi sang Microservices?',
-      'studentReplyText': 'Thưa thầy cô và Giám khảo AI, Monolithic gom toàn bộ module vào một codebase và runtime duy nhất, dễ triển khai ban đầu nhưng khó scale độc lập. Ngược lại, Microservices chia nhỏ theo nghiệp vụ (Domain-Driven Design), scale linh hoạt từng service...',
-    },
-    {
-      'questionNumber': 2,
-      'bloomLevel': 'Phân tích & Phản biện (Analyzing)',
-      'isFollowUp': true,
-      'content': 'Trong mô hình Microservices, khi xảy ra sự cố mạng làm một service bị treo, em sẽ áp dụng Circuit Breaker pattern như thế nào để tránh hiệu ứng Domino (Cascading Failure)?',
-      'tags': ['#CircuitBreaker', '#FaultTolerance', '#Resilience4j'],
-      'aiSpeakerText': 'Câu trả lời rất tốt. Để đào sâu thêm vào khía cạnh chịu lỗi: Trong mô hình Microservices, khi một service bị treo hoặc timeout, em sẽ thiết kế Circuit Breaker pattern như thế nào để ngăn chặn sự sụp đổ dây chuyền của toàn hệ thống?',
-      'studentReplyText': 'Em sẽ cấu hình 3 trạng thái: Closed, Open và Half-Open. Khi tỷ lệ request lỗi vượt ngưỡng 50% trong sliding window, circuit breaker mở ra lập tức, trả về fallback response ngay để bảo toàn tài nguyên các service khác...',
-    },
-    {
-      'questionNumber': 3,
-      'bloomLevel': 'Đánh giá & Tối ưu (Evaluating)',
-      'isFollowUp': false,
-      'content': 'Khi hai microservices cần giao tiếp bất đồng bộ đảm bảo tính toàn vẹn dữ liệu (Eventual Consistency), em sẽ chọn Kafka hay RabbitMQ và lý giải vì sao?',
-      'tags': ['#MessageBroker', '#ApacheKafka', '#EventDriven'],
-      'aiSpeakerText': 'Câu hỏi số 3: Khi hai microservices cần trao đổi dữ liệu bất đồng bộ đảm bảo Eventual Consistency ở quy mô hàng triệu bản ghi, em chọn Apache Kafka hay RabbitMQ và vì sao?',
-      'studentReplyText': 'Với bài toán lưu vết event sourcing và lượng dữ liệu lớn hàng triệu bản ghi cần replay dữ liệu, em sẽ ưu tiên Apache Kafka vì kiến trúc Log-based immutable và throughput cực cao...',
-    },
-  ];
+  bool _hasShownFinishedDialog = false;
 
   @override
   void initState() {
     super.initState();
 
-    // 1. Kích hoạt API Backend Spring Boot bắt đầu ca thi & nạp đề thi thực tế
+    // 1. Kích hoạt API Backend Spring Boot bắt đầu ca thi
     _initExamSessionOnBackend();
 
     // 2. Tự động kết nối WebSocket demo/viva-ai-v2 với Token xác thực
@@ -96,83 +55,25 @@ class _VivaRoomScreenState extends State<VivaRoomScreen> with TickerProviderStat
         token: auth.currentUser?.token,
       );
     });
-
-    // 3. Khởi chạy đồng hồ đếm lùi ca thi
-    _countdownTimer = Timer.periodic(const Duration(seconds: 1), (timer) {
-      if (_remainingSeconds > 0) {
-        setState(() => _remainingSeconds--);
-      } else {
-        timer.cancel();
-      }
-    });
-
-    // 4. Mô phỏng nhịp sóng âm nhẹ nhàng
-    _audioSimulationTimer = Timer.periodic(const Duration(milliseconds: 250), (t) {
-      if (_voiceState == VivaVoiceState.listening && _isMicActive) {
-        setState(() {
-          _audioInputLevel = 0.35 + (DateTime.now().millisecond % 65) / 100.0;
-        });
-      }
-    });
   }
 
-  /// Gọi API Backend Spring Boot để bắt đầu ca thi và tải câu hỏi gán thật
+  /// Gọi API Backend Spring Boot để bắt đầu ca thi
   Future<void> _initExamSessionOnBackend() async {
     try {
-      // Gọi API POST /api/student/schedules/{id}/start để kích hoạt trạng thái IN_PROGRESS
       await ApiClient.instance.post(
         '${ApiEndpoints.studentScheduleStart}/${widget.exam.id}/start',
         body: {},
       );
       debugPrint('[VivaRoom] Exam schedule started successfully on Spring Boot backend.');
-
-      // Gọi API GET /api/schedules/{id}/assigned-questions để lấy câu hỏi thực tế
-      final qRes = await ApiClient.instance.get(
-        '${ApiEndpoints.assignedQuestions}/${widget.exam.id}/assigned-questions',
-      );
-
-      if (qRes.success && qRes.data is List && (qRes.data as List).isNotEmpty) {
-        final list = qRes.data as List;
-        final loadedQuestions = <Map<String, dynamic>>[];
-
-        for (int i = 0; i < list.length; i++) {
-          final item = list[i] as Map<String, dynamic>;
-          final qData = item['question'] is Map ? item['question'] as Map<String, dynamic> : item;
-          loadedQuestions.add({
-            'questionNumber': item['orderIndex'] ?? (i + 1),
-            'bloomLevel': qData['bloomTaxonomy'] ?? qData['bloomLevel'] ?? 'Vấn đáp Trực tiếp',
-            'isFollowUp': item['isFollowUp'] == true,
-            'content': qData['content'] ?? qData['questionText'] ?? 'Câu hỏi vấn đáp môn học',
-            'tags': ['#${widget.exam.courseCode}', '#VivaExam'],
-            'aiSpeakerText': qData['content'] ?? 'Câu hỏi số ${i + 1}',
-            'studentReplyText': '...',
-          });
-        }
-
-        if (mounted && loadedQuestions.isNotEmpty) {
-          setState(() {
-            _questions = loadedQuestions;
-          });
-          debugPrint('[VivaRoom] Loaded ${_questions.length} assigned questions from database.');
-        }
-      }
     } catch (e) {
-      debugPrint('[VivaRoom] Notice: Using course-prepared questions fallback: $e');
+      debugPrint('[VivaRoom] Notice: $e');
     }
   }
 
   @override
   void dispose() {
-    _countdownTimer?.cancel();
-    _audioSimulationTimer?.cancel();
     _scrollController.dispose();
     super.dispose();
-  }
-
-  String get _formattedTimer {
-    final m = (_remainingSeconds ~/ 60).toString().padLeft(2, '0');
-    final s = (_remainingSeconds % 60).toString().padLeft(2, '0');
-    return '$m:$s';
   }
 
   void _scrollToBottom() {
@@ -190,42 +91,13 @@ class _VivaRoomScreenState extends State<VivaRoomScreen> with TickerProviderStat
   void _toggleMicrophone() {
     final viva = context.read<VivaSessionProvider>();
     viva.toggleMicrophone();
-
-    setState(() {
-      _isMicActive = !_isMicActive;
-      if (_isMicActive) {
-        _voiceState = VivaVoiceState.listening;
-      }
-    });
     _scrollToBottom();
   }
 
   void _submitCurrentAnswer() {
     final viva = context.read<VivaSessionProvider>();
     viva.submitAnswer();
-
-    setState(() {
-      _voiceState = VivaVoiceState.socraticProbing;
-      _isMicActive = false;
-    });
     _scrollToBottom();
-
-    // Giả lập sau 2 giây AI suy nghĩ -> chuyển sang câu tiếp theo hoặc hoàn tất
-    Future.delayed(const Duration(seconds: 2), () {
-      if (!mounted) return;
-      if (_currentQuestionIndex < _questions.length - 1) {
-        setState(() {
-          _currentQuestionIndex++;
-          _voiceState = VivaVoiceState.aiSpeaking;
-        });
-        _scrollToBottom();
-      } else {
-        setState(() {
-          _voiceState = VivaVoiceState.completed;
-        });
-        _showExamFinishedDialog();
-      }
-    });
   }
 
   void _showExamFinishedDialog() {
@@ -306,23 +178,27 @@ class _VivaRoomScreenState extends State<VivaRoomScreen> with TickerProviderStat
   @override
   Widget build(BuildContext context) {
     final viva = context.watch<VivaSessionProvider>();
-    final currentQ = _questions.isNotEmpty && _currentQuestionIndex < _questions.length
-        ? _questions[_currentQuestionIndex]
-        : {
-            'questionNumber': 1,
-            'bloomLevel': 'Vấn đáp Trực tiếp',
-            'content': 'Chào mừng bạn đến với phòng thi vấn đáp trực tuyến AIVES.',
-            'tags': ['#${widget.exam.courseCode}', '#VivaExam'],
-            'aiSpeakerText': 'Chào bạn, chúng ta bắt đầu bài thi.',
-            'studentReplyText': '...',
-          };
-    final isAdaptive = currentQ['isFollowUp'] == true;
+    final currentQ = viva.currentQuestion;
+    final isAdaptive = currentQ.isAdaptiveFollowUp;
+
+    // Đồng bộ trạng thái giọng nói từ VivaSessionProvider thực tế
+    final effectiveVoiceState = viva.wsStatus != WsConnectionStatus.authenticated
+        ? VivaVoiceState.aiSpeaking
+        : (viva.sessionState == VivaSessionState.listening
+            ? VivaVoiceState.listening
+            : (viva.sessionState == VivaSessionState.processing
+                ? VivaVoiceState.socraticProbing
+                : (viva.sessionState == VivaSessionState.completed
+                    ? VivaVoiceState.completed
+                    : VivaVoiceState.aiSpeaking)));
 
     // Tự động kiểm tra nếu phiên thi hoàn thành từ server
-    if (viva.sessionState == VivaSessionState.completed && _voiceState != VivaVoiceState.completed) {
+    if (viva.sessionState == VivaSessionState.completed && !_hasShownFinishedDialog) {
+      _hasShownFinishedDialog = true;
       WidgetsBinding.instance.addPostFrameCallback((_) {
-        setState(() => _voiceState = VivaVoiceState.completed);
-        _showExamFinishedDialog();
+        if (mounted) {
+          _showExamFinishedDialog();
+        }
       });
     }
 
@@ -331,11 +207,50 @@ class _VivaRoomScreenState extends State<VivaRoomScreen> with TickerProviderStat
       body: SafeArea(
         child: Column(
           children: [
-            // Top Telemetry Header (Đã fix hoàn toàn lỗi tràn pixel 65px)
+            // Top Telemetry Header
             _buildTopTelemetryBar(viva),
 
-            // Interactive State Simulator Pill (Cho phép trải nghiệm các trạng thái)
-            _buildStatePreviewChips(),
+            // Banner thông báo trạng thái kết nối WebSocket thật với Python
+            if (viva.wsStatus == WsConnectionStatus.connecting)
+              Container(
+                width: double.infinity,
+                color: AppColors.warning.withValues(alpha: 0.15),
+                padding: const EdgeInsets.symmetric(vertical: 6, horizontal: 14),
+                child: Row(
+                  children: const [
+                    SizedBox(
+                      width: 12,
+                      height: 12,
+                      child: CircularProgressIndicator(strokeWidth: 2, color: AppColors.warning),
+                    ),
+                    SizedBox(width: 8),
+                    Expanded(
+                      child: Text(
+                        'Đang kết nối tới Python AI Examiner...',
+                        style: TextStyle(color: AppColors.warning, fontSize: 11),
+                      ),
+                    ),
+                  ],
+                ),
+              )
+            else if (viva.wsStatus == WsConnectionStatus.error || viva.wsStatus == WsConnectionStatus.disconnected)
+              Container(
+                width: double.infinity,
+                color: AppColors.danger.withValues(alpha: 0.2),
+                padding: const EdgeInsets.symmetric(vertical: 6, horizontal: 14),
+                child: Row(
+                  children: const [
+                    Icon(Icons.error_outline_rounded, color: AppColors.danger, size: 14),
+                    SizedBox(width: 8),
+                    Expanded(
+                      child: Text(
+                        'Mất kết nối với AI Engine. Vui lòng kiểm tra Python server.',
+                        style: TextStyle(color: AppColors.danger, fontSize: 11),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
 
             // Scrollable Viva Interview Stage
             Expanded(
@@ -350,8 +265,8 @@ class _VivaRoomScreenState extends State<VivaRoomScreen> with TickerProviderStat
                     _buildHolographicPresenceOrb(viva),
                     const SizedBox(height: 12),
 
-                    // Voice State Indicator Badge (Đã fix lỗi tràn 17px)
-                    _buildVoiceStatusBadge(),
+                    // Voice State Indicator Badge
+                    _buildVoiceStatusBadge(effectiveVoiceState),
                     const SizedBox(height: 16),
 
                     // Current Question Card (Highlighted)
@@ -367,16 +282,18 @@ class _VivaRoomScreenState extends State<VivaRoomScreen> with TickerProviderStat
             ),
 
             // Bottom Audio Control Deck
-            _buildBottomControlDeck(),
+            _buildBottomControlDeck(viva),
           ],
         ),
       ),
     );
   }
 
-  /// Thanh Header trên cùng đã được tối ưu hóa responsive, không bao giờ tràn pixel
+  /// Thanh Header trên cùng hiển thị chỉ số câu hỏi và đồng hồ đếm lùi thực
   Widget _buildTopTelemetryBar(VivaSessionProvider viva) {
     final isLiveWs = viva.wsStatus == WsConnectionStatus.authenticated;
+    final totalQ = viva.questions.isEmpty ? 1 : viva.questions.length;
+    final currentNum = (viva.currentQuestionIndex + 1).clamp(1, totalQ);
 
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
@@ -386,7 +303,6 @@ class _VivaRoomScreenState extends State<VivaRoomScreen> with TickerProviderStat
       ),
       child: Row(
         children: [
-          // Nút quay lại nhỏ gọn
           IconButton(
             padding: EdgeInsets.zero,
             constraints: const BoxConstraints(minWidth: 32, minHeight: 32),
@@ -395,7 +311,6 @@ class _VivaRoomScreenState extends State<VivaRoomScreen> with TickerProviderStat
           ),
           const SizedBox(width: 6),
 
-          // Tên phòng thi & mã môn học co giãn linh hoạt
           Expanded(
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
@@ -443,7 +358,7 @@ class _VivaRoomScreenState extends State<VivaRoomScreen> with TickerProviderStat
               border: Border.all(color: AppColors.borderGlass),
             ),
             child: Text(
-              'Câu ${_currentQuestionIndex + 1}/${_questions.length}',
+              'Câu $currentNum/$totalQ',
               style: AppTextStyles.labelSm.copyWith(color: Colors.white, fontSize: 11),
             ),
           ),
@@ -463,7 +378,7 @@ class _VivaRoomScreenState extends State<VivaRoomScreen> with TickerProviderStat
                 const Icon(Icons.timer_outlined, size: 13, color: AppColors.warning),
                 const SizedBox(width: 4),
                 Text(
-                  _formattedTimer,
+                  viva.formattedTimer,
                   style: AppTextStyles.codeOrTimer.copyWith(fontSize: 11.5),
                 ),
               ],
@@ -474,91 +389,27 @@ class _VivaRoomScreenState extends State<VivaRoomScreen> with TickerProviderStat
     );
   }
 
-  Widget _buildStatePreviewChips() {
-    return Container(
-      width: double.infinity,
-      color: AppColors.surfaceCardLow.withValues(alpha: 0.6),
-      padding: const EdgeInsets.symmetric(vertical: 6, horizontal: 10),
-      child: SingleChildScrollView(
-        scrollDirection: Axis.horizontal,
-        child: Row(
-          children: [
-            Text('Xem thử: ', style: AppTextStyles.bodySm.copyWith(color: AppColors.textMuted, fontSize: 11)),
-            _buildSimulatorChip('AI Đang Nói', VivaVoiceState.aiSpeaking),
-            _buildSimulatorChip('Thí Sinh Trả Lời', VivaVoiceState.listening),
-            _buildSimulatorChip('AI Phản Biện (RAG)', VivaVoiceState.socraticProbing),
-          ],
-        ),
-      ),
-    );
-  }
-
-  Widget _buildSimulatorChip(String label, VivaVoiceState state) {
-    final isSelected = _voiceState == state;
-    return GestureDetector(
-      onTap: () {
-        setState(() {
-          _voiceState = state;
-          _isMicActive = (state == VivaVoiceState.listening);
-        });
-      },
-      child: Container(
-        margin: const EdgeInsets.only(left: 6),
-        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
-        decoration: BoxDecoration(
-          color: isSelected ? AppColors.primary : AppColors.surfaceCard,
-          borderRadius: BorderRadius.circular(10),
-          border: Border.all(color: isSelected ? AppColors.primaryLight : AppColors.borderGlass),
-        ),
-        child: Text(
-          label,
-          style: TextStyle(
-            fontSize: 11,
-            color: isSelected ? Colors.white : AppColors.textSecondary,
-            fontWeight: isSelected ? FontWeight.bold : FontWeight.normal,
-          ),
-        ),
-      ),
-    );
-  }
-
   Widget _buildHolographicPresenceOrb(VivaSessionProvider viva) {
-    OrbState orbState;
-    switch (_voiceState) {
-      case VivaVoiceState.aiSpeaking:
-        orbState = OrbState.aiSpeaking;
-        break;
-      case VivaVoiceState.listening:
-        orbState = OrbState.listening;
-        break;
-      case VivaVoiceState.socraticProbing:
-        orbState = OrbState.processing;
-        break;
-      case VivaVoiceState.completed:
-        orbState = OrbState.idle;
-        break;
-    }
-
     final dynamicLevel = viva.currentAudioLevel > 0.05
         ? viva.currentAudioLevel
-        : (_isMicActive ? _audioInputLevel : 0.6);
+        : (viva.isRecording ? 0.45 : 0.25);
 
     return Center(
       child: AudioPulseOrb(
-        state: orbState,
+        state: viva.orbState,
         audioLevel: dynamicLevel,
         size: 132,
       ),
     );
   }
 
-  /// Badge trạng thái giọng nói chống tràn layout (Fix 17px overflow)
-  Widget _buildVoiceStatusBadge() {
+  /// Badge trạng thái giọng nói chống tràn layout
+  Widget _buildVoiceStatusBadge(VivaVoiceState vs) {
     String text;
     Color color;
     IconData icon;
 
-    switch (_voiceState) {
+    switch (vs) {
       case VivaVoiceState.aiSpeaking:
         text = 'Giám khảo AI đang xướng câu hỏi qua giọng nói...';
         color = AppColors.secondaryLight;
@@ -607,7 +458,9 @@ class _VivaRoomScreenState extends State<VivaRoomScreen> with TickerProviderStat
     );
   }
 
-  Widget _buildQuestionCard(Map<String, dynamic> q, bool isAdaptive) {
+  Widget _buildQuestionCard(VivaQuestionModel q, bool isAdaptive) {
+    final tags = q.topicTags.isNotEmpty ? q.topicTags : ['#${widget.exam.courseCode}', '#VivaExam'];
+
     return GlassCard(
       padding: const EdgeInsets.all(16),
       borderRadius: 16,
@@ -635,14 +488,14 @@ class _VivaRoomScreenState extends State<VivaRoomScreen> with TickerProviderStat
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     Text(
-                      isAdaptive ? 'Giám Khảo AI • Hỏi Xoáy Socratic (RAG)' : 'Giám Khảo AI • Câu Hỏi #${q['questionNumber']}',
+                      isAdaptive ? 'Giám Khảo AI • Hỏi Xoáy Socratic (RAG)' : 'Giám Khảo AI • Câu Hỏi #${q.questionNumber}',
                       style: AppTextStyles.labelBold.copyWith(
                         color: isAdaptive ? AppColors.primaryLight : Colors.white,
                         fontSize: 13.5,
                       ),
                     ),
                     Text(
-                      'Mức độ Bloom: ${q['bloomLevel']}',
+                      'Mức độ Bloom: ${q.bloomLevel}',
                       style: AppTextStyles.bodySm.copyWith(color: AppColors.textMuted, fontSize: 11),
                     ),
                   ],
@@ -665,7 +518,7 @@ class _VivaRoomScreenState extends State<VivaRoomScreen> with TickerProviderStat
           ),
           const SizedBox(height: 14),
           Text(
-            q['content'],
+            q.content.isNotEmpty ? q.content : 'Chào mừng bạn đến với ca thi vấn đáp trực tuyến AIVES.',
             style: AppTextStyles.headlineMd.copyWith(
               fontSize: 15,
               fontWeight: FontWeight.w600,
@@ -677,7 +530,7 @@ class _VivaRoomScreenState extends State<VivaRoomScreen> with TickerProviderStat
           Wrap(
             spacing: 6,
             runSpacing: 4,
-            children: (q['tags'] as List? ?? ['#VivaExam']).map<Widget>((t) {
+            children: tags.map<Widget>((t) {
               return Container(
                 padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2.5),
                 decoration: BoxDecoration(
@@ -686,7 +539,7 @@ class _VivaRoomScreenState extends State<VivaRoomScreen> with TickerProviderStat
                   border: Border.all(color: AppColors.borderGlass),
                 ),
                 child: Text(
-                  t.toString(),
+                  t,
                   style: AppTextStyles.bodySm.copyWith(fontSize: 10.5, color: AppColors.textMuted),
                 ),
               );
@@ -697,8 +550,7 @@ class _VivaRoomScreenState extends State<VivaRoomScreen> with TickerProviderStat
     );
   }
 
-  Widget _buildLiveConversationBubbles(Map<String, dynamic> q, VivaSessionProvider viva) {
-    // Nếu có transcript thời gian thực từ viva-ai-v2, ưu tiên hiển thị
+  Widget _buildLiveConversationBubbles(VivaQuestionModel q, VivaSessionProvider viva) {
     final liveTranscripts = viva.transcripts;
 
     if (liveTranscripts.isNotEmpty) {
@@ -795,7 +647,7 @@ class _VivaRoomScreenState extends State<VivaRoomScreen> with TickerProviderStat
             color: AppColors.surfaceCardLow,
             borderRadius: BorderRadius.circular(16),
             border: Border.all(
-              color: _voiceState == VivaVoiceState.aiSpeaking
+              color: viva.sessionState == VivaSessionState.aiSpeaking
                   ? AppColors.primaryGlow.withValues(alpha: 0.5)
                   : AppColors.borderGlass,
             ),
@@ -817,7 +669,7 @@ class _VivaRoomScreenState extends State<VivaRoomScreen> with TickerProviderStat
                   const SizedBox(width: 8),
                   Text('Lời Giám khảo AI xướng thoại', style: AppTextStyles.labelBold.copyWith(fontSize: 12)),
                   const Spacer(),
-                  if (_voiceState == VivaVoiceState.aiSpeaking)
+                  if (viva.sessionState == VivaSessionState.aiSpeaking)
                     VoiceWaveVisualizer(
                       isActive: true,
                       level: 0.7,
@@ -829,10 +681,10 @@ class _VivaRoomScreenState extends State<VivaRoomScreen> with TickerProviderStat
               ),
               const SizedBox(height: 8),
               Text(
-                q['aiSpeakerText'] ?? q['content'],
+                q.content.isNotEmpty ? q.content : 'Giám khảo AI đang kết nối và chuẩn bị câu hỏi...',
                 style: AppTextStyles.bodyMd.copyWith(
                   fontSize: 13,
-                  color: _voiceState == VivaVoiceState.aiSpeaking ? Colors.white : AppColors.textSecondary,
+                  color: viva.sessionState == VivaSessionState.aiSpeaking ? Colors.white : AppColors.textSecondary,
                   height: 1.45,
                 ),
               ),
@@ -848,7 +700,7 @@ class _VivaRoomScreenState extends State<VivaRoomScreen> with TickerProviderStat
             color: AppColors.surfaceCard,
             borderRadius: BorderRadius.circular(16),
             border: Border.all(
-              color: _isMicActive ? AppColors.tertiary.withValues(alpha: 0.6) : AppColors.borderGlass,
+              color: viva.isRecording ? AppColors.tertiary.withValues(alpha: 0.6) : AppColors.borderGlass,
             ),
           ),
           child: Column(
@@ -864,7 +716,7 @@ class _VivaRoomScreenState extends State<VivaRoomScreen> with TickerProviderStat
                   const SizedBox(width: 8),
                   Text('Thí sinh (Bạn phát biểu)', style: AppTextStyles.labelBold.copyWith(fontSize: 12)),
                   const Spacer(),
-                  if (_isMicActive)
+                  if (viva.isRecording)
                     Row(
                       children: [
                         Container(
@@ -883,13 +735,13 @@ class _VivaRoomScreenState extends State<VivaRoomScreen> with TickerProviderStat
               ),
               const SizedBox(height: 8),
               Text(
-                _isMicActive
+                viva.isRecording
                     ? 'Em đang trả lời câu hỏi... (Nói vào microphone của máy để ghi nhận trực tiếp)'
-                    : (q['studentReplyText'] ?? 'Nhấn vào biểu tượng Micro bên dưới để bắt đầu trả lời.'),
+                    : 'Nhấn vào biểu tượng Micro bên dưới để bắt đầu trả lời.',
                 style: AppTextStyles.bodyMd.copyWith(
                   fontSize: 13,
-                  color: _isMicActive ? AppColors.tertiary : AppColors.textSecondary,
-                  fontStyle: _isMicActive ? FontStyle.italic : FontStyle.normal,
+                  color: viva.isRecording ? AppColors.tertiary : AppColors.textSecondary,
+                  fontStyle: viva.isRecording ? FontStyle.italic : FontStyle.normal,
                   height: 1.45,
                 ),
               ),
@@ -900,8 +752,8 @@ class _VivaRoomScreenState extends State<VivaRoomScreen> with TickerProviderStat
     );
   }
 
-  Widget _buildBottomControlDeck() {
-    final viva = context.watch<VivaSessionProvider>();
+  Widget _buildBottomControlDeck(VivaSessionProvider viva) {
+    final isMicActive = viva.isRecording || viva.sessionState == VivaSessionState.listening;
 
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
@@ -928,12 +780,11 @@ class _VivaRoomScreenState extends State<VivaRoomScreen> with TickerProviderStat
                 constraints: const BoxConstraints(minWidth: 44, minHeight: 44),
                 icon: const Icon(Icons.replay_rounded, size: 26, color: Colors.white70),
                 onPressed: () {
-                  setState(() => _voiceState = VivaVoiceState.aiSpeaking);
                   ScaffoldMessenger.of(context).showSnackBar(
                     const SnackBar(
                       backgroundColor: AppColors.primary,
-                      duration: Duration(milliseconds: 1500),
-                      content: Text('Giám khảo AI đang xướng lại câu hỏi...'),
+                      duration: Duration(milliseconds: 2000),
+                      content: Text('Bạn có thể nói "Xin giám khảo nhắc lại câu hỏi" qua micro để AI đọc lại.'),
                     ),
                   );
                 },
@@ -950,7 +801,7 @@ class _VivaRoomScreenState extends State<VivaRoomScreen> with TickerProviderStat
               height: 74,
               decoration: BoxDecoration(
                 shape: BoxShape.circle,
-                gradient: (viva.isRecording || _isMicActive)
+                gradient: isMicActive
                     ? const LinearGradient(
                         colors: [AppColors.secondary, AppColors.primary],
                         begin: Alignment.topLeft,
@@ -959,14 +810,14 @@ class _VivaRoomScreenState extends State<VivaRoomScreen> with TickerProviderStat
                     : AppColors.primaryGradient,
                 boxShadow: [
                   BoxShadow(
-                    color: ((viva.isRecording || _isMicActive) ? AppColors.tertiary : AppColors.primary).withValues(alpha: 0.65),
-                    blurRadius: (viva.isRecording || _isMicActive) ? 24 : 14,
-                    spreadRadius: (viva.isRecording || _isMicActive) ? 3 : 0,
+                    color: (isMicActive ? AppColors.tertiary : AppColors.primary).withValues(alpha: 0.65),
+                    blurRadius: isMicActive ? 24 : 14,
+                    spreadRadius: isMicActive ? 3 : 0,
                   ),
                 ],
               ),
               child: Icon(
-                (viva.isRecording || _isMicActive) ? Icons.mic_rounded : Icons.mic_none_rounded,
+                isMicActive ? Icons.mic_rounded : Icons.mic_none_rounded,
                 size: 34,
                 color: Colors.white,
               ),
@@ -981,7 +832,7 @@ class _VivaRoomScreenState extends State<VivaRoomScreen> with TickerProviderStat
                 padding: EdgeInsets.zero,
                 constraints: const BoxConstraints(minWidth: 44, minHeight: 44),
                 icon: const Icon(Icons.send_rounded, size: 26, color: AppColors.primaryLight),
-                onPressed: _voiceState == VivaVoiceState.socraticProbing ? null : _submitCurrentAnswer,
+                onPressed: viva.sessionState == VivaSessionState.processing ? null : _submitCurrentAnswer,
               ),
               Text('Nộp câu', style: AppTextStyles.bodySm.copyWith(fontSize: 11)),
             ],
