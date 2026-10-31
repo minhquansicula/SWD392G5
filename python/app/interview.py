@@ -1,4 +1,5 @@
 import json
+import logging
 from contextlib import asynccontextmanager
 from datetime import UTC, datetime
 from uuid import UUID
@@ -19,6 +20,8 @@ from app.models import (
 from app.prompts import GRADE_SYSTEM
 from app.schemas import GradeDraft
 
+logger = logging.getLogger(__name__)
+
 
 def encode(value) -> str:
     return json.dumps(value, ensure_ascii=False, default=str)
@@ -36,32 +39,28 @@ def transcript_dict(transcript: Transcript) -> dict:
     }
 
 
-def validate_report(draft: GradeDraft, rubric: dict, user_texts: dict[str, str]) -> dict:
+def clamp_score(value: float) -> float:
+    return max(0.0, min(10.0, float(value)))
+
+
+def validate_report(draft: GradeDraft, rubric: dict, question_ids: list[str]) -> dict:
+    """Chuẩn hóa kết quả AI; tiêu chí hoặc câu hỏi AI không chấm được giữ là chưa đánh giá, không tự gán điểm."""
     criteria = {c["id"]: c for c in rubric.get("criteria", [])}
     grades = {g.criterion_id: g for g in (draft.criteria or [])}
     results, total = [], 0.0
 
-    sample_quote = next(iter(user_texts.values()), "Thí sinh đã tham gia phỏng vấn.") if user_texts else ""
-
     for key, criterion in criteria.items():
         grade = grades.get(key)
         if not grade:
-            score = 5.0
-            rationale = "Tiêu chí được đánh giá tổng hợp từ nội dung buổi thi."
-            improvement = "Cần trình bày chi tiết và rõ ràng hơn."
-            evidence = [{"quote": sample_quote[:200]}] if sample_quote else []
-        else:
-            score = max(0.0, min(10.0, float(grade.score)))
-            rationale = grade.rationale or "Đã đối chiếu với nội dung phỏng vấn."
-            improvement = grade.improvement or "Tiếp tục trau dồi kiến thức thực tế."
+            score = 0.0
+            rationale = "Chưa đủ dữ liệu để đánh giá tiêu chí này."
+            improvement = ""
             evidence = []
-            if grade.evidence:
-                for ev in grade.evidence:
-                    quote = (ev.quote or "").strip()
-                    if quote:
-                        evidence.append({"quote": quote})
-            if not evidence and sample_quote:
-                evidence.append({"quote": sample_quote[:200]})
+        else:
+            score = clamp_score(grade.score)
+            rationale = grade.rationale
+            improvement = grade.improvement
+            evidence = [{"quote": ev.quote} for ev in grade.evidence if ev.quote]
 
         weighted = score * criterion["weight"] / 100
         total += weighted
@@ -75,15 +74,29 @@ def validate_report(draft: GradeDraft, rubric: dict, user_texts: dict[str, str])
                 "rationale": rationale,
                 "improvement": improvement,
                 "evidence": evidence,
-                "assessed": True,
+                "assessed": grade is not None,
+            }
+        )
+
+    question_grades = {q.question_id: q for q in (draft.questions or [])}
+    questions = []
+    for question_id in question_ids:
+        grade = question_grades.get(question_id)
+        questions.append(
+            {
+                "question_id": question_id,
+                "answered": grade.answered if grade else None,
+                "score": None if not grade else round(clamp_score(grade.score), 1) if grade.answered else 0.0,
+                "feedback": (grade.feedback or None) if grade else None,
             }
         )
     return {
         "criteria": results,
+        "questions": questions,
         "total_score": round(total, 2),
         "scale": 10,
         "summary": draft.summary or "Buổi phỏng vấn đã được tổng hợp và chấm điểm.",
-        "assessed_criteria": len(results),
+        "assessed_criteria": sum(1 for r in results if r["assessed"]),
     }
 
 
@@ -161,11 +174,15 @@ class InterviewService:
                 ],
                 "transcripts": [transcript_dict(t) for t in transcripts],
                 "voice_state": voice_session.state if voice_session else None,
+                "ai_report": schedule.ai_report,
                 "results": [
                     {
                         "question_id": str(r.question_id),
                         "ai_score": float(r.ai_score) if r.ai_score is not None else None,
                         "ai_feedback": r.ai_feedback,
+                        "max_score": float(r.max_score) if r.max_score is not None else 10.0,
+                        "lecturer_score": float(r.lecturer_score) if r.lecturer_score is not None else None,
+                        "lecturer_feedback": r.lecturer_feedback,
                     }
                     for r in results
                 ],
@@ -228,95 +245,95 @@ class InterviewService:
                     ).all()
                 )
 
-                student_transcripts = [t for t in transcripts if t.role == "STUDENT"]
-                if not student_transcripts:
-                    schedule.final_score = 0.0
-                    schedule.status = "COMPLETED"
-                    schedule.actual_end_time = datetime.now(UTC)
+                assigned = list(
+                    (
+                        await db.scalars(
+                            select(AssignedQuestion)
+                            .where(AssignedQuestion.exam_schedule_id == schedule_id)
+                            .order_by(AssignedQuestion.question_order)
+                        )
+                    ).all()
+                )
+                question_ids = [str(q.question_id) for q in assigned]
+
+                report = None
+                if not any(t.role == "STUDENT" for t in transcripts):
+                    report = validate_report(
+                        GradeDraft(
+                            questions=[{"question_id": qid, "answered": False} for qid in question_ids],
+                            summary="Thí sinh kết thúc ca thi khi chưa trả lời câu hỏi nào.",
+                        ),
+                        rubric_data,
+                        question_ids,
+                    )
+                else:
+                    # Chuẩn bị dữ liệu gửi cho LLM chấm
+                    eval_payload = encode(
+                        {
+                            "rubric_snapshot": rubric_data,
+                            "exam_title": exam.title,
+                            "assigned_questions": [
+                                {"question_id": str(q.question_id), "order": q.question_order, "content": q.content_snapshot}
+                                for q in assigned
+                            ],
+                            "transcript": [
+                                {
+                                    "id": str(t.id),
+                                    "role": t.role,
+                                    "question_id": str(t.question_id) if t.question_id else None,
+                                    "text": t.text_content,
+                                }
+                                for t in transcripts
+                            ],
+                        }
+                    )
+                    for attempt in range(2):
+                        try:
+                            draft = await self.gateway.structured(
+                                GradeDraft, GRADE_SYSTEM, eval_payload, model=self.settings.gemini_model
+                            )
+                            report = validate_report(draft, rubric_data, question_ids)
+                            break
+                        except Exception:
+                            logger.warning("AI grading attempt %s failed for schedule %s", attempt + 1, schedule_id, exc_info=True)
+
+                schedule.status = "COMPLETED"
+                schedule.actual_end_time = datetime.now(UTC)
+                if report is None:
+                    # Không bịa điểm khi AI lỗi; giữ kết quả cũ (nếu có) để có thể gọi chấm lại.
                     await db.commit()
                     return {
                         "schedule_id": str(schedule_id),
                         "exam_title": exam.title,
-                        "final_score": 0.0,
+                        "final_score": float(schedule.final_score) if schedule.final_score is not None else None,
                         "status": "COMPLETED",
-                        "total_score": 0.0,
+                        "total_score": None,
                         "scale": 10,
-                        "summary": "Thí sinh kết thúc ca thi khi chưa trả lời câu hỏi nào.",
+                        "summary": "Giám khảo AI chưa chấm được bài thi. Vui lòng thử chấm lại sau.",
                         "criteria": [],
+                        "questions": [],
                         "assessed_criteria": 0,
+                        "grading_failed": True,
                     }
 
-                user_texts = {str(t.id): t.text_content for t in student_transcripts}
-
-                # Chuẩn bị dữ liệu gửi cho LLM chấm
-                eval_payload = encode(
-                    {
-                        "rubric_snapshot": rubric_data,
-                        "exam_title": exam.title,
-                        "transcript": [
-                            {"id": str(t.id), "role": t.role, "text": t.text_content}
-                            for t in transcripts
-                        ],
-                    }
-                )
-
-                report = None
-                for attempt in range(2):
-                    try:
-                        draft = await self.gateway.structured(
-                            GradeDraft, GRADE_SYSTEM, eval_payload, model=self.settings.gemini_model
-                        )
-                        report = validate_report(draft, rubric_data, user_texts)
-                        break
-                    except Exception as exc:
-                        if attempt:
-                            report = validate_report(
-                                GradeDraft(criteria=[], summary="Giám khảo AI hoàn tất ghi nhận các câu trả lời vấn đáp của thí sinh."),
-                                rubric_data,
-                                user_texts,
-                            )
-                            break
-
-                # Ghi điểm vào các câu hỏi chính (assigned_questions)
-                assigned = list(
-                    (
-                        await db.scalars(
-                            select(AssignedQuestion).where(
-                                AssignedQuestion.exam_schedule_id == schedule_id
-                            )
-                        )
+                graded_at = datetime.now(UTC)
+                existing = {
+                    r.question_id: r
+                    for r in (
+                        await db.scalars(select(QuestionResult).where(QuestionResult.exam_schedule_id == schedule_id))
                     ).all()
-                )
+                }
+                for q, grade in zip(assigned, report["questions"]):
+                    result = existing.get(q.question_id)
+                    if not result:
+                        result = QuestionResult(exam_schedule_id=schedule_id, question_id=q.question_id, max_score=10.0)
+                        db.add(result)
+                    result.ai_score = grade["score"]
+                    result.ai_feedback = grade["feedback"]
+                    result.graded_at = graded_at
 
-                # Lưu vào bảng question_results
-                score_per_question = round(report["total_score"], 2)
-                for q in assigned:
-                    existing_result = await db.scalar(
-                        select(QuestionResult).where(
-                            QuestionResult.exam_schedule_id == schedule_id,
-                            QuestionResult.question_id == q.question_id,
-                        )
-                    )
-                    if existing_result:
-                        existing_result.ai_score = score_per_question
-                        existing_result.ai_feedback = report["summary"]
-                        existing_result.graded_at = datetime.now(UTC)
-                    else:
-                        db.add(
-                            QuestionResult(
-                                exam_schedule_id=schedule_id,
-                                question_id=q.question_id,
-                                ai_score=score_per_question,
-                                ai_feedback=report["summary"],
-                                max_score=10.0,
-                                graded_at=datetime.now(UTC),
-                            )
-                        )
-
-                # Cập nhật bảng exam_schedules
                 schedule.final_score = report["total_score"]
-                schedule.status = "COMPLETED"
-                schedule.actual_end_time = datetime.now(UTC)
+                schedule.ai_report = {k: v for k, v in report.items() if k != "questions"}
                 await db.commit()
 
                 return report | {
