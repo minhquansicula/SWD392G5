@@ -65,6 +65,7 @@ class ExamSchedule(Base):
     scheduled_end_time: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     status: Mapped[str] = mapped_column(String(50), default="PENDING")
     final_score: Mapped[float | None] = mapped_column(Numeric(5, 2), nullable=True)
+    ai_report: Mapped[dict | None] = mapped_column(JSONB, nullable=True)
     is_connected: Mapped[bool] = mapped_column(default=False)
     full_recording_url: Mapped[str | None] = mapped_column(String(500), nullable=True)
     graded_by: Mapped[UUID | None] = mapped_column(nullable=True)

@@ -41,8 +41,16 @@ class CriterionGrade(StrictModel):
     improvement: str = ""
 
 
+class QuestionGrade(StrictModel):
+    question_id: str
+    answered: bool = True
+    score: float = 0.0
+    feedback: str = ""
+
+
 class GradeDraft(StrictModel):
     criteria: list[CriterionGrade] = Field(default_factory=list)
+    questions: list[QuestionGrade] = Field(default_factory=list)
     summary: str = ""
 
 

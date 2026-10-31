@@ -80,6 +80,7 @@ CREATE TABLE "exam_schedules" (
     "scheduled_end_time" timestamp with time zone NOT NULL,
     "status" varchar(50) DEFAULT 'PENDING',
     "final_score" numeric(5, 2),
+    "ai_report" jsonb,
     "is_connected" boolean DEFAULT false,
     "full_recording_url" varchar(500),
     "graded_by" uuid REFERENCES "users"("id") ON DELETE SET NULL,

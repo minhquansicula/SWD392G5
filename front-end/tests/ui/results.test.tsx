@@ -5,6 +5,7 @@ import { ResultAnalyticsView } from '../../src/components/analytics/ResultAnalyt
 import { studentExamService } from '../../src/services/studentExamService';
 import { lecturerExamService } from '../../src/services/lecturerExamService';
 import { getSessionDetail } from '../../src/services/aiService';
+import { reportService } from '../../src/services/reportService';
 import type { ExamScheduleDto } from '../../src/types/examApi';
 import type { SessionDetail } from '../../src/services/aiService';
 import { deferred } from './helpers';
@@ -12,6 +13,7 @@ import { deferred } from './helpers';
 vi.mock('../../src/services/studentExamService', () => ({ studentExamService: { mySchedules: vi.fn() } }));
 vi.mock('../../src/services/lecturerExamService', () => ({ lecturerExamService: { list: vi.fn(), detail: vi.fn(), schedules: vi.fn() } }));
 vi.mock('../../src/services/aiService', () => ({ getSessionDetail: vi.fn() }));
+vi.mock('../../src/services/reportService', () => ({ reportService: { examReport: vi.fn(), gradebook: vi.fn() } }));
 vi.mock('recharts', () => ({ Bar: () => null, BarChart: () => null, CartesianGrid: () => null, ResponsiveContainer: () => null, Tooltip: () => null, XAxis: () => null, YAxis: () => null }));
 const user = { id: 'student', fullName: 'Student', email: 'a@example.com', role: 'STUDENT', studentCode: 'SE001', createdAt: '' } as const;
 const schedule = (id: string, finalScore: number | null = null) => ({ id, examId: 'exam', examTitle: `Exam ${id}`, status: 'COMPLETED', finalScore, assignedQuestionCount: 1, courseCode: 'SWD392', courseName: 'Architecture', scheduledStartTime: null, scheduledEndTime: null, actualStartTime: null, actualEndTime: null, student: null }) as ExamScheduleDto;
@@ -74,5 +76,29 @@ describe('results exceptions and data integrity', () => {
   it('lecturer schedule API failure remains an actionable error', async () => {
     vi.mocked(lecturerExamService.schedules).mockRejectedValue(new Error('Forbidden')); mount('/analytics', 'LECTURER');
     await waitFor(() => expect(screen.getByRole('alert').textContent).toContain('Forbidden'));
+  });
+  it('shows the rubric grade sheet in the school layout and hides unassessed marks', async () => {
+    vi.mocked(getSessionDetail).mockImplementation(async id => ({ ...session(id), ai_report: { total_score: 8.7, scale: 10, summary: 'Tổng kết AI.', assessed_criteria: 1, criteria: [
+      { criterion_id: 'a', name: 'Attitude', weight: 30, score: 10, weighted_score: 3, rationale: 'Chủ động.', improvement: '', evidence: [], assessed: true },
+      { criterion_id: 's', name: 'Soft Skills', weight: 70, score: 0, weighted_score: 0, rationale: 'Chưa đủ dữ liệu.', improvement: '', evidence: [], assessed: false },
+    ] } }));
+    mount();
+    expect(await screen.findByText('Status: Passed')).toBeTruthy();
+    expect(screen.getByText('Chủ động.')).toBeTruthy();
+    expect(screen.getByText('Tổng kết AI.')).toBeTruthy();
+    const softRow = screen.getAllByText('Soft Skills')[1].closest('tr')!;
+    expect(softRow.children[3].textContent).toBe('-');
+  });
+  it('lecturer analytics lists hardest questions with good-answer rates', async () => {
+    vi.mocked(reportService.examReport).mockResolvedValue({ goodAnswerScore: 7, goodAnswerRate: 0.25, questions: [
+      { questionId: 'q2', content: 'Giải thích JPA N+1', topic: 'JPA', difficulty: 'HARD', assignedCount: 2, gradedCount: 1, averageScore: 4, goodAnswerRate: 0 },
+      { questionId: 'q1', content: 'DI là gì', topic: 'DI', difficulty: 'EASY', assignedCount: 2, gradedCount: 0, averageScore: null, goodAnswerRate: null },
+    ] });
+    mount('/analytics?tab=class', 'LECTURER');
+    const hardest = (await screen.findByText('Giải thích JPA N+1')).closest('tr')!;
+    expect(hardest.textContent).toContain('1/2');
+    expect(hardest.textContent).toContain('0%');
+    expect(screen.getByText('DI là gì').closest('tr')!.textContent).toContain('—');
+    expect(screen.getByText(/Tỷ lệ trả lời tốt toàn kỳ thi: 25%/)).toBeTruthy();
   });
 });
