@@ -260,7 +260,8 @@ INSERT INTO "exams" (
 -- ==============================================================================
 INSERT INTO "exam_schedules" (
     "id", "exam_id", "student_id", "scheduled_start_time", "scheduled_end_time",
-    "status", "final_score", "is_connected", "graded_by"
+    "status", "final_score", "lecturer_total_score", "lecturer_total_pending",
+    "is_connected", "graded_by", "actual_start_time", "actual_end_time", "ai_report"
 ) VALUES
 -- Ca thi 1: Dành cho sinh viên mẫu student@aives.edu.vn (ĐANG DIỄN RA NGAY LÚC NÀY)
 (
@@ -271,7 +272,12 @@ INSERT INTO "exam_schedules" (
     CURRENT_TIMESTAMP + INTERVAL '105 minutes',
     'PENDING',
     NULL,
+    NULL,
     false,
+    false,
+    NULL,
+    NULL,
+    NULL,
     NULL
 ),
 -- Ca thi 2: Dành cho tài khoản cá nhân hoangma.se200043@gmail.com (ĐANG DIỄN RA NGAY LÚC NÀY)
@@ -283,10 +289,15 @@ INSERT INTO "exam_schedules" (
     CURRENT_TIMESTAMP + INTERVAL '105 minutes',
     'PENDING',
     NULL,
+    NULL,
     false,
+    false,
+    NULL,
+    NULL,
+    NULL,
     NULL
 ),
--- Ca thi 3: Ca thi đã hoàn tất có điểm để test màn hình Báo cáo & Bảng điểm
+-- Ca thi 3: Ca thi đã hoàn tất cho student@aives.edu.vn (có điểm & báo cáo để test Báo cáo / Bảng điểm)
 (
     '40000000-0000-0000-0000-000000000003',
     '30000000-0000-0000-0000-000000000002',
@@ -295,8 +306,50 @@ INSERT INTO "exam_schedules" (
     CURRENT_TIMESTAMP - INTERVAL '2 days' + INTERVAL '45 minutes',
     'COMPLETED',
     8.85,
+    8.85,
     false,
-    'b0000000-0000-0000-0000-000000000001'
+    false,
+    'b0000000-0000-0000-0000-000000000001',
+    CURRENT_TIMESTAMP - INTERVAL '2 days',
+    CURRENT_TIMESTAMP - INTERVAL '2 days' + INTERVAL '40 minutes',
+    jsonb_build_object(
+        'total_score', 8.85,
+        'scale', 10,
+        'summary', 'Thí sinh trả lời lưu loát, nắm chắc nguyên lý SOLID và phân tích tốt kiến trúc phần mềm.',
+        'assessed_criteria', 3,
+        'criteria', jsonb_build_array(
+            jsonb_build_object('criterion_id', 'concept', 'name', 'Kiến thức cốt lõi', 'weight', 40, 'score', 9.0, 'assessed', true, 'rationale', 'Nắm vững nguyên lý SRP và thiết kế hướng đối tượng.', 'improvement', ''),
+            jsonb_build_object('criterion_id', 'analysis', 'name', 'Phân tích kiến trúc', 'weight', 30, 'score', 8.5, 'assessed', true, 'rationale', 'So sánh rõ ràng giữa Monolith và Microservices.', 'improvement', ''),
+            jsonb_build_object('criterion_id', 'communication', 'name', 'Phản xạ và diễn đạt', 'weight', 30, 'score', 9.0, 'assessed', true, 'rationale', 'Trả lời tự tin, mạch lạc.', 'improvement', '')
+        )
+    )
+),
+-- Ca thi 4: Ca thi đã hoàn tất cho hoangma.se200043@gmail.com (có điểm & báo cáo để test trực tiếp trên Mobile)
+(
+    '40000000-0000-0000-0000-000000000004',
+    '30000000-0000-0000-0000-000000000002',
+    'c0000000-0000-0000-0000-000000000002',
+    CURRENT_TIMESTAMP - INTERVAL '2 days',
+    CURRENT_TIMESTAMP - INTERVAL '2 days' + INTERVAL '45 minutes',
+    'COMPLETED',
+    8.50,
+    8.50,
+    false,
+    false,
+    'b0000000-0000-0000-0000-000000000001',
+    CURRENT_TIMESTAMP - INTERVAL '2 days',
+    CURRENT_TIMESTAMP - INTERVAL '2 days' + INTERVAL '42 minutes',
+    jsonb_build_object(
+        'total_score', 8.50,
+        'scale', 10,
+        'summary', 'Thí sinh nắm chắc kiến thức cơ bản, xử lý tốt câu hỏi phản biện của AI Examiner.',
+        'assessed_criteria', 3,
+        'criteria', jsonb_build_array(
+            jsonb_build_object('criterion_id', 'concept', 'name', 'Kiến thức cốt lõi', 'weight', 40, 'score', 8.5, 'assessed', true, 'rationale', 'Nắm vững các nguyên lý thiết kế.', 'improvement', ''),
+            jsonb_build_object('criterion_id', 'analysis', 'name', 'Phân tích kiến trúc', 'weight', 30, 'score', 8.5, 'assessed', true, 'rationale', 'Phân tích tốt các ca sử dụng.', 'improvement', ''),
+            jsonb_build_object('criterion_id', 'communication', 'name', 'Phản xạ và diễn đạt', 'weight', 30, 'score', 8.5, 'assessed', true, 'rationale', 'Trình bày trôi chảy.', 'improvement', '')
+        )
+    )
 );
 
 -- ==============================================================================
@@ -327,7 +380,7 @@ INSERT INTO "assigned_questions" ("id", "exam_schedule_id", "question_id", "ques
     'Phân tích định lý CAP trong hệ thống phân tán. Giải thích cách mẫu thiết kế Saga Pattern (Choreography vs Orchestration) giải quyết bài toán giao dịch phân tán và xử lý bồi hoàn (Compensating Transaction) khi xảy ra sự cố thanh toán.'
 );
 
--- Gán cho Ca thi 2 (hoangma.se200043@gmail.com)
+-- Gán cho Ca thi 2 (hoangma.se200043@gmail.com - Đang diễn ra)
 INSERT INTO "assigned_questions" ("id", "exam_schedule_id", "question_id", "question_order", "content_snapshot") VALUES
 (
     '50000000-0000-0000-0000-000000000004',
@@ -351,8 +404,56 @@ INSERT INTO "assigned_questions" ("id", "exam_schedule_id", "question_id", "ques
     'Phân tích định lý CAP trong hệ thống phân tán. Giải thích cách mẫu thiết kế Saga Pattern (Choreography vs Orchestration) giải quyết bài toán giao dịch phân tán và xử lý bồi hoàn (Compensating Transaction) khi xảy ra sự cố thanh toán.'
 );
 
+-- Gán cho Ca thi 3 (student@aives.edu.vn - Đã hoàn tất)
+INSERT INTO "assigned_questions" ("id", "exam_schedule_id", "question_id", "question_order", "content_snapshot") VALUES
+(
+    '50000000-0000-0000-0000-000000000007',
+    '40000000-0000-0000-0000-000000000003',
+    '20000000-0000-0000-0000-000000000001',
+    1,
+    'Trình bày 5 nguyên lý thiết kế SOLID trong lập trình hướng đối tượng. Hãy giải thích chi tiết nguyên lý Đơn trách nhiệm (Single Responsibility Principle) và cách áp dụng trong kiến trúc phân lớp Clean Architecture.'
+),
+(
+    '50000000-0000-0000-0000-000000000008',
+    '40000000-0000-0000-0000-000000000003',
+    '20000000-0000-0000-0000-000000000002',
+    2,
+    'So sánh sự khác biệt giữa kiến trúc Monolithic và Microservices. Khi xây dựng một sàn thương mại điện tử lớn, bạn sẽ lựa chọn kiến trúc nào và phân chia các bounded context như thế nào?'
+),
+(
+    '50000000-0000-0000-0000-000000000009',
+    '40000000-0000-0000-0000-000000000003',
+    '20000000-0000-0000-0000-000000000003',
+    3,
+    'Phân tích định lý CAP trong hệ thống phân tán. Giải thích cách mẫu thiết kế Saga Pattern (Choreography vs Orchestration) giải quyết bài toán giao dịch phân tán và xử lý bồi hoàn (Compensating Transaction) khi xảy ra sự cố thanh toán.'
+);
+
+-- Gán cho Ca thi 4 (hoangma.se200043@gmail.com - Đã hoàn tất)
+INSERT INTO "assigned_questions" ("id", "exam_schedule_id", "question_id", "question_order", "content_snapshot") VALUES
+(
+    '50000000-0000-0000-0000-000000000010',
+    '40000000-0000-0000-0000-000000000004',
+    '20000000-0000-0000-0000-000000000001',
+    1,
+    'Trình bày 5 nguyên lý thiết kế SOLID trong lập trình hướng đối tượng. Hãy giải thích chi tiết nguyên lý Đơn trách nhiệm (Single Responsibility Principle) và cách áp dụng trong kiến trúc phân lớp Clean Architecture.'
+),
+(
+    '50000000-0000-0000-0000-000000000011',
+    '40000000-0000-0000-0000-000000000004',
+    '20000000-0000-0000-0000-000000000002',
+    2,
+    'So sánh sự khác biệt giữa kiến trúc Monolithic và Microservices. Khi xây dựng một sàn thương mại điện tử lớn, bạn sẽ lựa chọn kiến trúc nào và phân chia các bounded context như thế nào?'
+),
+(
+    '50000000-0000-0000-0000-000000000012',
+    '40000000-0000-0000-0000-000000000004',
+    '20000000-0000-0000-0000-000000000003',
+    3,
+    'Phân tích định lý CAP trong hệ thống phân tán. Giải thích cách mẫu thiết kế Saga Pattern (Choreography vs Orchestration) giải quyết bài toán giao dịch phân tán và xử lý bồi hoàn (Compensating Transaction) khi xảy ra sự cố thanh toán.'
+);
+
 -- ==============================================================================
--- 9. DỮ LIỆU ĐÀM THOẠI & KẾT QUẢ MẪU (CHO CA THI 3 ĐÃ HOÀN TẤT)
+-- 9. DỮ LIỆU ĐÀM THOẠI & KẾT QUẢ MẪU (CHO CÁC CA THI ĐÃ HOÀN TẤT)
 -- ==============================================================================
 INSERT INTO "transcripts" (
     "id", "exam_schedule_id", "question_id", "role", "text_content", "transcript_type"
@@ -372,11 +473,29 @@ INSERT INTO "transcripts" (
     'STUDENT',
     'Thưa thầy cô và Giám khảo AI, nguyên lý Single Responsibility Principle phát biểu rằng một class chỉ nên đảm nhận một trách nhiệm duy nhất và chỉ có một lý do duy nhất để thay đổi. Ví dụ trong dự án phần mềm, lớp UserService chỉ nên phụ trách nghiệp vụ người dùng, không nên kiêm thêm việc gửi email hay xử lý log database.',
     'MAIN'
+),
+(
+    '60000000-0000-0000-0000-000000000003',
+    '40000000-0000-0000-0000-000000000004',
+    '20000000-0000-0000-0000-000000000001',
+    'AI',
+    'Chào Hoàng, bạn hãy trình bày nguyên lý SRP và cách triển khai trong Clean Architecture nhé.',
+    'MAIN'
+),
+(
+    '60000000-0000-0000-0000-000000000004',
+    '40000000-0000-0000-0000-000000000004',
+    '20000000-0000-0000-0000-000000000001',
+    'STUDENT',
+    'Em chào Giám khảo AI, theo nguyên lý SRP, mỗi module hoặc class chỉ nên có một lý do duy nhất để thay đổi. Trong Clean Architecture, Use Case chỉ đảm nhận 1 nghiệp vụ duy nhất.',
+    'MAIN'
 );
 
+-- Kết quả chấm điểm từng câu hỏi (Question Results)
 INSERT INTO "question_results" (
     "id", "exam_schedule_id", "question_id", "ai_score", "ai_feedback", "lecturer_score", "lecturer_feedback"
-) VALUES (
+) VALUES
+(
     '70000000-0000-0000-0000-000000000001',
     '40000000-0000-0000-0000-000000000003',
     '20000000-0000-0000-0000-000000000001',
@@ -384,4 +503,64 @@ INSERT INTO "question_results" (
     'Thí sinh nắm rất vững nguyên lý SRP, lấy ví dụ thực tế mạch lạc và đúng trọng tâm chuyên môn.',
     8.85,
     'Đồng ý với đánh giá của AI Examiner. Thí sinh trả lời tự tin.'
+),
+(
+    '70000000-0000-0000-0000-000000000002',
+    '40000000-0000-0000-0000-000000000003',
+    '20000000-0000-0000-0000-000000000002',
+    8.70,
+    'Phân tích tốt sự đánh đổi giữa Monolith và Microservices.',
+    8.85,
+    'Phân tích chặt chẽ.'
+),
+(
+    '70000000-0000-0000-0000-000000000003',
+    '40000000-0000-0000-0000-000000000003',
+    '20000000-0000-0000-0000-000000000003',
+    8.85,
+    'Giải thích đúng định lý CAP và Saga Pattern.',
+    8.85,
+    'Hiểu đúng bản chất transaction phân tán.'
+),
+(
+    '70000000-0000-0000-0000-000000000004',
+    '40000000-0000-0000-0000-000000000004',
+    '20000000-0000-0000-0000-000000000001',
+    8.50,
+    'Trình bày đúng trọng tâm nguyên lý SRP.',
+    8.50,
+    'Trả lời tốt.'
+),
+(
+    '70000000-0000-0000-0000-000000000005',
+    '40000000-0000-0000-0000-000000000004',
+    '20000000-0000-0000-0000-000000000002',
+    8.50,
+    'Phân tích kiến trúc rõ ràng.',
+    8.50,
+    'Đạt yêu cầu môn học.'
+),
+(
+    '70000000-0000-0000-0000-000000000006',
+    '40000000-0000-0000-0000-000000000004',
+    '20000000-0000-0000-0000-000000000003',
+    8.50,
+    'Hiểu cách áp dụng Saga pattern.',
+    8.50,
+    'Nắm chắc kiến thức.'
 );
+
+-- ==============================================================================
+-- 10. ĐIỂM TIÊU CHÍ & LỊCH SỬ CHẤM ĐIỂM CỦA GIẢNG VIÊN (LECTURER GRADING)
+-- ==============================================================================
+INSERT INTO "lecturer_criterion_grades" ("exam_schedule_id", "criterion_id", "score", "graded_by") VALUES
+('40000000-0000-0000-0000-000000000003', 'concept', 9.00, 'b0000000-0000-0000-0000-000000000001'),
+('40000000-0000-0000-0000-000000000003', 'analysis', 8.50, 'b0000000-0000-0000-0000-000000000001'),
+('40000000-0000-0000-0000-000000000003', 'communication', 9.00, 'b0000000-0000-0000-0000-000000000001'),
+('40000000-0000-0000-0000-000000000004', 'concept', 8.50, 'b0000000-0000-0000-0000-000000000001'),
+('40000000-0000-0000-0000-000000000004', 'analysis', 8.50, 'b0000000-0000-0000-0000-000000000001'),
+('40000000-0000-0000-0000-000000000004', 'communication', 8.50, 'b0000000-0000-0000-0000-000000000001');
+
+INSERT INTO "lecturer_grading_history" ("exam_schedule_id", "question_id", "lecturer_id", "lecturer_name", "old_score", "new_score", "old_feedback", "new_feedback") VALUES
+('40000000-0000-0000-0000-000000000003', '20000000-0000-0000-0000-000000000001', 'b0000000-0000-0000-0000-000000000001', 'TS. Nguyễn Văn An', 9.00, 8.85, 'Điểm sơ bộ AI', 'Đồng ý với đánh giá của AI Examiner. Thí sinh trả lời tự tin.'),
+('40000000-0000-0000-0000-000000000004', '20000000-0000-0000-0000-000000000001', 'b0000000-0000-0000-0000-000000000001', 'TS. Nguyễn Văn An', 8.50, 8.50, 'Điểm sơ bộ AI', 'Hoàn thành tốt phần thi vấn đáp.');
