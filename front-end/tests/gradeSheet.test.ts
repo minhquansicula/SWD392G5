@@ -37,6 +37,12 @@ test('workbook has a summary row per student and sheets only for graded students
   const workbook = buildGradebookWorkbook(meta, [graded, pending]);
   assert.deepEqual(workbook.SheetNames, ['Summary', 'SE1']);
   const summary = XLSX.utils.sheet_to_json<(string | number)[]>(workbook.Sheets.Summary, { header: 1 });
-  assert.deepEqual(summary[0], ['No', 'Student code', 'Full name', 'Email', 'Attitude (30%)', 'Soft Skills (70%)', 'Course total', 'Status']);
-  assert.deepEqual(summary[2], [2, 'SE1', 'Binh', '', '-', '-', '-', 'Not graded']);
+  assert.deepEqual(summary[0], ['No', 'Student code', 'Full name', 'Email', 'Attitude (30%)', 'Soft Skills (70%)', 'Course total', 'Status', 'Total source']);
+  assert.deepEqual(summary[2], [2, 'SE1', 'Binh', '', '-', '-', '-', 'Not graded', '-']);
+  const lecturerWorkbook = buildGradebookWorkbook(meta, [{ ...graded, finalScore: 9, lecturerTotalScore: 9 }]);
+  const lecturerSummary = XLSX.utils.sheet_to_json<(string | number)[]>(lecturerWorkbook.Sheets.Summary, { header: 1 });
+  assert.equal(lecturerSummary[1].at(-1), 'Lecturer');
+  assert.match(String(studentSheetRows(meta, { ...graded, lecturerTotalScore: 9 }).rows.at(-1)?.at(-1)), /lecturer total/);
+  const overridden = studentSheetRows(meta, { ...graded, criteria: [{ ...graded.criteria[0], lecturerScore: 0 }] });
+  assert.deepEqual(overridden.rows[5], ['Attitude', 'Attitude', 30, 0, 'Giáo viên cho điểm']);
 });

@@ -12,6 +12,7 @@ from app.models import (
     Course,
     Exam,
     ExamSchedule,
+    LecturerCriterionGrade,
     QuestionResult,
     Rubric,
     Transcript,
@@ -43,14 +44,24 @@ def clamp_score(value: float) -> float:
     return max(0.0, min(10.0, float(value)))
 
 
-def validate_report(draft: GradeDraft, rubric: dict, question_ids: list[str]) -> dict:
+def validate_report(draft: GradeDraft, rubric: dict, question_ids: list[str], transcripts: list[dict]) -> dict:
     """Chuẩn hóa kết quả AI; tiêu chí hoặc câu hỏi AI không chấm được giữ là chưa đánh giá, không tự gán điểm."""
     criteria = {c["id"]: c for c in rubric.get("criteria", [])}
     grades = {g.criterion_id: g for g in (draft.criteria or [])}
+    student_messages = {str(t["id"]): t["text"] for t in transcripts if t["role"] == "STUDENT"}
     results, total = [], 0.0
 
     for key, criterion in criteria.items():
         grade = grades.get(key)
+        if grade:
+            for ev in grade.evidence:
+                source_id = ev.transcript_id or ev.message_id
+                if (not source_id or (ev.transcript_id and ev.message_id and ev.transcript_id != ev.message_id)
+                        or source_id not in student_messages or not ev.quote
+                        or ev.quote not in student_messages[source_id]):
+                    raise AppError("Bằng chứng AI không khớp câu trả lời của sinh viên.", 502, "invalid_evidence")
+            if not grade.evidence:
+                grade = None
         if not grade:
             score = 0.0
             rationale = "Chưa đủ dữ liệu để đánh giá tiêu chí này."
@@ -60,7 +71,7 @@ def validate_report(draft: GradeDraft, rubric: dict, question_ids: list[str]) ->
             score = clamp_score(grade.score)
             rationale = grade.rationale
             improvement = grade.improvement
-            evidence = [{"quote": ev.quote} for ev in grade.evidence if ev.quote]
+            evidence = [{"transcript_id": ev.transcript_id or ev.message_id, "quote": ev.quote} for ev in grade.evidence]
 
         weighted = score * criterion["weight"] / 100
         total += weighted
@@ -93,7 +104,7 @@ def validate_report(draft: GradeDraft, rubric: dict, question_ids: list[str]) ->
     return {
         "criteria": results,
         "questions": questions,
-        "total_score": round(total, 2),
+        "total_score": round(total, 2) if criteria and all(r["assessed"] for r in results) else None,
         "scale": 10,
         "summary": draft.summary or "Buổi phỏng vấn đã được tổng hợp và chấm điểm.",
         "assessed_criteria": sum(1 for r in results if r["assessed"]),
@@ -154,6 +165,9 @@ class InterviewService:
                     select(QuestionResult).where(QuestionResult.exam_schedule_id == schedule_id)
                 )
             ).all()
+            criterion_grades = (await db.scalars(
+                select(LecturerCriterionGrade).where(LecturerCriterionGrade.exam_schedule_id == schedule_id)
+            )).all()
 
             return {
                 "schedule_id": str(schedule.id),
@@ -161,6 +175,8 @@ class InterviewService:
                 "exam_title": exam.title if exam else None,
                 "status": schedule.status,
                 "final_score": float(schedule.final_score) if schedule.final_score is not None else None,
+                "lecturer_total_score": float(schedule.lecturer_total_score) if schedule.lecturer_total_score is not None else None,
+                "lecturer_total_pending": schedule.lecturer_total_pending,
                 "actual_start_time": schedule.actual_start_time.isoformat() if schedule.actual_start_time else None,
                 "actual_end_time": schedule.actual_end_time.isoformat() if schedule.actual_end_time else None,
                 "assigned_questions": [
@@ -175,6 +191,9 @@ class InterviewService:
                 "transcripts": [transcript_dict(t) for t in transcripts],
                 "voice_state": voice_session.state if voice_session else None,
                 "ai_report": schedule.ai_report,
+                "lecturer_criteria": [
+                    {"criterion_id": grade.criterion_id, "score": float(grade.score)} for grade in criterion_grades
+                ],
                 "results": [
                     {
                         "question_id": str(r.question_id),
@@ -195,6 +214,9 @@ class InterviewService:
                 schedule = await db.get(ExamSchedule, schedule_id)
                 if not schedule:
                     raise AppError("Không tìm thấy ca thi.", 404)
+
+                if schedule.status not in {"IN_PROGRESS", "COMPLETED"}:
+                    raise AppError("Ca thi chưa được bắt đầu qua hệ thống lịch thi.", 409, "schedule_not_started")
 
                 exam = await db.get(Exam, schedule.exam_id)
                 if not exam:
@@ -265,9 +287,16 @@ class InterviewService:
                         ),
                         rubric_data,
                         question_ids,
+                        [],
                     )
                 else:
                     # Chuẩn bị dữ liệu gửi cho LLM chấm
+                    grading_transcripts = [
+                        {"id": str(t.id), "role": t.role,
+                         "question_id": str(t.question_id) if t.question_id else None,
+                         "text": t.text_content}
+                        for t in transcripts
+                    ]
                     eval_payload = encode(
                         {
                             "rubric_snapshot": rubric_data,
@@ -276,15 +305,7 @@ class InterviewService:
                                 {"question_id": str(q.question_id), "order": q.question_order, "content": q.content_snapshot}
                                 for q in assigned
                             ],
-                            "transcript": [
-                                {
-                                    "id": str(t.id),
-                                    "role": t.role,
-                                    "question_id": str(t.question_id) if t.question_id else None,
-                                    "text": t.text_content,
-                                }
-                                for t in transcripts
-                            ],
+                            "transcript": grading_transcripts,
                         }
                     )
                     for attempt in range(2):
@@ -292,11 +313,16 @@ class InterviewService:
                             draft = await self.gateway.structured(
                                 GradeDraft, GRADE_SYSTEM, eval_payload, model=self.settings.gemini_model
                             )
-                            report = validate_report(draft, rubric_data, question_ids)
+                            report = validate_report(draft, rubric_data, question_ids, grading_transcripts)
                             break
                         except Exception:
                             logger.warning("AI grading attempt %s failed for schedule %s", attempt + 1, schedule_id, exc_info=True)
 
+                if report is not None:
+                    await db.refresh(schedule, with_for_update=True)
+                if report is not None and report["total_score"] is None and schedule.final_score is not None:
+                    logger.warning("Incomplete AI regrade for schedule %s; keeping previous result", schedule_id)
+                    report = None
                 schedule.status = "COMPLETED"
                 schedule.actual_end_time = datetime.now(UTC)
                 if report is None:
@@ -332,6 +358,8 @@ class InterviewService:
                     result.ai_feedback = grade["feedback"]
                     result.graded_at = graded_at
 
+                if schedule.lecturer_total_score is not None:
+                    schedule.lecturer_total_pending = True
                 schedule.final_score = report["total_score"]
                 schedule.ai_report = {k: v for k, v in report.items() if k != "questions"}
                 await db.commit()

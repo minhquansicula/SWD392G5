@@ -85,6 +85,7 @@ export function LiveVivaRoom({ scheduleId, examTitle, courseCode, candidateName,
       <div className="text-center">
         <CheckCircle2 aria-hidden="true" className="mx-auto mb-4 h-10 w-10 text-[var(--primary)]" />
         {evaluationReport?.total_score != null && <><p className="text-sm text-[var(--muted)]">{t('Điểm AI đề xuất', 'AI-suggested score')}</p><p className="my-3 text-4xl font-semibold tabular-nums">{evaluationReport.total_score}<span className="ml-1 text-lg text-[var(--muted)]">/{evaluationReport.scale || 10}</span></p></>}
+        {evaluationReport?.total_score === null && <p className="text-sm text-[var(--muted)]">{t('Chưa đủ bằng chứng để tính điểm tổng. Giảng viên có thể xem và chấm lại.', 'There is not enough evidence to calculate a total. A lecturer can review the result.')}</p>}
         <p className="text-sm leading-7 text-[var(--muted)]">{t('Giảng viên sẽ thẩm định kết quả. Đây chưa phải thông báo công bố điểm chính thức.', 'Your lecturer will review the results. This is not a publication of your official grade.')}</p>
       </div>
       {evaluationReport?.summary && <div className="rounded-xl bg-[var(--surface-muted)] p-4 text-sm leading-7"><h3 className="mb-2 font-semibold">{t('Nhận xét từ AI', 'AI feedback')}</h3>{evaluationReport.summary}</div>}

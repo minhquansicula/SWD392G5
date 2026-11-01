@@ -29,6 +29,7 @@ class ReportQueriesPostgresTest {
 
     private static final String SCHEMA_AND_DATA = """
             CREATE TABLE exam_schedules (id uuid PRIMARY KEY, exam_id uuid NOT NULL, status varchar(50), ai_report jsonb);
+            CREATE TABLE lecturer_criterion_grades (exam_schedule_id uuid, criterion_id varchar(100), score numeric(5,2));
             CREATE TABLE questions (id uuid PRIMARY KEY, content text NOT NULL, topic varchar(255), difficulty_level varchar(50));
             CREATE TABLE assigned_questions (id uuid PRIMARY KEY DEFAULT gen_random_uuid(), exam_schedule_id uuid NOT NULL,
                 question_id uuid NOT NULL, question_order integer NOT NULL, content_snapshot text NOT NULL);

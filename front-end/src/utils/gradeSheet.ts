@@ -39,18 +39,18 @@ export function studentSheetRows(meta: GradeSheetMeta, row: GradebookRowDto) {
   const merges: XLSX.Range[] = [];
   row.criteria.forEach((criterion: CriterionMarkDto) => {
     merges.push({ s: { r: rows.length, c: 0 }, e: { r: rows.length + 1, c: 0 } });
-    rows.push([criterion.name, criterion.name, criterion.weight, markOf(criterion), criterion.comment || '-']);
+    rows.push([criterion.name, criterion.name, criterion.weight, markOf(criterion), criterion.lecturerScore != null ? 'Giáo viên cho điểm' : criterion.comment || '-']);
     rows.push(['', 'Total', `${criterion.weight}%`, markOf(criterion), '']);
   });
   rows.push(['', 'Late penalty (%)', '0%', '', '']);
   rows.push(['', 'Mark bonus', '-', '', '']);
-  rows.push(['', 'Course total', 'Average', row.finalScore ?? '-', `Status: ${passStatus(row.finalScore)}`]);
+  rows.push(['', 'Course total', 'Average', row.finalScore ?? '-', `Status: ${passStatus(row.finalScore)}${row.lecturerTotalScore != null ? ' (lecturer total)' : ''}`]);
   return { rows, merges };
 }
 
 /** A criterion the AI could not assess shows "-", never a score. */
 export function markOf(criterion: CriterionMarkDto) {
-  return criterion.assessed && criterion.score != null ? Number(criterion.score) : '-';
+  return criterion.lecturerScore != null ? Number(criterion.lecturerScore) : criterion.assessed && criterion.score != null ? Number(criterion.score) : '-';
 }
 
 export function downloadGradebook(meta: GradeSheetMeta, gradebook: GradebookRowDto[]) {
@@ -63,11 +63,11 @@ export function buildGradebookWorkbook(meta: GradeSheetMeta, gradebook: Gradeboo
   const names = [...new Set(gradebook.flatMap(row => row.criteria.map(c => c.name)))];
   const weights = new Map(gradebook.flatMap(row => row.criteria.map(c => [c.name, c.weight] as const)));
   const summary = [
-    ['No', 'Student code', 'Full name', 'Email', ...names.map(name => `${name} (${weights.get(name)}%)`), 'Course total', 'Status'],
+    ['No', 'Student code', 'Full name', 'Email', ...names.map(name => `${name} (${weights.get(name)}%)`), 'Course total', 'Status', 'Total source'],
     ...gradebook.map((row, index) => [
       index + 1, row.studentCode || '', row.fullName || '', row.email || '',
       ...names.map(name => { const c = row.criteria.find(item => item.name === name); return c ? markOf(c) : '-'; }),
-      row.finalScore ?? '-', passStatus(row.finalScore),
+      row.finalScore ?? '-', passStatus(row.finalScore), row.finalScore == null ? '-' : row.lecturerTotalScore != null ? 'Lecturer' : 'AI',
     ]),
   ];
   XLSX.utils.book_append_sheet(workbook, XLSX.utils.aoa_to_sheet(summary), 'Summary');

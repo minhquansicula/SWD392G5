@@ -57,13 +57,19 @@ public class ExamDtoMapper {
         Map<UUID, Long> counts = assignedQuestions.countByScheduleIds(items.stream().map(ExamSchedule::getId).toList())
                 .stream().collect(Collectors.toMap(AssignedQuestionRepository.ScheduleCount::getScheduleId,
                         AssignedQuestionRepository.ScheduleCount::getTotal));
+        Map<UUID, List<ExamScheduleDto.CriterionGrade>> criterionGrades = schedules.criterionGrades(items.stream().map(ExamSchedule::getId).toList())
+                .stream().collect(Collectors.groupingBy(ExamScheduleRepository.CriterionGrade::getScheduleId,
+                        Collectors.mapping(g -> new ExamScheduleDto.CriterionGrade(g.getCriterionId(), g.getScore()), Collectors.toList())));
         return items.stream().map(s -> {
             Exam e = s.getExam();
             Course c = e.getCourse();
             return ExamScheduleDto.builder().id(s.getId()).examId(e.getId()).examTitle(e.getTitle())
                     .courseCode(c == null ? null : c.getCourseCode()).courseName(c == null ? null : c.getCourseName())
                     .student(s.getStudentId() == null ? null : students.get(s.getStudentId())).scheduledStartTime(s.getScheduledStartTime())
-                    .scheduledEndTime(s.getScheduledEndTime()).status(s.getStatus()).finalScore(s.getFinalScore())
+                    .scheduledEndTime(s.getScheduledEndTime()).status(s.getStatus())
+                    .finalScore(Boolean.TRUE.equals(s.getLecturerTotalPending()) ? null : s.getLecturerTotalScore() != null ? s.getLecturerTotalScore() : s.getFinalScore())
+                    .lecturerTotalScore(s.getLecturerTotalScore()).lecturerTotalPending(s.getLecturerTotalPending())
+                    .lecturerCriteria(criterionGrades.getOrDefault(s.getId(), List.of()))
                     .assignedQuestionCount(Math.toIntExact(counts.getOrDefault(s.getId(), 0L)))
                     .isConnected(s.getIsConnected()).fullRecordingUrl(s.getFullRecordingUrl()).gradedById(s.getGradedById())
                     .actualStartTime(s.getActualStartTime()).actualEndTime(s.getActualEndTime()).build();

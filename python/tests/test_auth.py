@@ -127,6 +127,7 @@ async def test_ai_generation_and_rubric_save_require_authentication(lab, path, b
 async def test_authorized_users_can_read_session(lab, token):
     response = await lab.client.get(f"/api/v1/sessions/{SCHEDULE}", headers=bearer(token))
     assert response.status_code == 200
+    assert response.headers["cache-control"] == "no-store"
     assert lab.requests[0].url.path == "/api/auth/me"
     assert lab.requests[0].headers["authorization"] == f"Bearer {token}"
     lab.interviews.detail.assert_awaited_once_with(SCHEDULE)
@@ -153,11 +154,19 @@ async def test_assigned_read_only_lecturer_cannot_finish(lab):
     lab.interviews.finish.assert_not_awaited()
 
 
-async def test_pending_schedule_cannot_skip_spring_start_validation(lab):
+@pytest.mark.parametrize("token", ["student", "owner", "admin"])
+async def test_pending_schedule_cannot_skip_spring_start_validation(lab, token):
     lab.database.rows[(ExamSchedule, SCHEDULE)].status = "PENDING"
-    response = await lab.client.post(f"/api/v1/sessions/{SCHEDULE}/finish", headers=bearer("student"))
+    response = await lab.client.post(f"/api/v1/sessions/{SCHEDULE}/finish", headers=bearer(token))
     assert response.status_code == 409
     lab.interviews.finish.assert_not_awaited()
+
+
+async def test_completed_schedule_can_be_regraded(lab):
+    lab.database.rows[(ExamSchedule, SCHEDULE)].status = "COMPLETED"
+    response = await lab.client.post(f"/api/v1/sessions/{SCHEDULE}/finish", headers=bearer("owner"))
+    assert response.status_code == 200
+    lab.interviews.finish.assert_awaited_once_with(SCHEDULE)
 
 
 async def test_students_cannot_manage_materials(lab):
@@ -231,3 +240,18 @@ async def test_socket_rejects_untrusted_browser_origin(lab):
         with client.websocket_connect(f"/ws/live/sessions/{SCHEDULE}", headers={"origin": "https://untrusted.example"}):
             pass
     assert exc.value.code == 1008
+
+
+async def test_pending_schedule_cannot_enter_voice_room(lab, monkeypatch):
+    from app import main
+
+    lab.database.rows[(ExamSchedule, SCHEDULE)].status = "PENDING"
+    room = AsyncMock()
+    monkeypatch.setattr(main, "VoiceRoom", room)
+    client = TestClient(lab.app)
+    with client.websocket_connect(f"/ws/live/sessions/{SCHEDULE}") as ws:
+        ws.send_json({"type": "authenticate", "token": "student"})
+        with pytest.raises(WebSocketDisconnect) as exc:
+            ws.receive_json()
+    assert exc.value.code == 4409
+    room.assert_not_called()

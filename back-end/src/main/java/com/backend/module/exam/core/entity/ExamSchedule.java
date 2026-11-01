@@ -54,6 +54,12 @@ public class ExamSchedule {
     @DecimalMax("10")
     private BigDecimal finalScore;
 
+    @Column(name = "lecturer_total_score", precision = 5, scale = 2)
+    private BigDecimal lecturerTotalScore;
+
+    @Column(name = "lecturer_total_pending", nullable = false)
+    private Boolean lecturerTotalPending = false;
+
     @ColumnDefault("false")
     @Column(name = "is_connected")
     private Boolean isConnected = false;

@@ -48,7 +48,7 @@ export class FakeSocket {
   binaryType = '';
   onopen: (() => void) | null = null;
   onmessage: ((event: { data: string | ArrayBuffer }) => void) | null = null;
-  onclose: (() => void) | null = null;
+  onclose: ((event?: { code: number }) => void) | null = null;
   onerror: (() => void) | null = null;
   send = vi.fn();
   close = vi.fn(() => { this.readyState = 3; });

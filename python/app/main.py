@@ -15,7 +15,7 @@ from contextlib import asynccontextmanager, suppress
 from pathlib import Path
 from uuid import UUID
 
-from fastapi import Depends, FastAPI, File, Request, UploadFile, WebSocket, WebSocketDisconnect
+from fastapi import Depends, FastAPI, File, Request, Response, UploadFile, WebSocket, WebSocketDisconnect
 from fastapi.encoders import jsonable_encoder
 from fastapi.exceptions import RequestValidationError
 from fastapi.middleware.cors import CORSMiddleware
@@ -397,7 +397,7 @@ def create_app(settings=None, gateway=None, auth_transport=None) -> FastAPI:
                 await authorizer.require_schedule(principal, schedule_id, write=True)
             except (ValueError, KeyError, TimeoutError, AppError) as exc:
                 status = exc.status if isinstance(exc, AppError) else 401
-                code = 4401 if status == 401 else 4403 if status in (403, 404) else 1013
+                code = 4401 if status == 401 else 4403 if status in (403, 404) else 4409 if status == 409 else 1013
                 logger.error(
                     "❌ [WebSocket Auth Failed] Schedule: %s | Error: %s (status=%s, close_code=%s)",
                     schedule_id, exc, status, code,
@@ -431,9 +431,10 @@ def create_app(settings=None, gateway=None, auth_transport=None) -> FastAPI:
     # 5. GRADING & EXAMINATION RESULT (Chấm điểm & Lấy báo cáo)
     # ==========================================================================
     @app.get("/api/v1/sessions/{schedule_id}")
-    async def get_session_detail(schedule_id: UUID, principal: Principal = Depends(current_principal)):
+    async def get_session_detail(schedule_id: UUID, response: Response, principal: Principal = Depends(current_principal)):
         """Lấy chi tiết ca thi, danh sách câu hỏi đề thi và transcript đã lưu."""
         await authorizer.require_schedule(principal, schedule_id)
+        response.headers["Cache-Control"] = "no-store"
         return await interviews.detail(schedule_id)
 
     @app.post("/api/v1/sessions/{schedule_id}/finish")

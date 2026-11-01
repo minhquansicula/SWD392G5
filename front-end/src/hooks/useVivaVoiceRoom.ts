@@ -88,8 +88,10 @@ export function useVivaVoiceRoom({ scheduleId, onFinish, onError }: UseVivaVoice
   const complete = useCallback((report: any) => {
     if (!mounted.current || statusRef.current === 'COMPLETED') return;
     const scale = report?.scale ?? 10;
-    if (!report || typeof report.total_score !== 'number' || !Number.isFinite(report.total_score)
-      || typeof scale !== 'number' || !Number.isFinite(scale) || scale <= 0 || report.total_score < 0 || report.total_score > scale) {
+    const totalIsValid = report?.total_score === null
+      ? Array.isArray(report.criteria) && report.grading_failed !== true
+      : typeof report?.total_score === 'number' && Number.isFinite(report.total_score) && report.total_score >= 0 && report.total_score <= scale;
+    if (!report || !totalIsValid || typeof scale !== 'number' || !Number.isFinite(scale) || scale <= 0) {
       fail('Dữ liệu kết quả từ máy chủ không hợp lệ. Vui lòng kiểm tra lại lịch thi hoặc liên hệ giảng viên.'); return;
     }
     clearApiCache();
@@ -175,9 +177,10 @@ export function useVivaVoiceRoom({ scheduleId, onFinish, onError }: UseVivaVoice
         } else if (event.type === 'report') complete(event.data || event.report);
         else if (event.type === 'error') fail(typeof event.message === 'string' ? event.message : 'Có sự cố trong phiên vấn đáp.');
       };
-      socket.onclose = () => {
+      socket.onclose = event => {
         if (!active()) return;
-        if (statusRef.current === 'EVALUATING') fail('Kết nối bị ngắt khi đang chấm điểm. Kết quả yêu cầu chưa xác định; hãy kiểm tra lại lịch thi trước khi thao tác tiếp.');
+        if (event?.code === 4409) fail('Ca thi chưa được bắt đầu. Vui lòng quay lại lịch thi và bắt đầu ca trước khi vào phòng.');
+        else if (statusRef.current === 'EVALUATING') fail('Kết nối bị ngắt khi đang chấm điểm. Kết quả yêu cầu chưa xác định; hãy kiểm tra lại lịch thi trước khi thao tác tiếp.');
         else { transition('DISCONNECTED'); void cleanup(); }
       };
       socket.onerror = () => { if (active()) fail('Không thể kết nối dịch vụ vấn đáp. Kiểm tra mạng hoặc liên hệ giảng viên.'); };
