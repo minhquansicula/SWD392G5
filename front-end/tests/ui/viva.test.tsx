@@ -83,6 +83,21 @@ describe('voice-room lifecycle and exceptions', () => {
     const { result, socket } = await connect(); act(() => socket.onclose?.());
     expect(result.current.status).toBe('DISCONNECTED'); expect(audio.tracks[0].stop).toHaveBeenCalled();
   });
+  it('accepts a completed report without a total when criteria lack evidence', async () => {
+    const { result, socket, onFinish } = await connect();
+    act(() => socket.message({ type: 'report', data: { total_score: null, scale: 10, criteria: [{ assessed: false }] } }));
+    expect(result.current.status).toBe('COMPLETED');
+    expect(onFinish).toHaveBeenCalled();
+  });
+  it('explains when the schedule has not been started', async () => {
+    const { result } = renderHook(() => useVivaVoiceRoom({ scheduleId: 's' }));
+    await act(async () => result.current.startRoom());
+    const socket = FakeSocket.instances[0];
+    act(() => { socket.open(); socket.onclose?.({ code: 4409 }); });
+    expect(result.current.status).toBe('ERROR');
+    expect(result.current.errorMsg).toContain('Ca thi chưa được bắt đầu');
+    expect(audio.tracks[0].stop).toHaveBeenCalled();
+  });
   it('turns a playback exception into a recoverable error instead of throwing from onmessage', async () => {
     const { result, socket } = await connect(); player.push.mockImplementationOnce(() => { throw new Error('Audio backlog'); });
     expect(() => act(() => socket.onmessage?.({ data: new ArrayBuffer(4) }))).not.toThrow();

@@ -48,6 +48,8 @@ export interface ExamScheduleDto {
   scheduledEndTime: string | null;
   status: ScheduleStatus | null;
   finalScore: number | null;
+  lecturerTotalPending?: boolean;
+    lecturerCriteria?: { criterionId: string; score: number }[];
   assignedQuestionCount: number;
   isConnected: boolean | null;
   fullRecordingUrl: string | null;

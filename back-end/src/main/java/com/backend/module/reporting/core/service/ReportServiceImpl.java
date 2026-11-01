@@ -64,6 +64,7 @@ public class ReportServiceImpl implements ReportService {
                     .email(student == null ? null : student.getEmail())
                     .status(s.getStatus())
                     .finalScore(s.getFinalScore())
+                    .lecturerTotalScore(s.getLecturerTotalScore())
                     .criteria(marks.getOrDefault(s.getId(), List.of()))
                     .build();
         }).toList();
@@ -74,7 +75,7 @@ public class ReportServiceImpl implements ReportService {
                 .filter(text -> text != null && !text.isBlank())
                 .collect(Collectors.joining(" "));
         return CriterionMarkDto.builder()
-                .name(m.getName()).weight(m.getWeight()).score(m.getScore())
+                .criterionId(m.getCriterionId()).name(m.getName()).weight(m.getWeight()).score(m.getScore()).lecturerScore(m.getLecturerScore())
                 .assessed(Boolean.TRUE.equals(m.getAssessed()))
                 .comment(comment.isEmpty() ? null : comment)
                 .build();

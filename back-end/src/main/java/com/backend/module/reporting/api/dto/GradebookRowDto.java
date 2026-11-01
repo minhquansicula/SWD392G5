@@ -14,5 +14,6 @@ public class GradebookRowDto {
     private String email;
     private String status;
     private BigDecimal finalScore;
+    private BigDecimal lecturerTotalScore;
     private List<CriterionMarkDto> criteria;
 }

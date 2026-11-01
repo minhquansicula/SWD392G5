@@ -77,6 +77,8 @@ class VoiceRoom:
                 raise AppError(f"Không tìm thấy ca thi với mã {self.id}", 404)
             if self.schedule.status == "COMPLETED":
                 raise AppError("Ca thi đã hoàn thành và chấm điểm.", 409)
+            if self.schedule.status != "IN_PROGRESS":
+                raise AppError("Ca thi chưa được bắt đầu qua hệ thống lịch thi.", 409, "schedule_not_started")
 
             self.exam = await db.get(Exam, self.schedule.exam_id)
             if not self.exam:
@@ -92,12 +94,6 @@ class VoiceRoom:
                     )
                 ).all()
             )
-
-            # Cập nhật trạng thái ca thi sang IN_PROGRESS nếu đang PENDING
-            if self.schedule.status == "PENDING":
-                self.schedule.status = "IN_PROGRESS"
-                self.schedule.actual_start_time = datetime.now(UTC)
-                await db.commit()
 
             # Lấy voice state nếu có
             self.voice_state = await db.get(VoiceSessionState, self.id)
@@ -194,6 +190,9 @@ class VoiceRoom:
         if self.finish_requested or self.finished:
             return {"finished": True}
 
+        if repeat and self.plan is not None:
+            return self.plan
+
         max_per_main = self.exam.max_followups_per_main if self.exam and self.exam.max_followups_per_main is not None else 2
         max_total = self.exam.max_followup_questions if self.exam and self.exam.max_followup_questions is not None else 10
         main_limit = (self.exam.main_answer_time_limit_seconds if self.exam and self.exam.main_answer_time_limit_seconds else 120)
@@ -201,21 +200,22 @@ class VoiceRoom:
 
         # Kiểm tra đồng thời ràng buộc theo câu chính và trần câu phụ toàn ca thi
         can_followup = (
-            self.followups_used < max_per_main
+            self.plan is not None
+            and self.followups_used < max_per_main
             and self.total_followups_used < max_total
             and bool(query)
             and not repeat
         )
 
         if can_followup:
-            self.followups_used += 1
-            self.total_followups_used += 1
             # Tra cứu RAG ngữ cảnh bài giảng cho câu hỏi đào sâu
             refs = await self.service.retrieval.retrieve(
                 course_id=self.exam.course_id,
                 query=query,
                 embedding_model=self.service.settings.gemini_embedding_model,
             )
+            self.followups_used += 1
+            self.total_followups_used += 1
             self.plan = {
                 "type": "followup",
                 "question_order": self.current_q_index + 1,
@@ -242,7 +242,7 @@ class VoiceRoom:
             return self.plan
 
         # Chuyển sang câu hỏi chính tiếp theo trong đề thi đã bốc thăm
-        if self.followups_used > 0:
+        if self.plan is not None and not repeat:
             self.current_q_index += 1
             self.followups_used = 0
 
@@ -393,7 +393,7 @@ class VoiceRoom:
         await self.load()
         max_main = self.exam.max_main_questions or len(self.assigned_questions)
         max_followups = self.exam.max_followup_questions or 0
-        max_per_main = self.exam.max_followups_per_main or 2
+        max_per_main = self.exam.max_followups_per_main if self.exam.max_followups_per_main is not None else 2
         main_limit = self.exam.main_answer_time_limit_seconds or 120
         followup_limit = self.exam.followup_answer_time_limit_seconds or 60
 

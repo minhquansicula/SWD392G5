@@ -65,6 +65,8 @@ class ExamSchedule(Base):
     scheduled_end_time: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     status: Mapped[str] = mapped_column(String(50), default="PENDING")
     final_score: Mapped[float | None] = mapped_column(Numeric(5, 2), nullable=True)
+    lecturer_total_score: Mapped[float | None] = mapped_column(Numeric(5, 2), nullable=True)
+    lecturer_total_pending: Mapped[bool] = mapped_column(default=False)
     ai_report: Mapped[dict | None] = mapped_column(JSONB, nullable=True)
     is_connected: Mapped[bool] = mapped_column(default=False)
     full_recording_url: Mapped[str | None] = mapped_column(String(500), nullable=True)
@@ -123,6 +125,15 @@ class QuestionResult(Base):
     max_score: Mapped[float] = mapped_column(Numeric(5, 2), default=10.0)
     lecturer_score: Mapped[float | None] = mapped_column(Numeric(5, 2), nullable=True)
     lecturer_feedback: Mapped[str | None] = mapped_column(Text, nullable=True)
+    graded_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=now)
+
+
+class LecturerCriterionGrade(Base):
+    __tablename__ = "lecturer_criterion_grades"
+    exam_schedule_id: Mapped[UUID] = mapped_column(ForeignKey("exam_schedules.id"), primary_key=True)
+    criterion_id: Mapped[str] = mapped_column(String(100), primary_key=True)
+    score: Mapped[float] = mapped_column(Numeric(5, 2))
+    graded_by: Mapped[UUID | None] = mapped_column(ForeignKey("users.id"), nullable=True)
     graded_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=now)
 
 

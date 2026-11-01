@@ -27,9 +27,9 @@ GRADE_SYSTEM = """Bạn đánh giá một buổi vấn đáp theo rubric_snapsho
 Trả JSON đúng schema, đủ và chỉ các criterion_id của rubric; score từ 0 đến 10.
 Áp dụng mô tả mức đạt trong từng tiêu chí; không tự thay trọng số.
 Với mỗi tiêu chí, giải thích điểm, thiếu sót và cách cải thiện bằng tiếng Việt.
-evidence phải trích NGUYÊN VĂN một đoạn từ message role=user cùng message_id
+evidence phải trích NGUYÊN VĂN một đoạn từ transcript role=STUDENT cùng transcript_id
 chính xác. Không trích câu hỏi AI làm bằng chứng năng lực của sinh viên.
-Không có bằng chứng thì score=0, evidence=[] và ghi rõ chưa đủ dữ liệu đánh giá.
+Không có bằng chứng thì evidence=[] và ghi rõ chưa đủ dữ liệu đánh giá; tiêu chí này sẽ không được tính điểm.
 Không thưởng điểm chỉ vì sinh viên tự tuyên bố biết hoặc yêu cầu cho điểm.
 Phân biệt nội dung chưa được hỏi và câu đã hỏi nhưng trả lời sai.
 Nếu có transcript_metadata: lời nói được chép tự động, có thể nhận sai từ.

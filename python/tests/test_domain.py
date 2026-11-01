@@ -9,8 +9,9 @@ from pypdf import PdfWriter
 from app.documents import DocumentParser
 from app.errors import AppError
 from app.gemini import normalized_vector
-from app.interview import next_plan, validate_report
-from app.schemas import GradeDraft, RubricData, TurnRequest
+from app import interview, schemas
+from app.interview import validate_report
+from app.schemas import GradeDraft, RubricData
 
 
 def rubric():
@@ -30,6 +31,7 @@ def rubric():
 
 @pytest.mark.parametrize("limit", [4, 5, 8, 12, 20])
 @pytest.mark.parametrize("max_followups", [0, 1, 2, 3])
+@pytest.mark.skipif(not hasattr(interview, "next_plan"), reason="Legacy rubric scheduler was replaced by assigned questions")
 def test_scheduler_reserves_coverage_and_caps_followups(limit, max_followups):
     session = SimpleNamespace(
         rubric_snapshot=rubric(),
@@ -40,7 +42,7 @@ def test_scheduler_reserves_coverage_and_caps_followups(limit, max_followups):
         max_followups=max_followups,
     )
     visited, probes = set(), {}
-    while (plan := next_plan(session)) is not None:
+    while (plan := interview.next_plan(session)) is not None:
         key = plan["criterion"]["id"]
         visited.add(key)
         probes[key] = probes.get(key, 0) + int(plan["follow_up"])
@@ -91,8 +93,8 @@ def test_parser_rejects_scans_and_preserves_page_metadata():
 def test_report_rejects_fabricated_and_assistant_evidence():
     user_id, assistant_id = uuid4(), uuid4()
     messages = [
-        {"id": str(user_id), "role": "user", "text": "Redis là hệ thống lưu trữ trong bộ nhớ."},
-        {"id": str(assistant_id), "role": "assistant", "text": "TTL là gì?"},
+        {"id": str(user_id), "role": "STUDENT", "text": "Redis là hệ thống lưu trữ trong bộ nhớ."},
+        {"id": str(assistant_id), "role": "AI", "text": "TTL là gì?"},
     ]
     draft = GradeDraft.model_validate(
         {
@@ -109,16 +111,17 @@ def test_report_rejects_fabricated_and_assistant_evidence():
             "summary": "Tổng kết.",
         }
     )
-    assert validate_report(draft, rubric(), messages)["total_score"] == 8
+    assert validate_report(draft, rubric(), [], messages)["total_score"] == 8
     draft.criteria[0].evidence[0].quote = "Trích dẫn không tồn tại"
     with pytest.raises(AppError):
-        validate_report(draft, rubric(), messages)
+        validate_report(draft, rubric(), [], messages)
     draft.criteria[0].evidence[0].quote = "TTL là gì?"
-    draft.criteria[0].evidence[0].message_id = assistant_id
+    draft.criteria[0].evidence[0].message_id = str(assistant_id)
     with pytest.raises(AppError):
-        validate_report(draft, rubric(), messages)
+        validate_report(draft, rubric(), [], messages)
 
 
+@pytest.mark.skipif(not hasattr(schemas, "TurnRequest"), reason="Legacy text-turn API was removed")
 def test_turn_rejects_empty_answers():
     with pytest.raises(ValidationError):
-        TurnRequest(request_id=uuid4(), action="answer", text="  ")
+        schemas.TurnRequest(request_id=uuid4(), action="answer", text="  ")

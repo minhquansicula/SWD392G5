@@ -5,12 +5,21 @@ import org.springframework.data.jpa.repository.*;
 import org.springframework.data.repository.query.Param;
 
 import java.time.OffsetDateTime;
+import java.math.BigDecimal;
 import java.util.Collection;
 import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
 
 public interface ExamScheduleRepository extends JpaRepository<ExamSchedule, UUID> {
+    interface CriterionGrade {
+        UUID getScheduleId();
+        String getCriterionId();
+        BigDecimal getScore();
+    }
+
+    @Query(value = "SELECT exam_schedule_id AS \"scheduleId\", criterion_id AS \"criterionId\", score AS \"score\" FROM lecturer_criterion_grades WHERE exam_schedule_id IN (:ids)", nativeQuery = true)
+    List<CriterionGrade> criterionGrades(@Param("ids") Collection<UUID> ids);
     @EntityGraph(attributePaths = {"exam", "exam.course"})
     List<ExamSchedule> findByExamIdOrderByScheduledStartTimeAscIdAsc(UUID examId);
 
@@ -24,6 +33,10 @@ public interface ExamScheduleRepository extends JpaRepository<ExamSchedule, UUID
     // Scalar lookup avoids loading stale schedule state before acquiring the exam lock.
     @Query("select s.exam.id from ExamSchedule s where s.id = :id")
     Optional<UUID> findExamIdById(@Param("id") UUID id);
+
+    @Lock(jakarta.persistence.LockModeType.PESSIMISTIC_WRITE)
+    @Query("select s from ExamSchedule s where s.id = :id")
+    Optional<ExamSchedule> findLockedById(@Param("id") UUID id);
 
     boolean existsByExamIdAndStudentId(UUID examId, UUID studentId);
     boolean existsByExamIdAndStatusIn(UUID examId, Collection<String> statuses);

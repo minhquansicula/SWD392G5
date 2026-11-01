@@ -1,0 +1,23 @@
+name: aives-reporting-test
+services:
+  db:
+    image: pgvector/pgvector:pg16
+    ports:
+      - "127.0.0.1:55432:5432"
+    environment:
+      POSTGRES_DB: aives_reporting_local
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: local_test_only
+    volumes:
+      - reporting_test_data:/var/lib/postgresql/data
+      - ./database/docker-init/01_init_schema.sql:/docker-entrypoint-initdb.d/01_init_schema.sql:ro
+      - ./database/docker-init/02_seed_data.sql:/docker-entrypoint-initdb.d/02_seed_data.sql:ro
+      - ./database/fixtures/reporting-local.sql:/docker-entrypoint-initdb.d/03_reporting_local.sql:ro
+      - ./database/fixtures/reporting-same-student.sql:/docker-entrypoint-initdb.d/04_reporting_same_student.sql:ro
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres -d aives_reporting_local"]
+      interval: 3s
+      timeout: 3s
+      retries: 20
+volumes:
+  reporting_test_data:

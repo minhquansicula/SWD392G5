@@ -175,6 +175,7 @@ export async function generateQuestionsFromMaterials(
 export interface SessionTranscript {
   id: string;
   role: 'AI' | 'STUDENT';
+  question_id?: string | null;
   text: string;
   created_at: string;
 }
@@ -196,14 +197,14 @@ export interface SessionCriterion {
   weighted_score: number;
   rationale: string;
   improvement: string;
-  evidence: { quote: string }[];
+  evidence: { transcript_id?: string; quote: string }[];
   assessed: boolean;
 }
 
 /** Rubric grading report saved by the AI service when the exam is finished. */
 export interface SessionAiReport {
   criteria: SessionCriterion[];
-  total_score: number;
+  total_score: number | null;
   scale: number;
   summary: string;
   assessed_criteria: number;
@@ -217,11 +218,14 @@ export interface SessionAssignedQuestion {
 }
 
 export interface SessionDetail {
+  lecturer_criteria?: { criterion_id: string; score: number }[];
   schedule_id: string;
   exam_id: string | null;
   exam_title: string | null;
   status: string;
   final_score: number | null;
+  lecturer_total_score?: number | null;
+  lecturer_total_pending?: boolean;
   actual_start_time: string | null;
   actual_end_time: string | null;
   assigned_questions: SessionAssignedQuestion[];

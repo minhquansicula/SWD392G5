@@ -10,6 +10,9 @@ import java.util.List;
 import java.util.UUID;
 
 public interface QuestionResultRepository extends JpaRepository<QuestionResult, UUID> {
+    List<QuestionResult> findByExamScheduleIdAndQuestionId(UUID scheduleId, UUID questionId);
+    List<QuestionResult> findByExamScheduleId(UUID scheduleId);
+
     interface QuestionStat {
         UUID getQuestionId();
         String getContent();
@@ -41,23 +44,26 @@ public interface QuestionResultRepository extends JpaRepository<QuestionResult, 
 
     interface CriterionMark {
         UUID getScheduleId();
+        String getCriterionId();
         String getName();
         BigDecimal getWeight();
         BigDecimal getScore();
         Boolean getAssessed();
+        BigDecimal getLecturerScore();
         String getRationale();
         String getImprovement();
     }
 
     /** Rubric marks stored by the Python AI service in exam_schedules.ai_report, in rubric order. */
     @Query(nativeQuery = true, value = """
-            SELECT s.id AS "scheduleId", c.item ->> 'name' AS "name",
+            SELECT s.id AS "scheduleId", c.item ->> 'criterion_id' AS "criterionId", c.item ->> 'name' AS "name",
                    CAST(c.item ->> 'weight' AS numeric) AS "weight",
                    CAST(c.item ->> 'score' AS numeric) AS "score",
-                   CAST(c.item ->> 'assessed' AS boolean) AS "assessed",
+                   CAST(c.item ->> 'assessed' AS boolean) AS "assessed", g.score AS "lecturerScore",
                    c.item ->> 'rationale' AS "rationale", c.item ->> 'improvement' AS "improvement"
             FROM exam_schedules s
             CROSS JOIN LATERAL jsonb_array_elements(s.ai_report -> 'criteria') WITH ORDINALITY AS c(item, position)
+            LEFT JOIN lecturer_criterion_grades g ON g.exam_schedule_id = s.id AND g.criterion_id = c.item ->> 'criterion_id'
             WHERE s.exam_id = :examId
             ORDER BY s.id, c.position
             """)

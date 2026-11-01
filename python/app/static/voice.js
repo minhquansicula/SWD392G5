@@ -29,11 +29,11 @@ async function api(path, options) {
 }
 function report(data) {
   $('report').hidden = false; const root = $('report-content'); root.replaceChildren();
-  const total = document.createElement('h3'); total.textContent = `${data.total_score}/${data.scale} điểm`;
+  const total = document.createElement('h3'); total.textContent = data.total_score == null ? 'Chưa đủ bằng chứng để tính điểm tổng.' : `${data.total_score}/${data.scale} điểm`;
   const summary = document.createElement('p'); summary.textContent = data.summary; root.append(total, summary);
   for (const c of data.criteria) {
     const row = document.createElement('article');
-    for (const [tag, text] of [['h3',`${c.name}: ${c.score}/10 · ${c.weight}%`],['p',c.rationale],['p',`Cải thiện: ${c.improvement}`]]) {
+    for (const [tag, text] of [['h3',`${c.name}: ${c.assessed ? `${c.score}/10` : 'Chưa đánh giá'} · ${c.weight}%`],['p',c.rationale],['p',`Cải thiện: ${c.improvement}`]]) {
       const node = document.createElement(tag); node.textContent = text; row.append(node);
     }
     for (const e of c.evidence) { const q = document.createElement('blockquote'); q.textContent = e.quote; row.append(q); }
@@ -113,9 +113,10 @@ function connect() {
       if (event.type === 'error') void fail(new Error(event.message));
     } catch (e) { void fail(e); }
   };
-  ws.onclose = () => {
+  ws.onclose = (event) => {
     if (epoch !== generation || !active) return;
     ready = false; player.clear();
+    if (event.code === 4409) { void fail(new Error('Ca thi chưa được bắt đầu. Vui lòng bắt đầu ca từ lịch thi.')); return; }
     if (finishing) { void fail(new Error('Kết nối đóng khi chấm điểm. Bấm Kết thúc để thử chấm lại.')); return; }
     if (++retries > 4) { void fail(new Error('Không nối lại được. Transcript đã nhận vẫn được lưu.')); return; }
     label('Mất kết nối · đang thử lại'); $('activity').textContent = 'Tạm dừng nói trong lúc nối lại';
