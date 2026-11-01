@@ -154,9 +154,15 @@ class VoiceRoom:
         if t_obj is None:
             return
 
-        t_obj.text_content += text or ""
+        clean_text = text or ""
+        if raw_role != "user":
+            import re
+            clean_text = re.sub(r"<ctrl\d+>", "", clean_text)
+            clean_text = re.sub(r"<\/?ctrl[^>]*>", "", clean_text)
 
-        # Gửi subtitle về cho giao diện Web
+        t_obj.text_content += clean_text
+
+        # Gửi subtitle về cho giao diện Mobile / Web
         await self.send(
             {
                 "type": "transcript",
@@ -303,10 +309,25 @@ class VoiceRoom:
                         )
                 elif frame.get("text"):
                     body = json.loads(frame["text"])
-                    if body.get("type") == "finish":
+                    msg_type = body.get("type")
+                    if msg_type in ("finish", "finish_exam", "force_finish"):
                         self.accept_audio = False
                         await self.events.put(("finish", None))
-                    elif body.get("type") == "ping":
+                    elif msg_type == "submit_answer":
+                        # Thí sinh bấm Nộp câu: nhắc AI chuyển sang câu hỏi tiếp theo
+                        if self.live and self.accept_audio and not self.finished:
+                            await self.live.send_client_content(
+                                turns=types.Content(
+                                    role="user",
+                                    parts=[
+                                        types.Part(
+                                            text="Thí sinh đã trả lời xong và bấm nộp câu hỏi này. Bạn hãy gọi prepare_next_question để chuyển sang câu hỏi tiếp theo."
+                                        )
+                                    ],
+                                ),
+                                turn_complete=True,
+                            )
+                    elif msg_type == "ping":
                         await self.events.put(("ping", None))
         except (WebSocketDisconnect, RuntimeError):
             await self.events.put(("disconnect", None))
@@ -434,7 +455,7 @@ class VoiceRoom:
                                     role="user",
                                     parts=[
                                         types.Part(
-                                            text=f"Bắt đầu ca thi vấn đáp cho môn học. Hãy chào thí sinh ngắn gọn và đặt câu hỏi thứ 1: '{first_q}'"
+                                            text=f"Bắt đầu ca thi vấn đáp cho môn học. Hãy chào thí sinh ngắn gọn một câu, sau đó đọc to, rõ ràng và trọn vẹn toàn bộ câu hỏi thứ 1 sau đây: '{first_q}'"
                                         )
                                     ],
                                 ),
