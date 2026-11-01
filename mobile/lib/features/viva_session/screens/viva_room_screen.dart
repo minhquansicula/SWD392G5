@@ -10,6 +10,8 @@ import '../../../core/widgets/glass_card.dart';
 import '../../../core/widgets/voice_wave_visualizer.dart';
 import '../../auth/providers/auth_provider.dart';
 import '../../exam/models/exam_schedule_model.dart';
+import '../../exam/providers/exam_provider.dart';
+import '../../report/providers/report_provider.dart';
 import '../../report/screens/exam_result_report_screen.dart';
 import '../models/viva_question_model.dart';
 import '../providers/viva_session_provider.dart';
@@ -94,10 +96,39 @@ class _VivaRoomScreenState extends State<VivaRoomScreen> with TickerProviderStat
     _scrollToBottom();
   }
 
-  void _submitCurrentAnswer() {
-    final viva = context.read<VivaSessionProvider>();
-    viva.submitAnswer();
-    _scrollToBottom();
+  void _confirmFinishExam(VivaSessionProvider viva) {
+    showDialog(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        backgroundColor: AppColors.surfaceCard,
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+        title: Row(
+          children: const [
+            Icon(Icons.assignment_turned_in_rounded, color: AppColors.primaryLight, size: 26),
+            SizedBox(width: 8),
+            Text('Nộp bài thi vấn đáp?', style: TextStyle(color: Colors.white, fontSize: 17, fontWeight: FontWeight.bold)),
+          ],
+        ),
+        content: const Text(
+          'Bạn có chắc chắn muốn kết thúc buổi thi và nộp toàn bộ câu trả lời để Giám khảo AI chấm điểm không?',
+          style: TextStyle(color: AppColors.textSecondary, fontSize: 13.5, height: 1.45),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(ctx).pop(),
+            child: const Text('Tiếp tục thi', style: TextStyle(color: Colors.white70)),
+          ),
+          ElevatedButton(
+            style: ElevatedButton.styleFrom(backgroundColor: AppColors.primary),
+            onPressed: () {
+              Navigator.of(ctx).pop();
+              viva.finishExamSession(examScheduleId: widget.exam.id);
+            },
+            child: const Text('Nộp bài ngay', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
+          ),
+        ],
+      ),
+    );
   }
 
   void _showExamFinishedDialog() {
@@ -125,13 +156,25 @@ class _VivaRoomScreenState extends State<VivaRoomScreen> with TickerProviderStat
               shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
               padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 10),
             ),
-            onPressed: () {
+            onPressed: () async {
               Navigator.of(ctx).pop();
-              Navigator.of(context).pushReplacement(
-                MaterialPageRoute(
-                  builder: (_) => ExamResultReportScreen(exam: widget.exam),
-                ),
-              );
+              // 1. Cập nhật danh sách ca thi của sinh viên trên Backend để ExamProvider có trạng thái COMPLETED
+              context.read<ExamProvider>().refreshExams();
+              // 2. Tải dữ liệu báo cáo mới nhất trước khi chuyển màn hình
+              await context.read<ReportProvider>().fetchReportForExam(widget.exam.id);
+              if (mounted) {
+                final completedExam = widget.exam.copyWith(status: ExamStatus.completed);
+                // Dùng pushAndRemoveUntil (route.isFirst) để loại bỏ hoàn toàn cả VivaRoomScreen
+                // và ExamDetailChecklistScreen ra khỏi ngăn xếp điều hướng (navigation stack).
+                // Khi thí sinh xem xong điểm và ấn nút Back, ứng dụng sẽ quay thẳng về màn hình chính (Lịch thi)
+                // thay vì quay lại màn hình kiểm tra điều kiện dự thi!
+                Navigator.of(context).pushAndRemoveUntil(
+                  MaterialPageRoute(
+                    builder: (_) => ExamResultReportScreen(exam: completedExam),
+                  ),
+                  (route) => route.isFirst,
+                );
+              }
             },
             child: const Text('Xem Bảng Điểm & Nhận Xét', style: TextStyle(color: Colors.white, fontWeight: FontWeight.w600)),
           ),
@@ -382,6 +425,30 @@ class _VivaRoomScreenState extends State<VivaRoomScreen> with TickerProviderStat
                   style: AppTextStyles.codeOrTimer.copyWith(fontSize: 11.5),
                 ),
               ],
+            ),
+          ),
+          const SizedBox(width: 6),
+
+          // Nút Nộp bài / Kết thúc ca thi thủ công
+          TextButton(
+            style: TextButton.styleFrom(
+              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+              backgroundColor: AppColors.danger.withValues(alpha: 0.18),
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(10),
+                side: BorderSide(color: AppColors.danger.withValues(alpha: 0.5)),
+              ),
+            ),
+            onPressed: viva.sessionState == VivaSessionState.processing
+                ? null
+                : () => _confirmFinishExam(viva),
+            child: const Text(
+              'Nộp bài',
+              style: TextStyle(
+                color: AppColors.danger,
+                fontSize: 11.5,
+                fontWeight: FontWeight.bold,
+              ),
             ),
           ),
         ],
@@ -769,31 +836,35 @@ class _VivaRoomScreenState extends State<VivaRoomScreen> with TickerProviderStat
         ],
       ),
       child: Row(
-        mainAxisAlignment: MainAxisAlignment.spaceEvenly,
         children: [
-          // Replay Question button
-          Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              IconButton(
-                padding: EdgeInsets.zero,
-                constraints: const BoxConstraints(minWidth: 44, minHeight: 44),
-                icon: const Icon(Icons.replay_rounded, size: 26, color: Colors.white70),
-                onPressed: () {
-                  ScaffoldMessenger.of(context).showSnackBar(
-                    const SnackBar(
-                      backgroundColor: AppColors.primary,
-                      duration: Duration(milliseconds: 2000),
-                      content: Text('Bạn có thể nói "Xin giám khảo nhắc lại câu hỏi" qua micro để AI đọc lại.'),
-                    ),
-                  );
-                },
+          // Replay Question button (Bên trái)
+          Expanded(
+            child: Align(
+              alignment: Alignment.centerLeft,
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  IconButton(
+                    padding: EdgeInsets.zero,
+                    constraints: const BoxConstraints(minWidth: 44, minHeight: 44),
+                    icon: const Icon(Icons.replay_rounded, size: 26, color: Colors.white70),
+                    onPressed: () {
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        const SnackBar(
+                          backgroundColor: AppColors.primary,
+                          duration: Duration(milliseconds: 2000),
+                          content: Text('Bạn có thể nói "Xin giám khảo nhắc lại câu hỏi" qua micro để AI đọc lại.'),
+                        ),
+                      );
+                    },
+                  ),
+                  Text('Hỏi lại', style: AppTextStyles.bodySm.copyWith(fontSize: 11)),
+                ],
               ),
-              Text('Hỏi lại', style: AppTextStyles.bodySm.copyWith(fontSize: 11)),
-            ],
+            ),
           ),
 
-          // Central Large Glowing Interactive Microphone Button (74px)
+          // Central Large Glowing Interactive Microphone Button (74px) ở chính giữa
           GestureDetector(
             onTap: _toggleMicrophone,
             child: Container(
@@ -824,18 +895,12 @@ class _VivaRoomScreenState extends State<VivaRoomScreen> with TickerProviderStat
             ),
           ),
 
-          // Submit / Finish turn button
-          Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              IconButton(
-                padding: EdgeInsets.zero,
-                constraints: const BoxConstraints(minWidth: 44, minHeight: 44),
-                icon: const Icon(Icons.send_rounded, size: 26, color: AppColors.primaryLight),
-                onPressed: viva.sessionState == VivaSessionState.processing ? null : _submitCurrentAnswer,
-              ),
-              Text('Nộp câu', style: AppTextStyles.bodySm.copyWith(fontSize: 11)),
-            ],
+          // Khoảng đệm đối xứng bên phải để giữ Microphone luôn ở chính tâm màn hình
+          const Expanded(
+            child: Align(
+              alignment: Alignment.centerRight,
+              child: SizedBox(width: 44, height: 44),
+            ),
           ),
         ],
       ),

@@ -168,6 +168,8 @@ class VivaSessionProvider extends ChangeNotifier {
         notifyListeners();
       } else {
         timer.cancel();
+        debugPrint('[VivaSessionProvider] Time expired! Force finishing exam session.');
+        finishExamSession(isTimeout: true);
       }
     });
 
@@ -176,18 +178,31 @@ class VivaSessionProvider extends ChangeNotifier {
     notifyListeners();
   }
 
+  int _currentTurnId = 0;
+
   void _startAutoListening() async {
-    // Chờ 800ms để các chunk âm thanh cuối cùng phát trọn vẹn ra loa ngoài
-    // và tiếng vang phòng tiêu tán hoàn toàn trước khi bật mic
-    await Future.delayed(const Duration(milliseconds: 800));
-    if (_sessionState == VivaSessionState.aiSpeaking) {
-      await _recorderService.startRecording();
-      _sessionState = VivaSessionState.listening;
-      notifyListeners();
+    final turnId = ++_currentTurnId;
+    debugPrint('[VivaSessionProvider] turn_complete received. Waiting for audio player to drain before enabling mic...');
+    // Chờ cho đến khi toàn bộ âm thanh từ buffer loa ngoài được phát trọn vẹn ra ngoài
+    // cộng thêm 600ms để tiếng vang âm phòng tiêu tán triệt để trước khi kích hoạt mic
+    await _playerService.waitUntilPlaybackFinished(extraBufferMs: 600);
+
+    // Kiểm tra xem lượt chờ này có còn hợp lệ hay không (không bị ngắt bởi barge-in, nộp bài, hoặc chuyển câu)
+    if (turnId != _currentTurnId || _sessionState != VivaSessionState.aiSpeaking) {
+      debugPrint('[VivaSessionProvider] Auto-listening cancelled (state changed or new turn active).');
+      return;
     }
+
+    debugPrint('[VivaSessionProvider] Audio playback drained completely. Opening microphone for student response.');
+    if (!_recorderService.isRecording) {
+      await _recorderService.startRecording();
+    }
+    _sessionState = VivaSessionState.listening;
+    notifyListeners();
   }
 
   void toggleMicrophone() async {
+    _currentTurnId++;
     if (_recorderService.isRecording) {
       await _recorderService.stopRecording();
       _sessionState = VivaSessionState.processing;
@@ -221,18 +236,37 @@ class VivaSessionProvider extends ChangeNotifier {
     });
   }
 
-  /// Kết thúc toàn bộ ca thi và kích hoạt AI chấm điểm Rubric
-  Future<void> finishExamSession() async {
+  /// Kết thúc toàn bộ ca thi và kích hoạt AI chấm điểm Rubric (hỗ trợ cả nộp thủ công và timeout ép buộc)
+  Future<void> finishExamSession({bool isTimeout = false, String? examScheduleId}) async {
+    if (_sessionState == VivaSessionState.completed) return;
+
+    _currentTurnId++;
     await _recorderService.stopRecording();
     await _playerService.stop();
     _sessionState = VivaSessionState.processing;
     notifyListeners();
 
+    // 1. Gửi lệnh kết thúc qua WebSocket cho viva-ai-v2
     _wsService.finishExam();
 
-    // Fallback bảo vệ timeout sau 4 giây nếu mạng chậm
-    Future.delayed(const Duration(seconds: 4), () {
+    // 2. Dự phòng REST API: Nếu sau 3 giây WS chưa trả report, gọi trực tiếp endpoint HTTP finish
+    final scheduleId = examScheduleId ?? (_questions.isNotEmpty ? _questions.first.parentQuestionId : null);
+    Future.delayed(const Duration(seconds: 3), () async {
       if (_sessionState != VivaSessionState.completed) {
+        if (scheduleId != null && scheduleId.isNotEmpty) {
+          try {
+            debugPrint('[VivaSessionProvider] WS finish timeout, calling REST API fallback: ${ApiEndpoints.aiServiceBaseUrl}${ApiEndpoints.aiSessionFinish}/$scheduleId/finish');
+            final res = await ApiClient.instance.post(
+              '${ApiEndpoints.aiServiceBaseUrl}${ApiEndpoints.aiSessionFinish}/$scheduleId/finish',
+              body: {},
+            );
+            if (res.success && res.data is Map<String, dynamic>) {
+              _finalEvaluationReport = res.data as Map<String, dynamic>;
+            }
+          } catch (e) {
+            debugPrint('[VivaSessionProvider] REST finish fallback error: $e');
+          }
+        }
         _sessionState = VivaSessionState.completed;
         notifyListeners();
       }
@@ -364,6 +398,7 @@ class VivaSessionProvider extends ChangeNotifier {
     // 6. Sự kiện Clear Audio: Thí sinh ngắt lời AI (Barge-in)
     else if (type == 'clear_audio') {
       debugPrint('[VivaSessionProvider] User interrupted AI voice playback.');
+      _currentTurnId++;
       _playerService.clearAudioBuffer();
       notifyListeners();
     }
