@@ -7,6 +7,9 @@ import '../models/password_link_model.dart';
 
 class AuthProvider extends ChangeNotifier {
   static const String _tokenKey = 'aives_access_token';
+  final ApiClient _api;
+  int _sessionVersion = 0;
+  bool _disposed = false;
 
   UserModel? _currentUser;
   bool _isLoading = false;
@@ -19,41 +22,86 @@ class AuthProvider extends ChangeNotifier {
   bool get isInitializing => _isInitializing;
   String? get errorMessage => _errorMessage;
 
-  AuthProvider() {
-    restoreSession();
+  AuthProvider({ApiClient? apiClient, bool autoRestore = true})
+    : _api = apiClient ?? ApiClient.instance {
+    if (autoRestore) {
+      restoreSession();
+    } else {
+      _isInitializing = false;
+    }
+  }
+
+  bool _validUser(Map<String, dynamic> user) =>
+      user['id'] is String &&
+      (user['id'] as String).isNotEmpty &&
+      user['email'] is String &&
+      (user['email'] as String).trim().isNotEmpty &&
+      const ['STUDENT', 'LECTURER', 'ADMIN'].contains(user['role']);
+
+  @override
+  void notifyListeners() {
+    if (!_disposed) super.notifyListeners();
+  }
+
+  @override
+  void dispose() {
+    _disposed = true;
+    _sessionVersion++;
+    super.dispose();
   }
 
   /// Khôi phục phiên đăng nhập từ SharedPreferences qua GET /api/auth/me
   Future<void> restoreSession() async {
+    final version = ++_sessionVersion;
     _isInitializing = true;
     notifyListeners();
 
     try {
       final prefs = await SharedPreferences.getInstance();
       final savedToken = prefs.getString(_tokenKey);
+      if (version != _sessionVersion) return;
 
       if (savedToken != null && savedToken.trim().isNotEmpty) {
-        ApiClient.instance.setAuthToken(savedToken.trim());
-        debugPrint('[AuthProvider] Found saved token, validating via ${ApiEndpoints.currentUser}...');
+        _api.setAuthToken(savedToken.trim());
+        debugPrint(
+          '[AuthProvider] Found saved token, validating via ${ApiEndpoints.currentUser}...',
+        );
 
-        final res = await ApiClient.instance.get(ApiEndpoints.currentUser);
+        final res = await _api.get(ApiEndpoints.currentUser);
+        if (version != _sessionVersion) return;
         if (res.success && res.data != null) {
           final userObj = res.data is Map
               ? Map<String, dynamic>.from(res.data as Map)
               : <String, dynamic>{};
-          _currentUser = UserModel.fromJson(userObj, token: savedToken);
-          debugPrint('[AuthProvider] Session restored: ${_currentUser?.fullName} (${_currentUser?.userCode})');
-        } else {
-          debugPrint('[AuthProvider] Token invalid or expired (${res.statusCode}), clearing session.');
+          if (!_validUser(userObj)) {
+            _currentUser = null;
+            _errorMessage =
+                'Thông tin tài khoản không hợp lệ. Vui lòng thử lại.';
+            return;
+          }
+          _currentUser = UserModel.fromJson(userObj, token: savedToken.trim());
+          debugPrint(
+            '[AuthProvider] Session restored: ${_currentUser?.fullName} (${_currentUser?.userCode})',
+          );
+        } else if (res.statusCode == 401) {
+          debugPrint(
+            '[AuthProvider] Token invalid or expired (${res.statusCode}), clearing session.',
+          );
           await prefs.remove(_tokenKey);
-          ApiClient.instance.setAuthToken(null);
+          if (version != _sessionVersion) return;
+          _api.setAuthToken(null);
           _currentUser = null;
+        } else {
+          _errorMessage = res.message;
         }
+      } else {
+        _api.setAuthToken(null);
+        _currentUser = null;
       }
     } catch (e) {
       debugPrint('[AuthProvider] Error restoring session: $e');
     } finally {
-      _isInitializing = false;
+      if (version == _sessionVersion) _isInitializing = false;
       notifyListeners();
     }
   }
@@ -64,6 +112,8 @@ class AuthProvider extends ChangeNotifier {
     required String password,
     String role = 'STUDENT',
   }) async {
+    if (_isLoading) return false;
+    final version = ++_sessionVersion;
     _isLoading = true;
     _errorMessage = null;
     notifyListeners();
@@ -87,40 +137,52 @@ class AuthProvider extends ChangeNotifier {
 
     try {
       // 1. Gọi trực tiếp API Spring Boot Backend: POST /api/auth/login
-      final res = await ApiClient.instance.post(
+      final res = await _api.post(
         ApiEndpoints.login,
-        body: {
-          'email': inputIdentifier,
-          'password': trimmedPass,
-        },
+        authenticated: false,
+        body: {'email': email, 'password': password},
       );
+      if (version != _sessionVersion) return false;
 
       // 2. Kiểm tra phản hồi từ Backend
       if (res.success && res.data != null) {
-        final data = res.data is Map ? Map<String, dynamic>.from(res.data as Map) : <String, dynamic>{};
+        final data = res.data is Map
+            ? Map<String, dynamic>.from(res.data as Map)
+            : <String, dynamic>{};
         final token = data['token']?.toString();
         final userObj = data['user'] is Map
             ? Map<String, dynamic>.from(data['user'] as Map)
             : Map<String, dynamic>.from(data);
 
-        ApiClient.instance.setAuthToken(token);
+        if (token == null || token.trim().isEmpty || !_validUser(userObj)) {
+          _errorMessage = 'Phản hồi đăng nhập không hợp lệ.';
+          _isLoading = false;
+          notifyListeners();
+          return false;
+        }
+        _api.setAuthToken(token);
         _currentUser = UserModel.fromJson(userObj, token: token);
 
         // Lưu JWT token vào SharedPreferences để ghi nhớ đăng nhập
-        if (token != null && token.isNotEmpty) {
+        if (token.isNotEmpty) {
           final prefs = await SharedPreferences.getInstance();
+          if (version != _sessionVersion) return false;
           await prefs.setString(_tokenKey, token);
         }
+        if (version != _sessionVersion) return false;
 
         _isLoading = false;
         notifyListeners();
-        debugPrint('[AuthProvider] Login successfully from Spring Boot: ${_currentUser?.fullName} (${_currentUser?.userCode})');
+        debugPrint(
+          '[AuthProvider] Login successfully from Spring Boot: ${_currentUser?.fullName} (${_currentUser?.userCode})',
+        );
         return true;
       }
 
       // Xử lý lỗi khi Backend từ chối hoặc không phản hồi
       if (res.statusCode == 0) {
-        _errorMessage = 'Không thể kết nối đến máy chủ Backend (${ApiClient.instance.baseUrl}). Vui lòng kiểm tra mạng hoặc server.';
+        _errorMessage =
+            'Không thể kết nối đến máy chủ Backend (${ApiClient.instance.baseUrl}). Vui lòng kiểm tra mạng hoặc server.';
       } else {
         _errorMessage = res.message.isNotEmpty
             ? res.message
@@ -131,6 +193,9 @@ class AuthProvider extends ChangeNotifier {
       notifyListeners();
       return false;
     } catch (e) {
+      if (version != _sessionVersion) return false;
+      _api.setAuthToken(null);
+      _currentUser = null;
       debugPrint('[AuthProvider] Error during login: $e');
       _errorMessage = 'Đăng nhập thất bại: $e';
       _isLoading = false;
@@ -141,14 +206,17 @@ class AuthProvider extends ChangeNotifier {
 
   /// Đăng xuất và xóa sạch session token
   Future<void> logout() async {
+    _sessionVersion++;
+    _api.setAuthToken(null);
+    _currentUser = null;
+    _isLoading = false;
+    _isInitializing = false;
     try {
       final prefs = await SharedPreferences.getInstance();
       await prefs.remove(_tokenKey);
     } catch (e) {
       debugPrint('[AuthProvider] Error clearing token on logout: $e');
     }
-    ApiClient.instance.setAuthToken(null);
-    _currentUser = null;
     notifyListeners();
   }
 
@@ -164,9 +232,10 @@ class AuthProvider extends ChangeNotifier {
     }
 
     try {
-      final res = await ApiClient.instance.post(
+      final res = await _api.post(
         ApiEndpoints.forgotPassword,
-        body: {'email': cleanEmail},
+        authenticated: false,
+        body: {'email': email},
       );
       return res;
     } catch (e) {
@@ -185,21 +254,30 @@ class AuthProvider extends ChangeNotifier {
       throw Exception('Vui lòng nhập hoặc dán mã Token hợp lệ');
     }
 
-    final res = await ApiClient.instance.post(
+    final res = await _api.post(
       ApiEndpoints.checkPasswordLink,
+      authenticated: false,
       body: {'token': token},
     );
 
     if (res.success && res.data != null) {
-      final dataMap = res.data is Map ? Map<String, dynamic>.from(res.data as Map) : <String, dynamic>{};
+      final dataMap = res.data is Map
+          ? Map<String, dynamic>.from(res.data as Map)
+          : <String, dynamic>{};
       return PasswordLinkInfoModel.fromJson(dataMap);
     }
 
     if (res.statusCode == 400) {
-      throw Exception('Link hoặc mã Token không hợp lệ, đã được dùng hoặc đã hết hạn.');
+      throw Exception(
+        'Link hoặc mã Token không hợp lệ, đã được dùng hoặc đã hết hạn.',
+      );
     }
 
-    throw Exception(res.message.isNotEmpty ? res.message : 'Không thể xác thực link với máy chủ. Vui lòng thử lại.');
+    throw Exception(
+      res.message.isNotEmpty
+          ? res.message
+          : 'Không thể xác thực link với máy chủ. Vui lòng thử lại.',
+    );
   }
 
   /// Đặt mật khẩu mới bằng Token: POST /api/auth/password/set
@@ -221,17 +299,17 @@ class AuthProvider extends ChangeNotifier {
       return ApiResponseData(
         success: false,
         statusCode: 400,
-        message: validation.errorMessage ?? 'Mật khẩu không thỏa mãn yêu cầu bảo mật',
+        message:
+            validation.errorMessage ??
+            'Mật khẩu không thỏa mãn yêu cầu bảo mật',
       );
     }
 
     try {
-      final res = await ApiClient.instance.post(
+      final res = await _api.post(
         ApiEndpoints.setPassword,
-        body: {
-          'token': token,
-          'newPassword': newPassword,
-        },
+        authenticated: false,
+        body: {'token': token, 'newPassword': newPassword},
       );
       return res;
     } catch (e) {

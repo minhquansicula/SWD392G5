@@ -13,7 +13,10 @@ class RubricCriterion {
     this.maxScore = 10.0,
   });
 
-  double get percentage => (score / maxScore).clamp(0.0, 1.0);
+  double get percentage =>
+      !score.isFinite || !maxScore.isFinite || maxScore <= 0
+      ? 0.0
+      : (score / maxScore).clamp(0.0, 1.0);
 }
 
 class QuestionReportItem {
@@ -79,10 +82,10 @@ class VivaReportModel {
     final rank = score >= 8.5
         ? 'Hạng Giỏi (Excellence)'
         : score >= 7.0
-            ? 'Hạng Khá (Good)'
-            : score >= 5.0
-                ? 'Đạt (Pass)'
-                : 'Không đạt (Fail)';
+        ? 'Hạng Khá (Good)'
+        : score >= 5.0
+        ? 'Đạt (Pass)'
+        : 'Không đạt (Fail)';
 
     return VivaReportModel(
       id: exam.id,
@@ -94,7 +97,9 @@ class VivaReportModel {
       maxScore: 10.0,
       gradeRank: rank,
       isPassed: isPass,
-      verifiedByLecturer: exam.examiners.isNotEmpty ? exam.examiners.join(', ') : 'Hội đồng Giảng viên FPT',
+      verifiedByLecturer: exam.examiners.isNotEmpty
+          ? exam.examiners.join(', ')
+          : 'Hội đồng Giảng viên FPT',
       rubricCriteria: const [],
       strengths: const [],
       improvements: const [],
@@ -103,9 +108,10 @@ class VivaReportModel {
   }
 
   factory VivaReportModel.fromJson(Map<String, dynamic> json) {
-    final score = (json['totalScore'] ?? json['finalScore'] as num?)?.toDouble() ?? 0.0;
+    final score =
+        (json['totalScore'] ?? json['finalScore'] as num?)?.toDouble() ?? 0.0;
     final max = (json['maxScore'] as num?)?.toDouble() ?? 10.0;
-    final pass = json['isPassed'] == true || score >= 5.0;
+    final pass = json['isPassed'] is bool ? json['isPassed'] as bool : score >= 5.0;
 
     return VivaReportModel(
       id: json['id']?.toString() ?? '',
@@ -117,35 +123,55 @@ class VivaReportModel {
           : DateTime.now(),
       totalScore: score,
       maxScore: max,
-      gradeRank: json['gradeRank']?.toString() ?? (score >= 8.5 ? 'Hạng Giỏi' : score >= 7.0 ? 'Hạng Khá' : score >= 5.0 ? 'Đạt' : 'Không đạt'),
+      gradeRank:
+          json['gradeRank']?.toString() ??
+          (score >= 8.5
+              ? 'Hạng Giỏi'
+              : score >= 7.0
+              ? 'Hạng Khá'
+              : score >= 5.0
+              ? 'Đạt'
+              : 'Không đạt'),
       isPassed: pass,
-      verifiedByLecturer: json['verifiedByLecturer'] ?? json['gradedBy'] ?? 'Giảng viên chấm thi',
-      rubricCriteria: (json['rubricCriteria'] as List?)
-              ?.map((c) => RubricCriterion(
-                    title: c['title'] ?? '',
-                    englishTitle: c['englishTitle'] ?? '',
-                    score: (c['score'] as num?)?.toDouble() ?? 0.0,
-                    maxScore: (c['maxScore'] as num?)?.toDouble() ?? 10.0,
-                  ))
+      verifiedByLecturer:
+          json['verifiedByLecturer'] ??
+          json['gradedBy'] ??
+          'Giảng viên chấm thi',
+      rubricCriteria:
+          (json['rubricCriteria'] as List?)
+              ?.map(
+                (c) => RubricCriterion(
+                  title: c['title'] ?? '',
+                  englishTitle: c['englishTitle'] ?? '',
+                  score: (c['score'] as num?)?.toDouble() ?? 0.0,
+                  maxScore: (c['maxScore'] as num?)?.toDouble() ?? 10.0,
+                ),
+              )
               .toList() ??
           const [],
-      strengths: (json['strengths'] as List?)?.map((s) => s.toString()).toList() ?? const [],
-      improvements: (json['improvements'] as List?)?.map((s) => s.toString()).toList() ?? const [],
-      questionReports: (json['questionReports'] as List?)
-              ?.map((q) => QuestionReportItem(
-                    questionNumber: q['questionNumber'] ?? 1,
-                    title: q['title'] ?? '',
-                    fullQuestion: q['fullQuestion'] ?? '',
-                    studentAnswer: q['studentAnswer'] ?? '',
-                    score: (q['score'] as num?)?.toDouble() ?? 0.0,
-                    maxScore: (q['maxScore'] as num?)?.toDouble() ?? 2.5,
-                    audioDuration: q['audioDuration'] ?? '00:00',
-                    bloomLevel: q['bloomLevel'] ?? '',
-                    isFollowUp: q['isFollowUp'] == true,
-                  ))
+      strengths:
+          (json['strengths'] as List?)?.map((s) => s.toString()).toList() ??
+          const [],
+      improvements:
+          (json['improvements'] as List?)?.map((s) => s.toString()).toList() ??
+          const [],
+      questionReports:
+          (json['questionReports'] as List?)
+              ?.map(
+                (q) => QuestionReportItem(
+                  questionNumber: q['questionNumber'] ?? 1,
+                  title: q['title'] ?? '',
+                  fullQuestion: q['fullQuestion'] ?? '',
+                  studentAnswer: q['studentAnswer'] ?? '',
+                  score: (q['score'] as num?)?.toDouble() ?? 0.0,
+                  maxScore: (q['maxScore'] as num?)?.toDouble() ?? 2.5,
+                  audioDuration: q['audioDuration'] ?? '00:00',
+                  bloomLevel: q['bloomLevel'] ?? '',
+                  isFollowUp: q['isFollowUp'] == true,
+                ),
+              )
               .toList() ??
           const [],
     );
   }
 }
-

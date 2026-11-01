@@ -57,6 +57,10 @@ class ExamScheduleModel {
     if (json['finalScore'] != null) {
       score = double.tryParse(json['finalScore'].toString());
     }
+    if (json['lecturerTotalPending'] == true ||
+        (score != null && (!score.isFinite || score < 0 || score > 10))) {
+      score = null;
+    }
 
     return ExamScheduleModel(
       id: json['id']?.toString() ?? '',

@@ -17,39 +17,45 @@ import '../services/viva_websocket_service.dart';
 
 /// Các trạng thái tương tác giọng nói trong phòng thi vấn đáp
 enum VivaVoiceState {
-  aiSpeaking,      // Giám khảo AI đang đọc câu hỏi (TTS)
-  listening,       // Sinh viên đang phát biểu trả lời qua Microphone
+  aiSpeaking, // Giám khảo AI đang đọc câu hỏi (TTS)
+  listening, // Sinh viên đang phát biểu trả lời qua Microphone
   socraticProbing, // AI đang đối chiếu Rubric & sinh câu hỏi phản biện / đào sâu
-  completed,       // Ca thi hoàn tất
+  completed, // Ca thi hoàn tất
 }
 
 class VivaRoomScreen extends StatefulWidget {
   final ExamScheduleModel exam;
 
-  const VivaRoomScreen({
-    super.key,
-    required this.exam,
-  });
+  const VivaRoomScreen({super.key, required this.exam});
 
   @override
   State<VivaRoomScreen> createState() => _VivaRoomScreenState();
 }
 
-class _VivaRoomScreenState extends State<VivaRoomScreen> with TickerProviderStateMixin {
+class _VivaRoomScreenState extends State<VivaRoomScreen>
+    with TickerProviderStateMixin {
   final ScrollController _scrollController = ScrollController();
   bool _hasShownFinishedDialog = false;
+  String? _startError;
+  late VivaSessionProvider _session;
 
   @override
   void initState() {
     super.initState();
 
     // 1. Kích hoạt API Backend Spring Boot bắt đầu ca thi
-    _initExamSessionOnBackend();
 
     // 2. Tự động kết nối WebSocket demo/viva-ai-v2 với Token xác thực
-    WidgetsBinding.instance.addPostFrameCallback((_) {
+    _session = context.read<VivaSessionProvider>();
+    WidgetsBinding.instance.addPostFrameCallback((_) async {
+      if (!mounted) return;
+      if (widget.exam.status != ExamStatus.inProgress &&
+          !await _initExamSessionOnBackend()) {
+        return;
+      }
+      if (!mounted) return;
       final auth = context.read<AuthProvider>();
-      context.read<VivaSessionProvider>().startSession(
+      await _session.startSession(
         examId: widget.exam.id,
         studentId: auth.currentUser?.id ?? '',
         token: auth.currentUser?.token,
@@ -58,20 +64,35 @@ class _VivaRoomScreenState extends State<VivaRoomScreen> with TickerProviderStat
   }
 
   /// Gọi API Backend Spring Boot để bắt đầu ca thi
-  Future<void> _initExamSessionOnBackend() async {
+  Future<bool> _initExamSessionOnBackend() async {
     try {
-      await ApiClient.instance.post(
+      final result = await ApiClient.instance.post(
         '${ApiEndpoints.studentScheduleStart}/${widget.exam.id}/start',
         body: {},
       );
-      debugPrint('[VivaRoom] Exam schedule started successfully on Spring Boot backend.');
+      if (!result.success) {
+        if (mounted) setState(() => _startError = result.message);
+        return false;
+      }
+      debugPrint(
+        '[VivaRoom] Exam schedule started successfully on Spring Boot backend.',
+      );
+      return true;
     } catch (e) {
       debugPrint('[VivaRoom] Notice: $e');
+      if (mounted) {
+        setState(
+          () =>
+              _startError = 'Không thể bắt đầu ca thi. Kiểm tra lại lịch thi.',
+        );
+      }
+      return false;
     }
   }
 
   @override
   void dispose() {
+    _session.stopSession();
     _scrollController.dispose();
     super.dispose();
   }
@@ -109,20 +130,37 @@ class _VivaRoomScreenState extends State<VivaRoomScreen> with TickerProviderStat
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(22)),
         title: Row(
           children: const [
-            Icon(Icons.check_circle_rounded, color: AppColors.success, size: 28),
+            Icon(
+              Icons.check_circle_rounded,
+              color: AppColors.success,
+              size: 28,
+            ),
             SizedBox(width: 10),
-            Text('Ca Thi Hoàn Tất', style: TextStyle(color: Colors.white, fontSize: 18, fontWeight: FontWeight.bold)),
+            Text(
+              'Ca Thi Hoàn Tất',
+              style: TextStyle(
+                color: Colors.white,
+                fontSize: 18,
+                fontWeight: FontWeight.bold,
+              ),
+            ),
           ],
         ),
         content: const Text(
           'Chúc mừng bạn đã hoàn thành phiên thi vấn đáp AI! Giám khảo AI đã tổng hợp bảng điểm và nhận xét chi tiết Rubric.',
-          style: TextStyle(color: AppColors.textSecondary, fontSize: 13.5, height: 1.5),
+          style: TextStyle(
+            color: AppColors.textSecondary,
+            fontSize: 13.5,
+            height: 1.5,
+          ),
         ),
         actions: [
           ElevatedButton(
             style: ElevatedButton.styleFrom(
               backgroundColor: AppColors.primary,
-              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(12),
+              ),
               padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 10),
             ),
             onPressed: () {
@@ -133,7 +171,13 @@ class _VivaRoomScreenState extends State<VivaRoomScreen> with TickerProviderStat
                 ),
               );
             },
-            child: const Text('Xem Bảng Điểm & Nhận Xét', style: TextStyle(color: Colors.white, fontWeight: FontWeight.w600)),
+            child: const Text(
+              'Xem Bảng Điểm & Nhận Xét',
+              style: TextStyle(
+                color: Colors.white,
+                fontWeight: FontWeight.w600,
+              ),
+            ),
           ),
         ],
       ),
@@ -148,9 +192,20 @@ class _VivaRoomScreenState extends State<VivaRoomScreen> with TickerProviderStat
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
         title: Row(
           children: const [
-            Icon(Icons.warning_amber_rounded, color: AppColors.warning, size: 26),
+            Icon(
+              Icons.warning_amber_rounded,
+              color: AppColors.warning,
+              size: 26,
+            ),
             SizedBox(width: 8),
-            Text('Rời khỏi phòng thi?', style: TextStyle(color: Colors.white, fontSize: 17, fontWeight: FontWeight.bold)),
+            Text(
+              'Rời khỏi phòng thi?',
+              style: TextStyle(
+                color: Colors.white,
+                fontSize: 17,
+                fontWeight: FontWeight.bold,
+              ),
+            ),
           ],
         ),
         content: const Text(
@@ -160,15 +215,23 @@ class _VivaRoomScreenState extends State<VivaRoomScreen> with TickerProviderStat
         actions: [
           TextButton(
             onPressed: () => Navigator.of(ctx).pop(),
-            child: const Text('Tiếp tục thi', style: TextStyle(color: Colors.white70)),
+            child: const Text(
+              'Tiếp tục thi',
+              style: TextStyle(color: Colors.white70),
+            ),
           ),
           ElevatedButton(
-            style: ElevatedButton.styleFrom(backgroundColor: AppColors.dangerDark),
+            style: ElevatedButton.styleFrom(
+              backgroundColor: AppColors.dangerDark,
+            ),
             onPressed: () {
               Navigator.of(ctx).pop();
               Navigator.of(context).pop();
             },
-            child: const Text('Rời phòng', style: TextStyle(color: Colors.white)),
+            child: const Text(
+              'Rời phòng',
+              style: TextStyle(color: Colors.white),
+            ),
           ),
         ],
       ),
@@ -182,18 +245,20 @@ class _VivaRoomScreenState extends State<VivaRoomScreen> with TickerProviderStat
     final isAdaptive = currentQ.isAdaptiveFollowUp;
 
     // Đồng bộ trạng thái giọng nói từ VivaSessionProvider thực tế
-    final effectiveVoiceState = viva.wsStatus != WsConnectionStatus.authenticated
+    final effectiveVoiceState =
+        viva.wsStatus != WsConnectionStatus.authenticated
         ? VivaVoiceState.aiSpeaking
         : (viva.sessionState == VivaSessionState.listening
-            ? VivaVoiceState.listening
-            : (viva.sessionState == VivaSessionState.processing
-                ? VivaVoiceState.socraticProbing
-                : (viva.sessionState == VivaSessionState.completed
-                    ? VivaVoiceState.completed
-                    : VivaVoiceState.aiSpeaking)));
+              ? VivaVoiceState.listening
+              : (viva.sessionState == VivaSessionState.processing
+                    ? VivaVoiceState.socraticProbing
+                    : (viva.sessionState == VivaSessionState.completed
+                          ? VivaVoiceState.completed
+                          : VivaVoiceState.aiSpeaking)));
 
     // Tự động kiểm tra nếu phiên thi hoàn thành từ server
-    if (viva.sessionState == VivaSessionState.completed && !_hasShownFinishedDialog) {
+    if (viva.sessionState == VivaSessionState.completed &&
+        !_hasShownFinishedDialog) {
       _hasShownFinishedDialog = true;
       WidgetsBinding.instance.addPostFrameCallback((_) {
         if (mounted) {
@@ -207,6 +272,14 @@ class _VivaRoomScreenState extends State<VivaRoomScreen> with TickerProviderStat
       body: SafeArea(
         child: Column(
           children: [
+            if (_startError != null || viva.errorMessage != null)
+              Padding(
+                padding: const EdgeInsets.all(12),
+                child: Text(
+                  _startError ?? viva.errorMessage!,
+                  style: const TextStyle(color: AppColors.danger),
+                ),
+              ),
             // Top Telemetry Header
             _buildTopTelemetryBar(viva),
 
@@ -215,32 +288,49 @@ class _VivaRoomScreenState extends State<VivaRoomScreen> with TickerProviderStat
               Container(
                 width: double.infinity,
                 color: AppColors.warning.withValues(alpha: 0.15),
-                padding: const EdgeInsets.symmetric(vertical: 6, horizontal: 14),
+                padding: const EdgeInsets.symmetric(
+                  vertical: 6,
+                  horizontal: 14,
+                ),
                 child: Row(
                   children: const [
                     SizedBox(
                       width: 12,
                       height: 12,
-                      child: CircularProgressIndicator(strokeWidth: 2, color: AppColors.warning),
+                      child: CircularProgressIndicator(
+                        strokeWidth: 2,
+                        color: AppColors.warning,
+                      ),
                     ),
                     SizedBox(width: 8),
                     Expanded(
                       child: Text(
                         'Đang kết nối tới Python AI Examiner...',
-                        style: TextStyle(color: AppColors.warning, fontSize: 11),
+                        style: TextStyle(
+                          color: AppColors.warning,
+                          fontSize: 11,
+                        ),
                       ),
                     ),
                   ],
                 ),
               )
-            else if (viva.wsStatus == WsConnectionStatus.error || viva.wsStatus == WsConnectionStatus.disconnected)
+            else if (viva.wsStatus == WsConnectionStatus.error ||
+                viva.wsStatus == WsConnectionStatus.disconnected)
               Container(
                 width: double.infinity,
                 color: AppColors.danger.withValues(alpha: 0.2),
-                padding: const EdgeInsets.symmetric(vertical: 6, horizontal: 14),
+                padding: const EdgeInsets.symmetric(
+                  vertical: 6,
+                  horizontal: 14,
+                ),
                 child: Row(
                   children: const [
-                    Icon(Icons.error_outline_rounded, color: AppColors.danger, size: 14),
+                    Icon(
+                      Icons.error_outline_rounded,
+                      color: AppColors.danger,
+                      size: 14,
+                    ),
                     SizedBox(width: 8),
                     Expanded(
                       child: Text(
@@ -256,7 +346,10 @@ class _VivaRoomScreenState extends State<VivaRoomScreen> with TickerProviderStat
             Expanded(
               child: SingleChildScrollView(
                 controller: _scrollController,
-                padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 8),
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 18,
+                  vertical: 8,
+                ),
                 child: Column(
                   children: [
                     const SizedBox(height: 10),
@@ -306,7 +399,11 @@ class _VivaRoomScreenState extends State<VivaRoomScreen> with TickerProviderStat
           IconButton(
             padding: EdgeInsets.zero,
             constraints: const BoxConstraints(minWidth: 32, minHeight: 32),
-            icon: const Icon(Icons.arrow_back_ios_new_rounded, size: 18, color: Colors.white),
+            icon: const Icon(
+              Icons.arrow_back_ios_new_rounded,
+              size: 18,
+              color: Colors.white,
+            ),
             onPressed: _confirmExit,
           ),
           const SizedBox(width: 6),
@@ -332,15 +429,22 @@ class _VivaRoomScreenState extends State<VivaRoomScreen> with TickerProviderStat
                       width: 6,
                       height: 6,
                       decoration: BoxDecoration(
-                        color: isLiveWs ? AppColors.success : AppColors.secondary,
+                        color: isLiveWs
+                            ? AppColors.success
+                            : AppColors.secondary,
                         shape: BoxShape.circle,
                       ),
                     ),
                   ],
                 ),
                 Text(
-                  isLiveWs ? '${widget.exam.courseCode} • Gemini Live & RAG' : widget.exam.courseCode,
-                  style: AppTextStyles.bodySm.copyWith(color: AppColors.textMuted, fontSize: 11),
+                  isLiveWs
+                      ? '${widget.exam.courseCode} • Gemini Live & RAG'
+                      : widget.exam.courseCode,
+                  style: AppTextStyles.bodySm.copyWith(
+                    color: AppColors.textMuted,
+                    fontSize: 11,
+                  ),
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
                 ),
@@ -359,7 +463,10 @@ class _VivaRoomScreenState extends State<VivaRoomScreen> with TickerProviderStat
             ),
             child: Text(
               'Câu $currentNum/$totalQ',
-              style: AppTextStyles.labelSm.copyWith(color: Colors.white, fontSize: 11),
+              style: AppTextStyles.labelSm.copyWith(
+                color: Colors.white,
+                fontSize: 11,
+              ),
             ),
           ),
           const SizedBox(width: 6),
@@ -370,12 +477,18 @@ class _VivaRoomScreenState extends State<VivaRoomScreen> with TickerProviderStat
             decoration: BoxDecoration(
               color: AppColors.warning.withValues(alpha: 0.15),
               borderRadius: BorderRadius.circular(10),
-              border: Border.all(color: AppColors.warning.withValues(alpha: 0.4)),
+              border: Border.all(
+                color: AppColors.warning.withValues(alpha: 0.4),
+              ),
             ),
             child: Row(
               mainAxisSize: MainAxisSize.min,
               children: [
-                const Icon(Icons.timer_outlined, size: 13, color: AppColors.warning),
+                const Icon(
+                  Icons.timer_outlined,
+                  size: 13,
+                  color: AppColors.warning,
+                ),
                 const SizedBox(width: 4),
                 Text(
                   viva.formattedTimer,
@@ -459,14 +572,18 @@ class _VivaRoomScreenState extends State<VivaRoomScreen> with TickerProviderStat
   }
 
   Widget _buildQuestionCard(VivaQuestionModel q, bool isAdaptive) {
-    final tags = q.topicTags.isNotEmpty ? q.topicTags : ['#${widget.exam.courseCode}', '#VivaExam'];
+    final tags = q.topicTags.isNotEmpty
+        ? q.topicTags
+        : ['#${widget.exam.courseCode}', '#VivaExam'];
 
     return GlassCard(
       padding: const EdgeInsets.all(16),
       borderRadius: 16,
       backgroundColor: AppColors.surfaceCard,
       border: Border.all(
-        color: isAdaptive ? AppColors.primaryLight.withValues(alpha: 0.6) : AppColors.borderGlass,
+        color: isAdaptive
+            ? AppColors.primaryLight.withValues(alpha: 0.6)
+            : AppColors.borderGlass,
         width: isAdaptive ? 1.5 : 1,
       ),
       child: Column(
@@ -480,7 +597,11 @@ class _VivaRoomScreenState extends State<VivaRoomScreen> with TickerProviderStat
                   color: AppColors.primary.withValues(alpha: 0.2),
                   borderRadius: BorderRadius.circular(8),
                 ),
-                child: const Icon(Icons.psychology_rounded, size: 18, color: AppColors.primaryLight),
+                child: const Icon(
+                  Icons.psychology_rounded,
+                  size: 18,
+                  color: AppColors.primaryLight,
+                ),
               ),
               const SizedBox(width: 10),
               Expanded(
@@ -488,37 +609,54 @@ class _VivaRoomScreenState extends State<VivaRoomScreen> with TickerProviderStat
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     Text(
-                      isAdaptive ? 'Giám Khảo AI • Hỏi Xoáy Socratic (RAG)' : 'Giám Khảo AI • Câu Hỏi #${q.questionNumber}',
+                      isAdaptive
+                          ? 'Giám Khảo AI • Hỏi Xoáy Socratic (RAG)'
+                          : 'Giám Khảo AI • Câu Hỏi #${q.questionNumber}',
                       style: AppTextStyles.labelBold.copyWith(
-                        color: isAdaptive ? AppColors.primaryLight : Colors.white,
+                        color: isAdaptive
+                            ? AppColors.primaryLight
+                            : Colors.white,
                         fontSize: 13.5,
                       ),
                     ),
                     Text(
                       'Mức độ Bloom: ${q.bloomLevel}',
-                      style: AppTextStyles.bodySm.copyWith(color: AppColors.textMuted, fontSize: 11),
+                      style: AppTextStyles.bodySm.copyWith(
+                        color: AppColors.textMuted,
+                        fontSize: 11,
+                      ),
                     ),
                   ],
                 ),
               ),
               if (isAdaptive)
                 Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 8,
+                    vertical: 3,
+                  ),
                   decoration: BoxDecoration(
                     color: AppColors.primarySoft,
                     borderRadius: BorderRadius.circular(8),
-                    border: Border.all(color: AppColors.primaryLight.withValues(alpha: 0.35)),
+                    border: Border.all(
+                      color: AppColors.primaryLight.withValues(alpha: 0.35),
+                    ),
                   ),
                   child: Text(
                     'Đào Sâu',
-                    style: AppTextStyles.labelSm.copyWith(color: AppColors.primaryLight, fontSize: 10.5),
+                    style: AppTextStyles.labelSm.copyWith(
+                      color: AppColors.primaryLight,
+                      fontSize: 10.5,
+                    ),
                   ),
                 ),
             ],
           ),
           const SizedBox(height: 14),
           Text(
-            q.content.isNotEmpty ? q.content : 'Chào mừng bạn đến với ca thi vấn đáp trực tuyến AIVES.',
+            q.content.isNotEmpty
+                ? q.content
+                : 'Chào mừng bạn đến với ca thi vấn đáp trực tuyến AIVES.',
             style: AppTextStyles.headlineMd.copyWith(
               fontSize: 15,
               fontWeight: FontWeight.w600,
@@ -532,7 +670,10 @@ class _VivaRoomScreenState extends State<VivaRoomScreen> with TickerProviderStat
             runSpacing: 4,
             children: tags.map<Widget>((t) {
               return Container(
-                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2.5),
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 8,
+                  vertical: 2.5,
+                ),
                 decoration: BoxDecoration(
                   color: AppColors.surfaceCardHigh,
                   borderRadius: BorderRadius.circular(8),
@@ -540,7 +681,10 @@ class _VivaRoomScreenState extends State<VivaRoomScreen> with TickerProviderStat
                 ),
                 child: Text(
                   t,
-                  style: AppTextStyles.bodySm.copyWith(fontSize: 10.5, color: AppColors.textMuted),
+                  style: AppTextStyles.bodySm.copyWith(
+                    fontSize: 10.5,
+                    color: AppColors.textMuted,
+                  ),
                 ),
               );
             }).toList(),
@@ -550,7 +694,10 @@ class _VivaRoomScreenState extends State<VivaRoomScreen> with TickerProviderStat
     );
   }
 
-  Widget _buildLiveConversationBubbles(VivaQuestionModel q, VivaSessionProvider viva) {
+  Widget _buildLiveConversationBubbles(
+    VivaQuestionModel q,
+    VivaSessionProvider viva,
+  ) {
     final liveTranscripts = viva.transcripts;
 
     if (liveTranscripts.isNotEmpty) {
@@ -579,13 +726,16 @@ class _VivaRoomScreenState extends State<VivaRoomScreen> with TickerProviderStat
                       width: 22,
                       height: 22,
                       decoration: BoxDecoration(
-                        color: (isAi ? AppColors.primary : AppColors.tertiary).withValues(alpha: 0.25),
+                        color: (isAi ? AppColors.primary : AppColors.tertiary)
+                            .withValues(alpha: 0.25),
                         shape: BoxShape.circle,
                       ),
                       child: Icon(
                         isAi ? Icons.smart_toy_rounded : Icons.person_rounded,
                         size: 13,
-                        color: isAi ? AppColors.primaryLight : AppColors.tertiary,
+                        color: isAi
+                            ? AppColors.primaryLight
+                            : AppColors.tertiary,
                       ),
                     ),
                     const SizedBox(width: 8),
@@ -604,7 +754,9 @@ class _VivaRoomScreenState extends State<VivaRoomScreen> with TickerProviderStat
                             width: 6,
                             height: 6,
                             decoration: BoxDecoration(
-                              color: isAi ? AppColors.primaryLight : AppColors.tertiary,
+                              color: isAi
+                                  ? AppColors.primaryLight
+                                  : AppColors.tertiary,
                               shape: BoxShape.circle,
                             ),
                           ),
@@ -613,7 +765,9 @@ class _VivaRoomScreenState extends State<VivaRoomScreen> with TickerProviderStat
                             isAi ? 'Đang đọc...' : 'Đang phát biểu...',
                             style: AppTextStyles.bodySm.copyWith(
                               fontSize: 10,
-                              color: isAi ? AppColors.primaryLight : AppColors.tertiary,
+                              color: isAi
+                                  ? AppColors.primaryLight
+                                  : AppColors.tertiary,
                             ),
                           ),
                         ],
@@ -664,10 +818,17 @@ class _VivaRoomScreenState extends State<VivaRoomScreen> with TickerProviderStat
                       color: AppColors.primary.withValues(alpha: 0.3),
                       shape: BoxShape.circle,
                     ),
-                    child: const Icon(Icons.smart_toy_rounded, size: 13, color: AppColors.primaryLight),
+                    child: const Icon(
+                      Icons.smart_toy_rounded,
+                      size: 13,
+                      color: AppColors.primaryLight,
+                    ),
                   ),
                   const SizedBox(width: 8),
-                  Text('Lời Giám khảo AI xướng thoại', style: AppTextStyles.labelBold.copyWith(fontSize: 12)),
+                  Text(
+                    'Lời Giám khảo AI xướng thoại',
+                    style: AppTextStyles.labelBold.copyWith(fontSize: 12),
+                  ),
                   const Spacer(),
                   if (viva.sessionState == VivaSessionState.aiSpeaking)
                     VoiceWaveVisualizer(
@@ -681,10 +842,14 @@ class _VivaRoomScreenState extends State<VivaRoomScreen> with TickerProviderStat
               ),
               const SizedBox(height: 8),
               Text(
-                q.content.isNotEmpty ? q.content : 'Giám khảo AI đang kết nối và chuẩn bị câu hỏi...',
+                q.content.isNotEmpty
+                    ? q.content
+                    : 'Giám khảo AI đang kết nối và chuẩn bị câu hỏi...',
                 style: AppTextStyles.bodyMd.copyWith(
                   fontSize: 13,
-                  color: viva.sessionState == VivaSessionState.aiSpeaking ? Colors.white : AppColors.textSecondary,
+                  color: viva.sessionState == VivaSessionState.aiSpeaking
+                      ? Colors.white
+                      : AppColors.textSecondary,
                   height: 1.45,
                 ),
               ),
@@ -700,7 +865,9 @@ class _VivaRoomScreenState extends State<VivaRoomScreen> with TickerProviderStat
             color: AppColors.surfaceCard,
             borderRadius: BorderRadius.circular(16),
             border: Border.all(
-              color: viva.isRecording ? AppColors.tertiary.withValues(alpha: 0.6) : AppColors.borderGlass,
+              color: viva.isRecording
+                  ? AppColors.tertiary.withValues(alpha: 0.6)
+                  : AppColors.borderGlass,
             ),
           ),
           child: Column(
@@ -711,10 +878,17 @@ class _VivaRoomScreenState extends State<VivaRoomScreen> with TickerProviderStat
                   const CircleAvatar(
                     radius: 11,
                     backgroundColor: AppColors.primaryLight,
-                    child: Icon(Icons.person_rounded, size: 13, color: Colors.white),
+                    child: Icon(
+                      Icons.person_rounded,
+                      size: 13,
+                      color: Colors.white,
+                    ),
                   ),
                   const SizedBox(width: 8),
-                  Text('Thí sinh (Bạn phát biểu)', style: AppTextStyles.labelBold.copyWith(fontSize: 12)),
+                  Text(
+                    'Thí sinh (Bạn phát biểu)',
+                    style: AppTextStyles.labelBold.copyWith(fontSize: 12),
+                  ),
                   const Spacer(),
                   if (viva.isRecording)
                     Row(
@@ -722,12 +896,18 @@ class _VivaRoomScreenState extends State<VivaRoomScreen> with TickerProviderStat
                         Container(
                           width: 7,
                           height: 7,
-                          decoration: const BoxDecoration(color: AppColors.tertiary, shape: BoxShape.circle),
+                          decoration: const BoxDecoration(
+                            color: AppColors.tertiary,
+                            shape: BoxShape.circle,
+                          ),
                         ),
                         const SizedBox(width: 6),
                         Text(
                           'Đang thu âm...',
-                          style: AppTextStyles.labelSm.copyWith(color: AppColors.tertiary, fontSize: 10.5),
+                          style: AppTextStyles.labelSm.copyWith(
+                            color: AppColors.tertiary,
+                            fontSize: 10.5,
+                          ),
                         ),
                       ],
                     ),
@@ -740,8 +920,12 @@ class _VivaRoomScreenState extends State<VivaRoomScreen> with TickerProviderStat
                     : 'Nhấn vào biểu tượng Micro bên dưới để bắt đầu trả lời.',
                 style: AppTextStyles.bodyMd.copyWith(
                   fontSize: 13,
-                  color: viva.isRecording ? AppColors.tertiary : AppColors.textSecondary,
-                  fontStyle: viva.isRecording ? FontStyle.italic : FontStyle.normal,
+                  color: viva.isRecording
+                      ? AppColors.tertiary
+                      : AppColors.textSecondary,
+                  fontStyle: viva.isRecording
+                      ? FontStyle.italic
+                      : FontStyle.normal,
                   height: 1.45,
                 ),
               ),
@@ -753,7 +937,8 @@ class _VivaRoomScreenState extends State<VivaRoomScreen> with TickerProviderStat
   }
 
   Widget _buildBottomControlDeck(VivaSessionProvider viva) {
-    final isMicActive = viva.isRecording || viva.sessionState == VivaSessionState.listening;
+    final isMicActive =
+        viva.isRecording || viva.sessionState == VivaSessionState.listening;
 
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
@@ -778,18 +963,27 @@ class _VivaRoomScreenState extends State<VivaRoomScreen> with TickerProviderStat
               IconButton(
                 padding: EdgeInsets.zero,
                 constraints: const BoxConstraints(minWidth: 44, minHeight: 44),
-                icon: const Icon(Icons.replay_rounded, size: 26, color: Colors.white70),
+                icon: const Icon(
+                  Icons.replay_rounded,
+                  size: 26,
+                  color: Colors.white70,
+                ),
                 onPressed: () {
                   ScaffoldMessenger.of(context).showSnackBar(
                     const SnackBar(
                       backgroundColor: AppColors.primary,
                       duration: Duration(milliseconds: 2000),
-                      content: Text('Bạn có thể nói "Xin giám khảo nhắc lại câu hỏi" qua micro để AI đọc lại.'),
+                      content: Text(
+                        'Bạn có thể nói "Xin giám khảo nhắc lại câu hỏi" qua micro để AI đọc lại.',
+                      ),
                     ),
                   );
                 },
               ),
-              Text('Hỏi lại', style: AppTextStyles.bodySm.copyWith(fontSize: 11)),
+              Text(
+                'Hỏi lại',
+                style: AppTextStyles.bodySm.copyWith(fontSize: 11),
+              ),
             ],
           ),
 
@@ -810,7 +1004,9 @@ class _VivaRoomScreenState extends State<VivaRoomScreen> with TickerProviderStat
                     : AppColors.primaryGradient,
                 boxShadow: [
                   BoxShadow(
-                    color: (isMicActive ? AppColors.tertiary : AppColors.primary).withValues(alpha: 0.65),
+                    color:
+                        (isMicActive ? AppColors.tertiary : AppColors.primary)
+                            .withValues(alpha: 0.65),
                     blurRadius: isMicActive ? 24 : 14,
                     spreadRadius: isMicActive ? 3 : 0,
                   ),
@@ -831,10 +1027,19 @@ class _VivaRoomScreenState extends State<VivaRoomScreen> with TickerProviderStat
               IconButton(
                 padding: EdgeInsets.zero,
                 constraints: const BoxConstraints(minWidth: 44, minHeight: 44),
-                icon: const Icon(Icons.send_rounded, size: 26, color: AppColors.primaryLight),
-                onPressed: viva.sessionState == VivaSessionState.processing ? null : _submitCurrentAnswer,
+                icon: const Icon(
+                  Icons.send_rounded,
+                  size: 26,
+                  color: AppColors.primaryLight,
+                ),
+                onPressed: viva.sessionState == VivaSessionState.processing
+                    ? null
+                    : _submitCurrentAnswer,
               ),
-              Text('Nộp câu', style: AppTextStyles.bodySm.copyWith(fontSize: 11)),
+              Text(
+                'Nộp câu',
+                style: AppTextStyles.bodySm.copyWith(fontSize: 11),
+              ),
             ],
           ),
         ],

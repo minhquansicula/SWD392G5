@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:intl/intl.dart';
 import 'package:provider/provider.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_text_styles.dart';
@@ -13,10 +14,7 @@ import '../../home/screens/main_navigation_screen.dart';
 class ExamResultReportScreen extends StatefulWidget {
   final ExamScheduleModel? exam;
 
-  const ExamResultReportScreen({
-    super.key,
-    this.exam,
-  });
+  const ExamResultReportScreen({super.key, this.exam});
 
   @override
   State<ExamResultReportScreen> createState() => _ExamResultReportScreenState();
@@ -27,10 +25,16 @@ class _ExamResultReportScreenState extends State<ExamResultReportScreen> {
 
   @override
   Widget build(BuildContext context) {
-    final isPendingOrNoScore = widget.exam != null &&
-        (widget.exam!.status != ExamStatus.completed || widget.exam!.finalScore == null);
+    final isPendingOrNoScore =
+        widget.exam != null &&
+        (widget.exam!.status != ExamStatus.completed ||
+            widget.exam!.finalScore == null);
 
-    final report = context.watch<ReportProvider>().latestReport ??
+    final latest = context.watch<ReportProvider>().latestReport;
+    final report =
+        (widget.exam == null || latest?.id == widget.exam!.id
+            ? latest
+            : null) ??
         (widget.exam != null && widget.exam!.finalScore != null
             ? VivaReportModel.fromExam(widget.exam!)
             : null);
@@ -74,7 +78,9 @@ class _ExamResultReportScreenState extends State<ExamResultReportScreen> {
                       ScaffoldMessenger.of(context).showSnackBar(
                         const SnackBar(
                           backgroundColor: AppColors.successDark,
-                          content: Text('Đã xuất file AIVES_SWD392_Report.pdf về máy'),
+                          content: Text(
+                            'Chức năng xuất PDF chưa được triển khai.',
+                          ),
                         ),
                       );
                     },
@@ -87,7 +93,9 @@ class _ExamResultReportScreenState extends State<ExamResultReportScreen> {
                     icon: Icons.home_rounded,
                     onPressed: () {
                       Navigator.of(context).pushAndRemoveUntil(
-                        MaterialPageRoute(builder: (_) => const MainNavigationScreen()),
+                        MaterialPageRoute(
+                          builder: (_) => const MainNavigationScreen(),
+                        ),
                         (route) => false,
                       );
                     },
@@ -115,7 +123,9 @@ class _ExamResultReportScreenState extends State<ExamResultReportScreen> {
               Navigator.of(context).pop();
             } else {
               Navigator.of(context).pushAndRemoveUntil(
-                MaterialPageRoute(builder: (_) => const MainNavigationScreen(initialIndex: 1)),
+                MaterialPageRoute(
+                  builder: (_) => const MainNavigationScreen(initialIndex: 1),
+                ),
                 (route) => false,
               );
             }
@@ -127,7 +137,11 @@ class _ExamResultReportScreenState extends State<ExamResultReportScreen> {
               icon: const Icon(Icons.share_outlined, size: 20),
               onPressed: () {
                 ScaffoldMessenger.of(context).showSnackBar(
-                  const SnackBar(content: Text('Đang chuẩn bị liên kết chia sẻ bảng điểm...')),
+                  const SnackBar(
+                    content: Text(
+                      'Đang chuẩn bị liên kết chia sẻ bảng điểm...',
+                    ),
+                  ),
                 );
               },
             ),
@@ -148,18 +162,23 @@ class _ExamResultReportScreenState extends State<ExamResultReportScreen> {
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
               Container(
-                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 10,
+                  vertical: 4,
+                ),
                 decoration: BoxDecoration(
                   color: AppColors.primary.withValues(alpha: 0.15),
                   borderRadius: BorderRadius.circular(8),
                 ),
                 child: Text(
                   report.courseCode,
-                  style: AppTextStyles.labelBold.copyWith(color: AppColors.primaryLight),
+                  style: AppTextStyles.labelBold.copyWith(
+                    color: AppColors.primaryLight,
+                  ),
                 ),
               ),
               const StatusBadge(
-                label: 'Xác thực bởi AIVES AI',
+                label: 'Báo cáo AIVES',
                 type: BadgeType.success,
                 icon: Icons.verified_user_rounded,
               ),
@@ -173,7 +192,7 @@ class _ExamResultReportScreenState extends State<ExamResultReportScreen> {
           ),
           const SizedBox(height: 4),
           Text(
-            '${report.examTitle} • 24/10/2026',
+            '${report.examTitle} • ${DateFormat('dd/MM/yyyy').format(report.examDate)}',
             style: AppTextStyles.bodySm.copyWith(color: AppColors.textMuted),
           ),
           const SizedBox(height: 20),
@@ -204,7 +223,9 @@ class _ExamResultReportScreenState extends State<ExamResultReportScreen> {
               children: [
                 Text(
                   'Tổng điểm',
-                  style: AppTextStyles.labelSm.copyWith(color: AppColors.textMuted),
+                  style: AppTextStyles.labelSm.copyWith(
+                    color: AppColors.textMuted,
+                  ),
                 ),
                 Text(
                   report.totalScore.toStringAsFixed(1),
@@ -216,7 +237,10 @@ class _ExamResultReportScreenState extends State<ExamResultReportScreen> {
                 ),
                 Text(
                   '/10',
-                  style: AppTextStyles.labelBold.copyWith(color: AppColors.primaryLight, fontSize: 13),
+                  style: AppTextStyles.labelBold.copyWith(
+                    color: AppColors.primaryLight,
+                    fontSize: 13,
+                  ),
                 ),
               ],
             ),
@@ -227,14 +251,19 @@ class _ExamResultReportScreenState extends State<ExamResultReportScreen> {
           Row(
             mainAxisAlignment: MainAxisAlignment.center,
             children: [
-              const StatusBadge(
-                label: 'ĐẠT (PASSED)',
-                type: BadgeType.success,
-                icon: Icons.check_circle_rounded,
+              StatusBadge(
+                label: report.isPassed ? 'ĐẠT (PASSED)' : 'KHÔNG ĐẠT (FAILED)',
+                type: report.isPassed ? BadgeType.success : BadgeType.danger,
+                icon: report.isPassed
+                    ? Icons.check_circle_rounded
+                    : Icons.cancel_outlined,
               ),
               const SizedBox(width: 8),
               Container(
-                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 10,
+                  vertical: 4,
+                ),
                 decoration: BoxDecoration(
                   color: AppColors.surfaceCardHigh,
                   borderRadius: BorderRadius.circular(16),
@@ -248,8 +277,11 @@ class _ExamResultReportScreenState extends State<ExamResultReportScreen> {
           ),
           const SizedBox(height: 14),
           Text(
-            'Giảng viên chấm chốt: ${report.verifiedByLecturer}',
-            style: AppTextStyles.bodySm.copyWith(color: AppColors.textDisabled, fontSize: 11),
+            'Nguồn đánh giá: ${report.verifiedByLecturer}',
+            style: AppTextStyles.bodySm.copyWith(
+              color: AppColors.textDisabled,
+              fontSize: 11,
+            ),
           ),
         ],
       ),
@@ -264,7 +296,10 @@ class _ExamResultReportScreenState extends State<ExamResultReportScreen> {
           mainAxisAlignment: MainAxisAlignment.spaceBetween,
           children: [
             Text('Điểm thành phần theo Rubric', style: AppTextStyles.titleMd),
-            Text('${report.rubricCriteria.length} Tiêu chí', style: AppTextStyles.bodySm),
+            Text(
+              '${report.rubricCriteria.length} Tiêu chí',
+              style: AppTextStyles.bodySm,
+            ),
           ],
         ),
         const SizedBox(height: 12),
@@ -278,7 +313,9 @@ class _ExamResultReportScreenState extends State<ExamResultReportScreen> {
                     child: Text(
                       'Bảng phân rã tiêu chí rubric chi tiết đang được cập nhật từ Hội đồng Chấm thi.',
                       textAlign: TextAlign.center,
-                      style: AppTextStyles.bodySm.copyWith(color: AppColors.textMuted),
+                      style: AppTextStyles.bodySm.copyWith(
+                        color: AppColors.textMuted,
+                      ),
                     ),
                   ),
                 )
@@ -294,11 +331,15 @@ class _ExamResultReportScreenState extends State<ExamResultReportScreen> {
                             children: [
                               Text(
                                 c.title,
-                                style: AppTextStyles.labelBold.copyWith(fontSize: 13),
+                                style: AppTextStyles.labelBold.copyWith(
+                                  fontSize: 13,
+                                ),
                               ),
                               Text(
                                 '${c.score.toStringAsFixed(1)} / 10',
-                                style: AppTextStyles.labelBold.copyWith(color: AppColors.primaryLight),
+                                style: AppTextStyles.labelBold.copyWith(
+                                  color: AppColors.primaryLight,
+                                ),
                               ),
                             ],
                           ),
@@ -313,8 +354,8 @@ class _ExamResultReportScreenState extends State<ExamResultReportScreen> {
                                 c.score >= 8.5
                                     ? AppColors.success
                                     : c.score >= 7.0
-                                        ? AppColors.primaryLight
-                                        : AppColors.warning,
+                                    ? AppColors.primaryLight
+                                    : AppColors.warning,
                               ),
                             ),
                           ),
@@ -335,9 +376,16 @@ class _ExamResultReportScreenState extends State<ExamResultReportScreen> {
         children: [
           Row(
             children: [
-              const Icon(Icons.auto_awesome_rounded, color: AppColors.primaryLight, size: 20),
+              const Icon(
+                Icons.auto_awesome_rounded,
+                color: AppColors.primaryLight,
+                size: 20,
+              ),
               const SizedBox(width: 8),
-              Text('Nhận xét chi tiết từ AI Examiner', style: AppTextStyles.titleMd),
+              Text(
+                'Nhận xét chi tiết từ AI Examiner',
+                style: AppTextStyles.titleMd,
+              ),
             ],
           ),
           const SizedBox(height: 12),
@@ -349,7 +397,9 @@ class _ExamResultReportScreenState extends State<ExamResultReportScreen> {
                 padding: const EdgeInsets.symmetric(vertical: 8),
                 child: Text(
                   'Nhận xét đánh giá chi tiết buổi thi đang được đồng bộ.',
-                  style: AppTextStyles.bodySm.copyWith(color: AppColors.textMuted),
+                  style: AppTextStyles.bodySm.copyWith(
+                    color: AppColors.textMuted,
+                  ),
                 ),
               ),
             ),
@@ -362,9 +412,16 @@ class _ExamResultReportScreenState extends State<ExamResultReportScreen> {
       children: [
         Row(
           children: [
-            const Icon(Icons.auto_awesome_rounded, color: AppColors.primaryLight, size: 20),
+            const Icon(
+              Icons.auto_awesome_rounded,
+              color: AppColors.primaryLight,
+              size: 20,
+            ),
             const SizedBox(width: 8),
-            Text('Nhận xét chi tiết từ AI Examiner', style: AppTextStyles.titleMd),
+            Text(
+              'Nhận xét chi tiết từ AI Examiner',
+              style: AppTextStyles.titleMd,
+            ),
           ],
         ),
         const SizedBox(height: 12),
@@ -377,9 +434,18 @@ class _ExamResultReportScreenState extends State<ExamResultReportScreen> {
               // Strengths
               Row(
                 children: [
-                  const Icon(Icons.verified_rounded, color: AppColors.success, size: 18),
+                  const Icon(
+                    Icons.verified_rounded,
+                    color: AppColors.success,
+                    size: 18,
+                  ),
                   const SizedBox(width: 6),
-                  Text('Điểm mạnh', style: AppTextStyles.labelBold.copyWith(color: AppColors.success)),
+                  Text(
+                    'Điểm mạnh',
+                    style: AppTextStyles.labelBold.copyWith(
+                      color: AppColors.success,
+                    ),
+                  ),
                 ],
               ),
               const SizedBox(height: 8),
@@ -389,7 +455,13 @@ class _ExamResultReportScreenState extends State<ExamResultReportScreen> {
                   child: Row(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      const Text('• ', style: TextStyle(color: AppColors.success, fontWeight: FontWeight.bold)),
+                      const Text(
+                        '• ',
+                        style: TextStyle(
+                          color: AppColors.success,
+                          fontWeight: FontWeight.bold,
+                        ),
+                      ),
                       Expanded(child: Text(s, style: AppTextStyles.bodyMd)),
                     ],
                   ),
@@ -402,9 +474,18 @@ class _ExamResultReportScreenState extends State<ExamResultReportScreen> {
               // Improvements
               Row(
                 children: [
-                  const Icon(Icons.lightbulb_outline_rounded, color: AppColors.warning, size: 18),
+                  const Icon(
+                    Icons.lightbulb_outline_rounded,
+                    color: AppColors.warning,
+                    size: 18,
+                  ),
                   const SizedBox(width: 6),
-                  Text('Cần cải thiện', style: AppTextStyles.labelBold.copyWith(color: AppColors.warning)),
+                  Text(
+                    'Cần cải thiện',
+                    style: AppTextStyles.labelBold.copyWith(
+                      color: AppColors.warning,
+                    ),
+                  ),
                 ],
               ),
               const SizedBox(height: 8),
@@ -414,7 +495,13 @@ class _ExamResultReportScreenState extends State<ExamResultReportScreen> {
                   child: Row(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      const Text('• ', style: TextStyle(color: AppColors.warning, fontWeight: FontWeight.bold)),
+                      const Text(
+                        '• ',
+                        style: TextStyle(
+                          color: AppColors.warning,
+                          fontWeight: FontWeight.bold,
+                        ),
+                      ),
                       Expanded(child: Text(imp, style: AppTextStyles.bodyMd)),
                     ],
                   ),
@@ -435,7 +522,10 @@ class _ExamResultReportScreenState extends State<ExamResultReportScreen> {
           mainAxisAlignment: MainAxisAlignment.spaceBetween,
           children: [
             Text('Phân tích câu hỏi vấn đáp', style: AppTextStyles.titleMd),
-            Text('${report.questionReports.length} câu hỏi', style: AppTextStyles.bodySm),
+            Text(
+              '${report.questionReports.length} câu hỏi',
+              style: AppTextStyles.bodySm,
+            ),
           ],
         ),
         const SizedBox(height: 12),
@@ -448,104 +538,142 @@ class _ExamResultReportScreenState extends State<ExamResultReportScreen> {
                 padding: const EdgeInsets.symmetric(vertical: 8),
                 child: Text(
                   'Bản ghi câu hỏi và câu trả lời đang được lưu trữ trong hồ sơ ca thi.',
-                  style: AppTextStyles.bodySm.copyWith(color: AppColors.textMuted),
+                  style: AppTextStyles.bodySm.copyWith(
+                    color: AppColors.textMuted,
+                  ),
                 ),
               ),
             ),
           )
         else
           ...List.generate(report.questionReports.length, (index) {
-          final q = report.questionReports[index];
-          final isExpanded = _expandedQuestionIndex == index;
+            final q = report.questionReports[index];
+            final isExpanded = _expandedQuestionIndex == index;
 
-          return GlassCard(
-            margin: const EdgeInsets.only(bottom: 12),
-            padding: const EdgeInsets.all(16),
-            borderRadius: 16,
-            onTap: () {
-              setState(() {
-                _expandedQuestionIndex = isExpanded ? null : index;
-              });
-            },
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Row(
-                  children: [
-                    Container(
-                      width: 28,
-                      height: 28,
-                      decoration: BoxDecoration(
-                        color: q.isFollowUp ? AppColors.secondary.withValues(alpha: 0.2) : AppColors.primary.withValues(alpha: 0.2),
-                        shape: BoxShape.circle,
-                      ),
-                      child: Center(
-                        child: Text(
-                          '${index + 1}',
-                          style: AppTextStyles.labelBold.copyWith(
-                            color: q.isFollowUp ? AppColors.secondaryLight : AppColors.primaryLight,
-                            fontSize: 12,
-                          ),
-                        ),
-                      ),
-                    ),
-                    const SizedBox(width: 10),
-                    Expanded(
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Text(q.title, style: AppTextStyles.labelBold),
-                          Text('Mức độ: ${q.bloomLevel}', style: AppTextStyles.bodySm),
-                        ],
-                      ),
-                    ),
-                    Text(
-                      '${q.score}/${q.maxScore}',
-                      style: AppTextStyles.labelBold.copyWith(color: AppColors.success),
-                    ),
-                    const SizedBox(width: 6),
-                    Icon(
-                      isExpanded ? Icons.keyboard_arrow_up_rounded : Icons.keyboard_arrow_down_rounded,
-                      color: AppColors.textMuted,
-                      size: 20,
-                    ),
-                  ],
-                ),
-                if (isExpanded) ...[
-                  const SizedBox(height: 12),
-                  const Divider(color: AppColors.borderGlass),
-                  const SizedBox(height: 8),
-                  Text('Câu hỏi AI đặt:', style: AppTextStyles.labelSm.copyWith(color: AppColors.primaryLight)),
-                  const SizedBox(height: 4),
-                  Text(q.fullQuestion, style: AppTextStyles.bodyMd),
-                  const SizedBox(height: 10),
-                  Text('Câu trả lời của bạn:', style: AppTextStyles.labelSm.copyWith(color: AppColors.primaryLight)),
-                  const SizedBox(height: 4),
-                  Text(q.studentAnswer, style: AppTextStyles.bodyMd.copyWith(color: Colors.white70)),
-                  const SizedBox(height: 12),
+            return GlassCard(
+              margin: const EdgeInsets.only(bottom: 12),
+              padding: const EdgeInsets.all(16),
+              borderRadius: 16,
+              onTap: () {
+                setState(() {
+                  _expandedQuestionIndex = isExpanded ? null : index;
+                });
+              },
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
                   Row(
                     children: [
                       Container(
-                        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                        width: 28,
+                        height: 28,
                         decoration: BoxDecoration(
-                          color: AppColors.surfaceCardHigh,
-                          borderRadius: BorderRadius.circular(12),
+                          color: q.isFollowUp
+                              ? AppColors.secondary.withValues(alpha: 0.2)
+                              : AppColors.primary.withValues(alpha: 0.2),
+                          shape: BoxShape.circle,
                         ),
-                        child: Row(
+                        child: Center(
+                          child: Text(
+                            '${index + 1}',
+                            style: AppTextStyles.labelBold.copyWith(
+                              color: q.isFollowUp
+                                  ? AppColors.secondaryLight
+                                  : AppColors.primaryLight,
+                              fontSize: 12,
+                            ),
+                          ),
+                        ),
+                      ),
+                      const SizedBox(width: 10),
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
-                            const Icon(Icons.play_arrow_rounded, size: 16, color: AppColors.primaryLight),
-                            const SizedBox(width: 4),
-                            Text('Nghe lại âm thanh • ${q.audioDuration}', style: AppTextStyles.bodySm),
+                            Text(q.title, style: AppTextStyles.labelBold),
+                            Text(
+                              'Mức độ: ${q.bloomLevel}',
+                              style: AppTextStyles.bodySm,
+                            ),
                           ],
                         ),
                       ),
+                      Text(
+                        '${q.score}/${q.maxScore}',
+                        style: AppTextStyles.labelBold.copyWith(
+                          color: AppColors.success,
+                        ),
+                      ),
+                      const SizedBox(width: 6),
+                      Icon(
+                        isExpanded
+                            ? Icons.keyboard_arrow_up_rounded
+                            : Icons.keyboard_arrow_down_rounded,
+                        color: AppColors.textMuted,
+                        size: 20,
+                      ),
                     ],
                   ),
+                  if (isExpanded) ...[
+                    const SizedBox(height: 12),
+                    const Divider(color: AppColors.borderGlass),
+                    const SizedBox(height: 8),
+                    Text(
+                      'Câu hỏi AI đặt:',
+                      style: AppTextStyles.labelSm.copyWith(
+                        color: AppColors.primaryLight,
+                      ),
+                    ),
+                    const SizedBox(height: 4),
+                    Text(q.fullQuestion, style: AppTextStyles.bodyMd),
+                    const SizedBox(height: 10),
+                    Text(
+                      'Câu trả lời của bạn:',
+                      style: AppTextStyles.labelSm.copyWith(
+                        color: AppColors.primaryLight,
+                      ),
+                    ),
+                    const SizedBox(height: 4),
+                    Text(
+                      q.studentAnswer,
+                      style: AppTextStyles.bodyMd.copyWith(
+                        color: Colors.white70,
+                      ),
+                    ),
+                    const SizedBox(height: 12),
+                    Row(
+                      children: [
+                        Container(
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 10,
+                            vertical: 4,
+                          ),
+                          decoration: BoxDecoration(
+                            color: AppColors.surfaceCardHigh,
+                            borderRadius: BorderRadius.circular(12),
+                          ),
+                          child: Row(
+                            children: [
+                              const Icon(
+                                Icons.play_arrow_rounded,
+                                size: 16,
+                                color: AppColors.primaryLight,
+                              ),
+                              const SizedBox(width: 4),
+                              Text(
+                                'Nghe lại âm thanh • ${q.audioDuration}',
+                                style: AppTextStyles.bodySm,
+                              ),
+                            ],
+                          ),
+                        ),
+                      ],
+                    ),
+                  ],
                 ],
-              ],
-            ),
-          );
-        }),
+              ),
+            );
+          }),
       ],
     );
   }
@@ -559,20 +687,23 @@ class _ExamResultReportScreenState extends State<ExamResultReportScreen> {
     Color badgeColor = AppColors.warning;
     IconData statusIcon = Icons.calendar_today_rounded;
     String title = 'Chưa có kết quả điểm thi';
-    String desc = 'Thí sinh chưa bước vào ca thi này. Điểm số, biên bản đối thoại và phiếu đánh giá năng lực sẽ xuất hiện sau khi hoàn thành buổi thi.';
+    String desc =
+        'Thí sinh chưa bước vào ca thi này. Điểm số, biên bản đối thoại và phiếu đánh giá năng lực sẽ xuất hiện sau khi hoàn thành buổi thi.';
 
     if (isInProgress) {
       badgeLabel = 'ĐANG THI VẤN ĐÁP';
       badgeColor = AppColors.primaryLight;
       statusIcon = Icons.play_circle_outline_rounded;
       title = 'Ca thi đang diễn ra — Chưa có điểm';
-      desc = 'Thí sinh đang trong phòng thi vấn đáp trực tiếp với AI. Kết quả sẽ được tổng hợp ngay sau khi ca thi kết thúc.';
+      desc =
+          'Thí sinh đang trong phòng thi vấn đáp trực tiếp với AI. Kết quả sẽ được tổng hợp ngay sau khi ca thi kết thúc.';
     } else if (isCompleted) {
       badgeLabel = 'ĐANG CHỜ CHỐT ĐIỂM';
       badgeColor = AppColors.primaryLight;
       statusIcon = Icons.hourglass_top_rounded;
       title = 'Ca thi đã hoàn thành — Chờ thẩm định';
-      desc = 'Thí sinh đã hoàn thành phần thi vấn đáp. Biên bản hội thoại đang được AI và Hội đồng Giảng viên thẩm định trước khi công bố điểm chính thức.';
+      desc =
+          'Thí sinh đã hoàn thành phần thi vấn đáp. Biên bản hội thoại đang được AI và Hội đồng Giảng viên thẩm định trước khi công bố điểm chính thức.';
     }
 
     return SingleChildScrollView(
@@ -592,11 +723,16 @@ class _ExamResultReportScreenState extends State<ExamResultReportScreen> {
                   mainAxisAlignment: MainAxisAlignment.spaceBetween,
                   children: [
                     Container(
-                      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 10,
+                        vertical: 4,
+                      ),
                       decoration: BoxDecoration(
                         color: badgeColor.withValues(alpha: 0.15),
                         borderRadius: BorderRadius.circular(20),
-                        border: Border.all(color: badgeColor.withValues(alpha: 0.4)),
+                        border: Border.all(
+                          color: badgeColor.withValues(alpha: 0.4),
+                        ),
                       ),
                       child: Row(
                         children: [
@@ -604,14 +740,19 @@ class _ExamResultReportScreenState extends State<ExamResultReportScreen> {
                           const SizedBox(width: 6),
                           Text(
                             badgeLabel,
-                            style: AppTextStyles.labelBold.copyWith(color: badgeColor, fontSize: 11),
+                            style: AppTextStyles.labelBold.copyWith(
+                              color: badgeColor,
+                              fontSize: 11,
+                            ),
                           ),
                         ],
                       ),
                     ),
                     Text(
                       exam.courseCode,
-                      style: AppTextStyles.labelBold.copyWith(color: AppColors.primaryLight),
+                      style: AppTextStyles.labelBold.copyWith(
+                        color: AppColors.primaryLight,
+                      ),
                     ),
                   ],
                 ),
@@ -623,7 +764,10 @@ class _ExamResultReportScreenState extends State<ExamResultReportScreen> {
                 const SizedBox(height: 8),
                 Text(
                   desc,
-                  style: AppTextStyles.bodyMd.copyWith(color: AppColors.textMuted, height: 1.4),
+                  style: AppTextStyles.bodyMd.copyWith(
+                    color: AppColors.textMuted,
+                    height: 1.4,
+                  ),
                 ),
                 const SizedBox(height: 20),
 
@@ -637,13 +781,20 @@ class _ExamResultReportScreenState extends State<ExamResultReportScreen> {
                   ),
                   child: Column(
                     children: [
-                      _buildMetaRow('Môn học & Kỳ thi', '${exam.courseCode} - ${exam.examTitle}'),
+                      _buildMetaRow(
+                        'Môn học & Kỳ thi',
+                        '${exam.courseCode} - ${exam.examTitle}',
+                      ),
                       const Divider(color: AppColors.borderGlass, height: 16),
                       _buildMetaRow('Thời gian ca thi', exam.timeRemainingText),
                       const Divider(color: AppColors.borderGlass, height: 16),
                       _buildMetaRow('Phòng thi / Hội đồng', exam.room),
                       const Divider(color: AppColors.borderGlass, height: 16),
-                      _buildMetaRow('Trạng thái điểm', 'Chưa có điểm (Đang xử lý)', valueColor: AppColors.warning),
+                      _buildMetaRow(
+                        'Trạng thái điểm',
+                        'Chưa có điểm (Đang xử lý)',
+                        valueColor: AppColors.warning,
+                      ),
                     ],
                   ),
                 ),
@@ -677,13 +828,19 @@ class _ExamResultReportScreenState extends State<ExamResultReportScreen> {
     return Row(
       mainAxisAlignment: MainAxisAlignment.spaceBetween,
       children: [
-        Text(label, style: AppTextStyles.bodySm.copyWith(color: AppColors.textMuted)),
+        Text(
+          label,
+          style: AppTextStyles.bodySm.copyWith(color: AppColors.textMuted),
+        ),
         const SizedBox(width: 8),
         Expanded(
           child: Text(
             value,
             textAlign: TextAlign.right,
-            style: AppTextStyles.labelBold.copyWith(fontSize: 12, color: valueColor ?? Colors.white),
+            style: AppTextStyles.labelBold.copyWith(
+              fontSize: 12,
+              color: valueColor ?? Colors.white,
+            ),
             maxLines: 1,
             overflow: TextOverflow.ellipsis,
           ),
@@ -701,17 +858,36 @@ class _ExamResultReportScreenState extends State<ExamResultReportScreen> {
         children: [
           Row(
             children: [
-              const Icon(Icons.help_outline_rounded, size: 18, color: AppColors.primaryLight),
+              const Icon(
+                Icons.help_outline_rounded,
+                size: 18,
+                color: AppColors.primaryLight,
+              ),
               const SizedBox(width: 8),
-              Text('Quy trình khảo thí & Công bố điểm', style: AppTextStyles.labelBold.copyWith(fontSize: 13)),
+              Text(
+                'Quy trình khảo thí & Công bố điểm',
+                style: AppTextStyles.labelBold.copyWith(fontSize: 13),
+              ),
             ],
           ),
           const SizedBox(height: 14),
-          _buildFlowStep('1', 'Thi vấn đáp AI (Mobile)', 'Thí sinh trả lời trực tiếp các câu hỏi của AI Examiner trên ứng dụng điện thoại.'),
+          _buildFlowStep(
+            '1',
+            'Thi vấn đáp AI (Mobile)',
+            'Thí sinh trả lời trực tiếp các câu hỏi của AI Examiner trên ứng dụng điện thoại.',
+          ),
           const SizedBox(height: 10),
-          _buildFlowStep('2', 'AI Phân tích Rubric & Điểm', 'Hệ thống tự động đối chiếu câu trả lời với tiêu chí Rubric và xuất đề xuất điểm.'),
+          _buildFlowStep(
+            '2',
+            'AI Phân tích Rubric & Điểm',
+            'Hệ thống tự động đối chiếu câu trả lời với tiêu chí Rubric và xuất đề xuất điểm.',
+          ),
           const SizedBox(height: 10),
-          _buildFlowStep('3', 'Hội đồng Chốt & Công bố', 'Giảng viên thẩm định bài thi, điều chỉnh nếu cần và chốt điểm chính thức.'),
+          _buildFlowStep(
+            '3',
+            'Hội đồng Chốt & Công bố',
+            'Giảng viên thẩm định bài thi, điều chỉnh nếu cần và chốt điểm chính thức.',
+          ),
         ],
       ),
     );
@@ -729,7 +905,14 @@ class _ExamResultReportScreenState extends State<ExamResultReportScreen> {
             shape: BoxShape.circle,
           ),
           child: Center(
-            child: Text(step, style: const TextStyle(fontSize: 11, fontWeight: FontWeight.bold, color: Colors.white)),
+            child: Text(
+              step,
+              style: const TextStyle(
+                fontSize: 11,
+                fontWeight: FontWeight.bold,
+                color: Colors.white,
+              ),
+            ),
           ),
         ),
         const SizedBox(width: 10),
@@ -737,9 +920,19 @@ class _ExamResultReportScreenState extends State<ExamResultReportScreen> {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Text(title, style: AppTextStyles.labelBold.copyWith(fontSize: 12)),
+              Text(
+                title,
+                style: AppTextStyles.labelBold.copyWith(fontSize: 12),
+              ),
               const SizedBox(height: 2),
-              Text(desc, style: AppTextStyles.bodySm.copyWith(color: AppColors.textMuted, fontSize: 11, height: 1.3)),
+              Text(
+                desc,
+                style: AppTextStyles.bodySm.copyWith(
+                  color: AppColors.textMuted,
+                  fontSize: 11,
+                  height: 1.3,
+                ),
+              ),
             ],
           ),
         ),
@@ -762,7 +955,11 @@ class _ExamResultReportScreenState extends State<ExamResultReportScreen> {
                 shape: BoxShape.circle,
                 border: Border.all(color: AppColors.borderGlass),
               ),
-              child: const Icon(Icons.description_outlined, size: 40, color: AppColors.textMuted),
+              child: const Icon(
+                Icons.description_outlined,
+                size: 40,
+                color: AppColors.textMuted,
+              ),
             ),
             const SizedBox(height: 18),
             Text('Chưa có báo cáo điểm số', style: AppTextStyles.headlineMd),
@@ -780,7 +977,10 @@ class _ExamResultReportScreenState extends State<ExamResultReportScreen> {
                   Navigator.of(context).pop();
                 } else {
                   Navigator.of(context).pushAndRemoveUntil(
-                    MaterialPageRoute(builder: (_) => const MainNavigationScreen(initialIndex: 1)),
+                    MaterialPageRoute(
+                      builder: (_) =>
+                          const MainNavigationScreen(initialIndex: 1),
+                    ),
                     (route) => false,
                   );
                 }
@@ -792,4 +992,3 @@ class _ExamResultReportScreenState extends State<ExamResultReportScreen> {
     );
   }
 }
-
