@@ -77,4 +77,38 @@ class ExamScheduleModel {
       credits: 3,
     );
   }
+
+  ExamScheduleModel copyWith({
+    String? id,
+    String? courseCode,
+    String? courseName,
+    String? examTitle,
+    DateTime? scheduledAt,
+    String? room,
+    String? timeRemainingText,
+    List<String>? examiners,
+    int? totalQuestions,
+    int? maxFollowUpsPerQuestion,
+    int? durationMinutes,
+    ExamStatus? status,
+    double? finalScore,
+    int? credits,
+  }) {
+    return ExamScheduleModel(
+      id: id ?? this.id,
+      courseCode: courseCode ?? this.courseCode,
+      courseName: courseName ?? this.courseName,
+      examTitle: examTitle ?? this.examTitle,
+      scheduledAt: scheduledAt ?? this.scheduledAt,
+      room: room ?? this.room,
+      timeRemainingText: timeRemainingText ?? this.timeRemainingText,
+      examiners: examiners ?? this.examiners,
+      totalQuestions: totalQuestions ?? this.totalQuestions,
+      maxFollowUpsPerQuestion: maxFollowUpsPerQuestion ?? this.maxFollowUpsPerQuestion,
+      durationMinutes: durationMinutes ?? this.durationMinutes,
+      status: status ?? this.status,
+      finalScore: finalScore ?? this.finalScore,
+      credits: credits ?? this.credits,
+    );
+  }
 }

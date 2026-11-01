@@ -7,6 +7,7 @@ import '../../../core/widgets/glass_card.dart';
 import '../../../core/widgets/primary_button.dart';
 import '../../../core/widgets/status_badge.dart';
 import '../../exam/models/exam_schedule_model.dart';
+import '../../exam/providers/exam_provider.dart';
 import '../models/viva_report_model.dart';
 import '../providers/report_provider.dart';
 import '../../home/screens/main_navigation_screen.dart';
@@ -25,19 +26,21 @@ class _ExamResultReportScreenState extends State<ExamResultReportScreen> {
 
   @override
   Widget build(BuildContext context) {
-    final isPendingOrNoScore =
-        widget.exam != null &&
-        (widget.exam!.status != ExamStatus.completed ||
-            widget.exam!.finalScore == null);
-
     final latest = context.watch<ReportProvider>().latestReport;
     final report =
         (widget.exam == null || latest?.id == widget.exam!.id
             ? latest
             : null) ??
-        (widget.exam != null && widget.exam!.finalScore != null
+        (widget.exam != null &&
+                widget.exam!.status == ExamStatus.completed &&
+                widget.exam!.finalScore != null
             ? VivaReportModel.fromExam(widget.exam!)
             : null);
+    final isPendingOrNoScore =
+        report == null &&
+        widget.exam != null &&
+        (widget.exam!.status != ExamStatus.completed ||
+            widget.exam!.finalScore == null);
 
     final Widget bodyContent;
     if (isPendingOrNoScore) {
@@ -109,45 +112,50 @@ class _ExamResultReportScreenState extends State<ExamResultReportScreen> {
       );
     }
 
-    return Scaffold(
-      backgroundColor: AppColors.background,
-      appBar: AppBar(
-        title: Text(
-          isPendingOrNoScore ? 'Trạng Thái Điểm Số' : 'Báo Cáo Đánh Giá Viva',
-          style: AppTextStyles.headlineMd,
-        ),
-        leading: IconButton(
-          icon: const Icon(Icons.arrow_back_ios_new_rounded, size: 18),
-          onPressed: () {
-            if (Navigator.of(context).canPop()) {
-              Navigator.of(context).pop();
-            } else {
-              Navigator.of(context).pushAndRemoveUntil(
-                MaterialPageRoute(
-                  builder: (_) => const MainNavigationScreen(initialIndex: 1),
-                ),
-                (route) => false,
-              );
-            }
-          },
-        ),
-        actions: [
-          if (!isPendingOrNoScore && report != null)
-            IconButton(
-              icon: const Icon(Icons.share_outlined, size: 20),
-              onPressed: () {
-                ScaffoldMessenger.of(context).showSnackBar(
-                  const SnackBar(
-                    content: Text(
-                      'Đang chuẩn bị liên kết chia sẻ bảng điểm...',
-                    ),
+    return PopScope(
+      onPopInvokedWithResult: (didPop, result) {
+        if (didPop && mounted) context.read<ExamProvider>().refreshExams();
+      },
+      child: Scaffold(
+        backgroundColor: AppColors.background,
+        appBar: AppBar(
+          title: Text(
+            isPendingOrNoScore ? 'Trạng Thái Điểm Số' : 'Báo Cáo Đánh Giá Viva',
+            style: AppTextStyles.headlineMd,
+          ),
+          leading: IconButton(
+            icon: const Icon(Icons.arrow_back_ios_new_rounded, size: 18),
+            onPressed: () {
+              if (Navigator.of(context).canPop()) {
+                Navigator.of(context).pop();
+              } else {
+                Navigator.of(context).pushAndRemoveUntil(
+                  MaterialPageRoute(
+                    builder: (_) => const MainNavigationScreen(initialIndex: 1),
                   ),
+                  (route) => false,
                 );
-              },
-            ),
-        ],
+              }
+            },
+          ),
+          actions: [
+            if (!isPendingOrNoScore && report != null)
+              IconButton(
+                icon: const Icon(Icons.share_outlined, size: 20),
+                onPressed: () {
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    const SnackBar(
+                      content: Text(
+                        'Đang chuẩn bị liên kết chia sẻ bảng điểm...',
+                      ),
+                    ),
+                  );
+                },
+              ),
+          ],
+        ),
+        body: bodyContent,
       ),
-      body: bodyContent,
     );
   }
 

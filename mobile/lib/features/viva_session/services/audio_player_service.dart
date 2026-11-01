@@ -14,7 +14,28 @@ class AudioPlayerService {
   // Hàng đợi lưu các chunk đến trong khi stream đang mở hoặc khởi động
   final List<Uint8List> _chunkQueue = [];
 
+  // Theo dõi thời điểm dự kiến loa ngoài sẽ phát hết toàn bộ dữ liệu PCM trong buffer
+  DateTime _playbackEstimatedEndTime = DateTime.now();
+
   bool get isPlaying => _isPlaying;
+
+  /// Thời gian (ms) còn lại mà loa ngoài đang hoặc sẽ phát từ buffer
+  int get remainingPlaybackMillis {
+    final diff = _playbackEstimatedEndTime.difference(DateTime.now()).inMilliseconds;
+    return diff > 0 ? diff : 0;
+  }
+
+  /// Chờ cho đến khi toàn bộ âm thanh trong hàng đợi loa ngoài được phát xong hoàn toàn
+  Future<void> waitUntilPlaybackFinished({int extraBufferMs = 500}) async {
+    while (true) {
+      final remaining = remainingPlaybackMillis;
+      if (remaining <= 0) break;
+      await Future.delayed(Duration(milliseconds: remaining.clamp(40, 1000)));
+    }
+    if (extraBufferMs > 0) {
+      await Future.delayed(Duration(milliseconds: extraBufferMs));
+    }
+  }
 
   /// Khởi tạo audio session cho bộ phát
   Future<bool> init() async {
@@ -71,6 +92,16 @@ class AudioPlayerService {
   Future<void> feedPcmChunk(Uint8List chunk) async {
     if (_player == null || !_isPlayerInitialized || chunk.isEmpty) return;
 
+    // Cập nhật ước lượng thời điểm loa ngoài sẽ phát xong toàn bộ dữ liệu âm thanh
+    // Định dạng PCM 24,000Hz, 16-bit Mono = 48,000 bytes/giây = 48 bytes/mili-giây
+    final chunkDurationMs = (chunk.length * 1000) ~/ 48000;
+    final now = DateTime.now();
+    if (_playbackEstimatedEndTime.isBefore(now)) {
+      _playbackEstimatedEndTime = now.add(Duration(milliseconds: chunkDurationMs));
+    } else {
+      _playbackEstimatedEndTime = _playbackEstimatedEndTime.add(Duration(milliseconds: chunkDurationMs));
+    }
+
     // Nếu stream đã mở và uint8ListSink sẵn sàng -> đẩy trực tiếp qua Sink
     // StreamSink của flutter_sound tự quản lý hàng đợi và pause stream trong khi _feed
     // đang thực thi trên native, loại bỏ hoàn toàn race condition trong FeedThread của AudioTrack.
@@ -108,6 +139,7 @@ class AudioPlayerService {
   Future<void> stop() async {
     _isStarting = false;
     _chunkQueue.clear();
+    _playbackEstimatedEndTime = DateTime.now();
 
     if (_player != null && _isPlaying) {
       _isPlaying = false;
@@ -125,6 +157,7 @@ class AudioPlayerService {
   /// Xóa sạch buffer âm thanh đang phát dở (Barge-in / Interrupt)
   /// KHÔNG tự restart stream — chunk tiếp theo từ AI sẽ tự trigger start
   Future<void> clearAudioBuffer() async {
+    _playbackEstimatedEndTime = DateTime.now();
     await stop();
     debugPrint('[AudioPlayerService] Audio buffer cleared, ready for next AI turn.');
   }

@@ -18,17 +18,24 @@ class VivaSessionProvider extends ChangeNotifier {
     AudioPlayerService? player,
     VivaWebSocketService? socket,
     ApiClient? apiClient,
+    ApiClient? aiClient,
     Duration finishTimeout = const Duration(seconds: 45),
   }) : _recorderService = recorder ?? AudioRecorderService(),
        _playerService = player ?? AudioPlayerService(),
        _wsService = socket ?? VivaWebSocketService(),
        _api = apiClient ?? ApiClient.instance,
+       _aiApi =
+           aiClient ?? (ApiClient()..setBaseUrl(ApiEndpoints.aiServiceBaseUrl)),
        _finishTimeout = finishTimeout;
   final Duration _finishTimeout;
   final AudioRecorderService _recorderService;
   final AudioPlayerService _playerService;
   final VivaWebSocketService _wsService;
   final ApiClient _api;
+  final ApiClient _aiApi;
+  String? _scheduleId;
+  String? _sessionToken;
+  int _currentTurnId = 0;
   bool _disposed = false;
   bool _starting = false;
   bool _active = false;
@@ -120,6 +127,8 @@ class VivaSessionProvider extends ChangeNotifier {
     final generation = ++_generation;
     _errorMessage = null;
     _finishing = false;
+    _scheduleId = examId;
+    _sessionToken = authToken;
     _currentQuestionIndex = 0;
     _questions = [];
     _transcripts.clear();
@@ -173,10 +182,14 @@ class VivaSessionProvider extends ChangeNotifier {
       });
       _active = true;
       _sessionState = VivaSessionState.aiSpeaking;
-      _countdownTimer = Timer.periodic(const Duration(seconds: 1), (_) {
+      _countdownTimer = Timer.periodic(const Duration(seconds: 1), (timer) {
         if (_remainingSeconds > 0) {
           _remainingSeconds--;
           notifyListeners();
+          if (_remainingSeconds == 0) {
+            timer.cancel();
+            finishExamSession(isTimeout: true);
+          }
         }
       });
     } catch (error) {
@@ -192,6 +205,7 @@ class VivaSessionProvider extends ChangeNotifier {
 
   Future<void> stopSession() async {
     _generation++;
+    _currentTurnId++;
     _active = false;
     _starting = false;
     _countdownTimer?.cancel();
@@ -209,13 +223,13 @@ class VivaSessionProvider extends ChangeNotifier {
 
   void _startAutoListening() async {
     final generation = _generation;
-    // Chờ 800ms để các chunk âm thanh cuối cùng phát trọn vẹn ra loa ngoài
-    // và tiếng vang phòng tiêu tán hoàn toàn trước khi bật mic
-    await Future.delayed(const Duration(milliseconds: 800));
+    final turnId = ++_currentTurnId;
+    await _playerService.waitUntilPlaybackFinished(extraBufferMs: 600);
     if (!_disposed &&
         _active &&
         !_finishing &&
         generation == _generation &&
+        turnId == _currentTurnId &&
         _sessionState == VivaSessionState.aiSpeaking) {
       try {
         await _recorderService.startRecording();
@@ -230,6 +244,7 @@ class VivaSessionProvider extends ChangeNotifier {
 
   void toggleMicrophone() async {
     if (!_active || _finishing || _disposed) return;
+    _currentTurnId++;
     try {
       if (_recorderService.isRecording) {
         await _recorderService.stopRecording();
@@ -272,19 +287,51 @@ class VivaSessionProvider extends ChangeNotifier {
   }
 
   /// Kết thúc toàn bộ ca thi và kích hoạt AI chấm điểm Rubric
-  Future<void> finishExamSession() async {
-    if (!_active || _finishing || _disposed) return;
+  Future<void> finishExamSession({
+    bool isTimeout = false,
+    String? examScheduleId,
+  }) async {
+    if (!_active ||
+        _finishing ||
+        _disposed ||
+        _sessionState == VivaSessionState.completed) {
+      return;
+    }
+    final scheduleId = examScheduleId ?? _scheduleId;
+    if (scheduleId == null || scheduleId != _scheduleId) {
+      _errorMessage = 'Mã ca thi không khớp phiên hiện tại.';
+      notifyListeners();
+      return;
+    }
     _finishing = true;
+    _currentTurnId++;
+    final generation = _generation;
+    _countdownTimer?.cancel();
     _finishTimer?.cancel();
     await _recorderService.stopRecording();
     await _playerService.stop();
+    if (_disposed || generation != _generation) return;
     _sessionState = VivaSessionState.processing;
     notifyListeners();
 
     final sent = _wsService.finishExam();
     if (!sent) {
+      // Use HTTP only when no WebSocket command was sent. Never repeat an
+      // accepted WebSocket command merely because grading takes longer.
+      _aiApi.setAuthToken(_api.authToken ?? _sessionToken);
+      final result = await _aiApi.post(
+        '${ApiEndpoints.aiSessionFinish}/$scheduleId/finish',
+        body: {},
+      );
+      if (_disposed || generation != _generation) return;
+      if (result.success &&
+          result.data is Map<String, dynamic> &&
+          (result.data as Map).isNotEmpty) {
+        _completeWithReport(result.data as Map<String, dynamic>);
+        return;
+      }
       _errorMessage =
-          'Chưa gửi được yêu cầu kết thúc. Kiểm tra lại ca thi trước khi thử lại.';
+          'Chưa gửi được yêu cầu kết thúc hoặc chưa nhận được kết quả hợp lệ. Kiểm tra trạng thái ca thi trước khi thử lại.';
       notifyListeners();
       return;
     }
@@ -299,6 +346,18 @@ class VivaSessionProvider extends ChangeNotifier {
         notifyListeners();
       }
     });
+  }
+
+  void _completeWithReport(Map<String, dynamic> report) {
+    _finishTimer?.cancel();
+    _countdownTimer?.cancel();
+    _currentTurnId++;
+    _recorderService.stopRecording();
+    _playerService.stop();
+    _finalEvaluationReport = report;
+    _errorMessage = null;
+    _sessionState = VivaSessionState.completed;
+    notifyListeners();
   }
 
   /// Xử lý các sự kiện từ demo/viva-ai-v2
@@ -319,6 +378,9 @@ class VivaSessionProvider extends ChangeNotifier {
       }
       // 2. Sự kiện Plan: Cập nhật câu hỏi chính hoặc câu hỏi đào sâu (RAG)
       else if (type == 'plan') {
+        _currentTurnId++;
+        final limit = msg['time_limit_seconds'];
+        if (limit is int && limit >= 0) _remainingSeconds = limit;
         final kind = msg['kind']?.toString() ?? msg['type']?.toString();
         final content = msg['content']?.toString() ?? '';
         final number = msg['number'] ?? (_currentQuestionIndex + 1);
@@ -436,6 +498,7 @@ class VivaSessionProvider extends ChangeNotifier {
       }
       // 6. Sự kiện Clear Audio: Thí sinh ngắt lời AI (Barge-in)
       else if (type == 'clear_audio') {
+        _currentTurnId++;
         debugPrint('[VivaSessionProvider] User interrupted AI voice playback.');
         _playerService.clearAudioBuffer();
         notifyListeners();
@@ -448,13 +511,7 @@ class VivaSessionProvider extends ChangeNotifier {
           notifyListeners();
           return;
         }
-        _finishTimer?.cancel();
-        _countdownTimer?.cancel();
-        _recorderService.stopRecording();
-        _playerService.stop();
-        _finalEvaluationReport = report;
-        _sessionState = VivaSessionState.completed;
-        notifyListeners();
+        _completeWithReport(report);
       }
       // 8. Hết danh sách câu hỏi
       else if (type == 'questions_complete') {

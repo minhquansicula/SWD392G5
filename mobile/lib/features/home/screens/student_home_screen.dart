@@ -373,19 +373,35 @@ class _StudentHomeScreenState extends State<StudentHomeScreen> {
               child: InkWell(
                 borderRadius: BorderRadius.circular(14),
                 onTap: () {
-                  Navigator.of(context).push(
-                    MaterialPageRoute(
-                      builder: (_) => ExamDetailChecklistScreen(exam: exam),
-                    ),
-                  );
+                  if (exam.status == ExamStatus.completed) {
+                    Navigator.of(context).push(
+                      MaterialPageRoute(
+                        builder: (_) => ExamResultReportScreen(exam: exam),
+                      ),
+                    );
+                  } else {
+                    Navigator.of(context).push(
+                      MaterialPageRoute(
+                        builder: (_) => ExamDetailChecklistScreen(exam: exam),
+                      ),
+                    );
+                  }
                 },
                 child: Row(
                   mainAxisAlignment: MainAxisAlignment.center,
                   children: [
-                    Icon(isInProgress ? Icons.sensors_rounded : Icons.mic_rounded, size: 20, color: Colors.white),
+                    Icon(
+                      exam.status == ExamStatus.completed
+                          ? Icons.assignment_turned_in_rounded
+                          : (isInProgress ? Icons.sensors_rounded : Icons.mic_rounded),
+                      size: 20,
+                      color: Colors.white,
+                    ),
                     const SizedBox(width: 8),
                     Text(
-                      isInProgress ? 'Tiếp tục vào phòng thi' : 'Vào phòng thi ngay',
+                      exam.status == ExamStatus.completed
+                          ? 'Xem kết quả & bảng điểm'
+                          : (isInProgress ? 'Tiếp tục vào phòng thi' : 'Vào phòng thi ngay'),
                       style: AppTextStyles.labelBold.copyWith(fontSize: 15, color: Colors.white),
                     ),
                     const SizedBox(width: 6),

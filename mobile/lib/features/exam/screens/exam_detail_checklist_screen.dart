@@ -10,6 +10,7 @@ import '../../../core/widgets/status_badge.dart';
 import '../../../core/widgets/voice_wave_visualizer.dart';
 import '../../auth/providers/auth_provider.dart';
 import '../models/exam_schedule_model.dart';
+import '../providers/exam_provider.dart';
 import '../../viva_session/screens/viva_room_screen.dart';
 import '../../viva_session/services/audio_recorder_service.dart';
 import '../../report/screens/exam_result_report_screen.dart';
@@ -45,7 +46,30 @@ class _ExamDetailChecklistScreenState extends State<ExamDetailChecklistScreen> {
   @override
   void initState() {
     super.initState();
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      _checkIfAlreadyCompleted();
+    });
     _runSystemDiagnostics();
+  }
+
+  /// Kiểm tra nếu ca thi đã hoàn thành thì điều hướng thẳng tới màn hình điểm số, không cho vào phòng thi
+  void _checkIfAlreadyCompleted() {
+    if (!mounted) return;
+    final examProv = context.read<ExamProvider>();
+    final matchedExam = examProv.exams.firstWhere(
+      (e) => e.id == widget.exam.id,
+      orElse: () => widget.exam,
+    );
+    if (matchedExam.status == ExamStatus.completed || widget.exam.status == ExamStatus.completed) {
+      debugPrint('[ExamChecklist] Exam already completed. Auto-redirecting to report screen.');
+      Navigator.of(context).pushReplacement(
+        MaterialPageRoute(
+          builder: (_) => ExamResultReportScreen(
+            exam: matchedExam.copyWith(status: ExamStatus.completed),
+          ),
+        ),
+      );
+    }
   }
 
   @override
@@ -138,7 +162,12 @@ class _ExamDetailChecklistScreenState extends State<ExamDetailChecklistScreen> {
   @override
   Widget build(BuildContext context) {
     final currentUser = context.watch<AuthProvider>().currentUser;
-    final isCompleted = widget.exam.status == ExamStatus.completed;
+    final exams = context.watch<ExamProvider>().exams;
+    final currentExam = exams.firstWhere(
+      (e) => e.id == widget.exam.id,
+      orElse: () => widget.exam,
+    );
+    final isCompleted = currentExam.status == ExamStatus.completed || widget.exam.status == ExamStatus.completed;
     final allSystemReady = _micPermissionGranted && _serverConnectionReady && _profileVerified;
     final canEnter = !isCompleted && allSystemReady && _rulesAgreed;
 
@@ -173,7 +202,7 @@ class _ExamDetailChecklistScreenState extends State<ExamDetailChecklistScreen> {
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             // Hero Course & Examiner Information Card
-            _buildExamHeroCard(),
+            _buildExamHeroCard(currentExam, isCompleted),
             const SizedBox(height: 18),
 
             // Live Mic Audio Pre-check Station
@@ -337,7 +366,7 @@ class _ExamDetailChecklistScreenState extends State<ExamDetailChecklistScreen> {
                         if (context.mounted) {
                           Navigator.of(context).push(
                             MaterialPageRoute(
-                              builder: (_) => VivaRoomScreen(exam: widget.exam),
+                              builder: (_) => VivaRoomScreen(exam: currentExam),
                             ),
                           );
                         }
@@ -352,7 +381,7 @@ class _ExamDetailChecklistScreenState extends State<ExamDetailChecklistScreen> {
     );
   }
 
-  Widget _buildExamHeroCard() {
+  Widget _buildExamHeroCard(ExamScheduleModel currentExam, bool isCompleted) {
     return GlassCard(
       borderRadius: 16,
       backgroundColor: AppColors.surfaceCardLow,
@@ -364,31 +393,36 @@ class _ExamDetailChecklistScreenState extends State<ExamDetailChecklistScreen> {
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
               StatusBadge(
-                label: widget.exam.courseCode,
+                label: currentExam.courseCode,
                 type: BadgeType.purple,
                 icon: Icons.school_rounded,
               ),
               Container(
                 padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
                 decoration: BoxDecoration(
-                  color: AppColors.success.withValues(alpha: 0.15),
+                  color: (isCompleted ? AppColors.primaryLight : AppColors.success).withValues(alpha: 0.15),
                   borderRadius: BorderRadius.circular(12),
-                  border: Border.all(color: AppColors.success.withValues(alpha: 0.3)),
+                  border: Border.all(
+                    color: (isCompleted ? AppColors.primaryLight : AppColors.success).withValues(alpha: 0.3),
+                  ),
                 ),
                 child: Row(
                   children: [
                     Container(
                       width: 7,
                       height: 7,
-                      decoration: const BoxDecoration(
-                        color: AppColors.success,
+                      decoration: BoxDecoration(
+                        color: isCompleted ? AppColors.primaryLight : AppColors.success,
                         shape: BoxShape.circle,
                       ),
                     ),
                     const SizedBox(width: 6),
                     Text(
-                      'Phòng Thi Đang Mở',
-                      style: AppTextStyles.labelSm.copyWith(color: AppColors.success, fontSize: 11),
+                      isCompleted ? 'Ca Thi Đã Kết Thúc' : 'Phòng Thi Đang Mở',
+                      style: AppTextStyles.labelSm.copyWith(
+                        color: isCompleted ? AppColors.primaryLight : AppColors.success,
+                        fontSize: 11,
+                      ),
                     ),
                   ],
                 ),
@@ -397,12 +431,12 @@ class _ExamDetailChecklistScreenState extends State<ExamDetailChecklistScreen> {
           ),
           const SizedBox(height: 14),
           Text(
-            widget.exam.courseName,
+            currentExam.courseName,
             style: AppTextStyles.headlineLg.copyWith(fontSize: 20),
           ),
           const SizedBox(height: 4),
           Text(
-            widget.exam.examTitle,
+            currentExam.examTitle,
             style: AppTextStyles.bodyMd.copyWith(color: AppColors.primaryLight),
           ),
           const SizedBox(height: 16),
@@ -417,7 +451,7 @@ class _ExamDetailChecklistScreenState extends State<ExamDetailChecklistScreen> {
                     const SizedBox(width: 6),
                     Flexible(
                       child: Text(
-                        '${widget.exam.durationMinutes} phút làm bài',
+                        '${currentExam.durationMinutes} phút làm bài',
                         style: AppTextStyles.bodySm,
                         maxLines: 1,
                         overflow: TextOverflow.ellipsis,
