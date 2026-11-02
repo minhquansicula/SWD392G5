@@ -350,13 +350,17 @@ class _ExamResultReportScreenState extends State<ExamResultReportScreen> {
                         children: [
                           Row(
                             mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                            crossAxisAlignment: CrossAxisAlignment.start,
                             children: [
-                              Text(
-                                c.title,
-                                style: AppTextStyles.labelBold.copyWith(
-                                  fontSize: 13,
+                              Expanded(
+                                child: Text(
+                                  c.title,
+                                  style: AppTextStyles.labelBold.copyWith(
+                                    fontSize: 13,
+                                  ),
                                 ),
                               ),
+                              const SizedBox(width: 8),
                               Text(
                                 c.score == null
                                     ? 'Chưa đánh giá'
