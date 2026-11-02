@@ -53,15 +53,21 @@ class PasswordPolicyUtils {
         if (token != null && token.isNotEmpty) {
           return token.trim();
         }
-      } catch (_) {}
+        return '';
+      } catch (_) {
+        return '';
+      }
     }
 
     // Check if user pasted `token=abc...`
-    if (trimmed.contains('token=')) {
-      final parts = trimmed.split('token=');
-      if (parts.length > 1) {
-        final tokenPart = parts[1].split('&').first;
-        return tokenPart.trim();
+    if (trimmed.startsWith('token=') || trimmed.startsWith('?token=')) {
+      try {
+        return Uri.splitQueryString(
+              trimmed.startsWith('?') ? trimmed.substring(1) : trimmed,
+            )['token']?.trim() ??
+            '';
+      } on FormatException {
+        return '';
       }
     }
 
@@ -70,7 +76,7 @@ class PasswordPolicyUtils {
 
   /// Validates password according to Spring Boot backend policy & provides strength
   static PasswordValidationResult evaluatePassword(String password) {
-    if (password.isEmpty) {
+    if (password.trim().isEmpty) {
       return const PasswordValidationResult(
         isValid: false,
         errorMessage: 'Vui lòng nhập mật khẩu',
@@ -84,7 +90,8 @@ class PasswordPolicyUtils {
     if (password.length < minLength) {
       return PasswordValidationResult(
         isValid: false,
-        errorMessage: 'Mật khẩu phải có tối thiểu $minLength ký tự (hiện có ${password.length})',
+        errorMessage:
+            'Mật khẩu phải có tối thiểu $minLength ký tự (hiện có ${password.length})',
         strengthScore: 0.25,
         strengthLabel: 'Quá ngắn',
       );

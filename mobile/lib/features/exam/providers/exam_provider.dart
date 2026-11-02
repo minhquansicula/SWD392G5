@@ -4,13 +4,17 @@ import '../../../core/network/api_client.dart';
 import '../models/exam_schedule_model.dart';
 
 class ExamProvider extends ChangeNotifier {
+  final ApiClient _api;
+  int _requestVersion = 0;
+  bool _disposed = false;
   List<ExamScheduleModel> _exams = [];
   bool _isLoading = false;
   String? _errorMessage;
   ExamScheduleModel? _selectedExam;
 
-  ExamProvider() {
-    if (ApiClient.instance.authToken != null && ApiClient.instance.authToken!.isNotEmpty) {
+  ExamProvider({ApiClient? apiClient, bool autoLoad = true})
+    : _api = apiClient ?? ApiClient.instance {
+    if (autoLoad && _api.authToken != null && _api.authToken!.isNotEmpty) {
       refreshExams();
     }
   }
@@ -18,15 +22,20 @@ class ExamProvider extends ChangeNotifier {
   List<ExamScheduleModel> get exams => _exams;
   bool get isLoading => _isLoading;
   String? get errorMessage => _errorMessage;
-  ExamScheduleModel? get selectedExam => _selectedExam ?? (_exams.isNotEmpty ? _exams.first : null);
+  ExamScheduleModel? get selectedExam =>
+      _selectedExam ?? (_exams.isNotEmpty ? _exams.first : null);
 
   /// Ca thi đang hoạt động (Đang thi dở dang hoặc Sắp diễn ra) cần hiển thị trên Hero Card
   ExamScheduleModel? get activeHeroExam {
-    final inProgress = _exams.where((e) => e.status == ExamStatus.inProgress).toList();
+    final inProgress = _exams
+        .where((e) => e.status == ExamStatus.inProgress)
+        .toList();
     if (inProgress.isNotEmpty) {
       return inProgress.first;
     }
-    final upcoming = _exams.where((e) => e.status == ExamStatus.upcoming).toList();
+    final upcoming = _exams
+        .where((e) => e.status == ExamStatus.upcoming)
+        .toList();
     if (upcoming.isNotEmpty) {
       return upcoming.first;
     }
@@ -46,37 +55,57 @@ class ExamProvider extends ChangeNotifier {
 
   /// Tải danh sách ca thi của sinh viên từ Spring Boot: GET /api/student/my-schedules
   Future<void> refreshExams() async {
+    final version = ++_requestVersion;
     _isLoading = true;
     _errorMessage = null;
     notifyListeners();
 
     try {
-      final res = await ApiClient.instance.get(ApiEndpoints.studentMySchedules);
+      final res = await _api.get(ApiEndpoints.studentMySchedules);
+      if (_disposed || version != _requestVersion) return;
 
       if (res.success && res.data is List) {
         final list = res.data as List;
         _exams = list
-            .map((item) => ExamScheduleModel.fromJson(item as Map<String, dynamic>))
+            .map(
+              (item) =>
+                  ExamScheduleModel.fromJson(item as Map<String, dynamic>),
+            )
             .toList();
-        debugPrint('[ExamProvider] Loaded ${_exams.length} schedules from Spring Boot Backend.');
+        final selectedId = _selectedExam?.id;
+        _selectedExam = null;
+        for (final exam in _exams) {
+          if (exam.id == selectedId) _selectedExam = exam;
+        }
+        debugPrint(
+          '[ExamProvider] Loaded ${_exams.length} schedules from Spring Boot Backend.',
+        );
       } else {
         _exams = [];
-        _errorMessage = res.message.isNotEmpty ? res.message : 'Không thể tải lịch thi từ máy chủ.';
+        _selectedExam = null;
+        _errorMessage = res.message.isNotEmpty
+            ? res.message
+            : 'Không thể tải lịch thi từ máy chủ.';
       }
     } catch (e) {
+      if (_disposed || version != _requestVersion) return;
       debugPrint('[ExamProvider] Error loading exams from Backend: $e');
       _exams = [];
+      _selectedExam = null;
       _errorMessage = 'Lỗi kết nối máy chủ backend.';
     } finally {
-      _isLoading = false;
-      notifyListeners();
+      if (!_disposed && version == _requestVersion) {
+        _isLoading = false;
+        notifyListeners();
+      }
     }
   }
 
   /// Báo cho Spring Boot biết sinh viên bắt đầu thi: POST /api/student/schedules/{id}/start
   Future<bool> startExamOnBackend(String scheduleId) async {
     try {
-      final res = await ApiClient.instance.post(
+      if (scheduleId.trim().isEmpty) return false;
+      final res = await _api.post(
         '${ApiEndpoints.studentScheduleStart}/$scheduleId/start',
         body: {},
       );
@@ -85,5 +114,12 @@ class ExamProvider extends ChangeNotifier {
       debugPrint('[ExamProvider] Start exam error: $e');
       return false;
     }
+  }
+
+  @override
+  void dispose() {
+    _disposed = true;
+    _requestVersion++;
+    super.dispose();
   }
 }

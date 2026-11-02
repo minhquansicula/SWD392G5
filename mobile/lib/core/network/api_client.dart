@@ -20,8 +20,9 @@ class ApiResponseData<T> {
 }
 
 class ApiClient {
-  ApiClient._internal();
-  static final ApiClient instance = ApiClient._internal();
+  ApiClient({http.Client? client}) : _client = client ?? http.Client();
+  static final ApiClient instance = ApiClient();
+  final http.Client _client;
 
   String _baseUrl = ApiEndpoints.defaultBaseUrl;
   String? _authToken;
@@ -37,12 +38,15 @@ class ApiClient {
     _authToken = token;
   }
 
-  Map<String, String> _buildHeaders({Map<String, String>? extraHeaders}) {
+  Map<String, String> _buildHeaders({
+    Map<String, String>? extraHeaders,
+    bool authenticated = true,
+  }) {
     final headers = <String, String>{
       'Content-Type': 'application/json',
       'Accept': 'application/json',
     };
-    if (_authToken != null && _authToken!.isNotEmpty) {
+    if (authenticated && _authToken != null && _authToken!.isNotEmpty) {
       headers['Authorization'] = 'Bearer $_authToken';
     }
     if (extraHeaders != null) {
@@ -55,35 +59,36 @@ class ApiClient {
   Future<ApiResponseData<dynamic>> post(
     String endpoint, {
     Map<String, dynamic>? body,
+    bool authenticated = true,
     Duration timeout = const Duration(seconds: 15),
   }) async {
-    final url = Uri.parse('$_baseUrl$endpoint');
     try {
-      final response = await http
+      final url = Uri.parse('$_baseUrl$endpoint');
+      final response = await _client
           .post(
             url,
-            headers: _buildHeaders(),
+            headers: _buildHeaders(authenticated: authenticated),
             body: body != null ? jsonEncode(body) : null,
           )
           .timeout(timeout);
 
       return _parseResponse(response);
     } on SocketException catch (e) {
-      debugPrint('[ApiClient] SocketException for POST $url: $e');
+      debugPrint('[ApiClient] POST connection failed: $e');
       return ApiResponseData(
         success: false,
         statusCode: 0,
-        message: 'Không thể kết nối đến máy chủ Backend ($url).',
+        message: 'Không thể kết nối đến máy chủ Backend.',
       );
     } on TimeoutException {
-      debugPrint('[ApiClient] Timeout for POST $url');
+      debugPrint('[ApiClient] POST timeout');
       return ApiResponseData(
         success: false,
         statusCode: 408,
         message: 'Hết thời gian chờ phản hồi từ máy chủ Backend.',
       );
     } catch (e) {
-      debugPrint('[ApiClient] Unexpected error for POST $url: $e');
+      debugPrint('[ApiClient] POST failed: $e');
       return ApiResponseData(
         success: false,
         statusCode: 500,
@@ -98,33 +103,32 @@ class ApiClient {
     Map<String, String>? queryParams,
     Duration timeout = const Duration(seconds: 15),
   }) async {
-    var uri = Uri.parse('$_baseUrl$endpoint');
-    if (queryParams != null && queryParams.isNotEmpty) {
-      uri = uri.replace(queryParameters: queryParams);
-    }
-
     try {
-      final response = await http
+      var uri = Uri.parse('$_baseUrl$endpoint');
+      if (queryParams != null && queryParams.isNotEmpty) {
+        uri = uri.replace(queryParameters: queryParams);
+      }
+      final response = await _client
           .get(uri, headers: _buildHeaders())
           .timeout(timeout);
 
       return _parseResponse(response);
     } on SocketException catch (e) {
-      debugPrint('[ApiClient] SocketException for GET $uri: $e');
+      debugPrint('[ApiClient] GET connection failed: $e');
       return ApiResponseData(
         success: false,
         statusCode: 0,
-        message: 'Không thể kết nối đến máy chủ Backend ($uri).',
+        message: 'Không thể kết nối đến máy chủ Backend.',
       );
     } on TimeoutException {
-      debugPrint('[ApiClient] Timeout for GET $uri');
+      debugPrint('[ApiClient] GET timeout');
       return ApiResponseData(
         success: false,
         statusCode: 408,
         message: 'Hết thời gian chờ kết nối Backend.',
       );
     } catch (e) {
-      debugPrint('[ApiClient] Unexpected error for GET $uri: $e');
+      debugPrint('[ApiClient] GET failed: $e');
       return ApiResponseData(
         success: false,
         statusCode: 500,
@@ -134,25 +138,35 @@ class ApiClient {
   }
 
   ApiResponseData<dynamic> _parseResponse(http.Response response) {
+    if (response.statusCode == 204) {
+      return ApiResponseData(
+        success: true,
+        statusCode: 204,
+        message: 'Thành công',
+      );
+    }
     try {
       final decoded = jsonDecode(utf8.decode(response.bodyBytes));
       if (response.statusCode >= 200 && response.statusCode < 300) {
         // Handle Spring Boot standard ApiResponse: { code: 200, message: "...", data: ... }
-        final data = decoded is Map<String, dynamic> && decoded.containsKey('data')
+        final data =
+            decoded is Map<String, dynamic> && decoded.containsKey('data')
             ? decoded['data']
             : decoded;
-        final msg = decoded is Map<String, dynamic> && decoded.containsKey('message')
+        final msg =
+            decoded is Map<String, dynamic> && decoded.containsKey('message')
             ? decoded['message'].toString()
             : 'Thành công';
 
         return ApiResponseData(
-          success: true,
+          success: !(decoded is Map && decoded['success'] == false),
           statusCode: response.statusCode,
           message: msg,
           data: data,
         );
       } else {
-        final errorMsg = decoded is Map<String, dynamic> && decoded.containsKey('message')
+        final errorMsg =
+            decoded is Map<String, dynamic> && decoded.containsKey('message')
             ? decoded['message'].toString()
             : 'Lỗi máy chủ (${response.statusCode})';
 
@@ -165,7 +179,7 @@ class ApiClient {
       }
     } catch (e) {
       return ApiResponseData(
-        success: response.statusCode >= 200 && response.statusCode < 300,
+        success: false,
         statusCode: response.statusCode,
         message: 'Mã phản hồi HTTP: ${response.statusCode}',
         data: response.body,

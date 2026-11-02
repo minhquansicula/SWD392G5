@@ -30,3 +30,27 @@ Thumbs.db
 # AI Agent folders
 .agents/
 .agent/
+
+# Local-only tests, test configuration and verification reports
+/front-end/tests/
+/front-end/vitest.config.ts
+/front-end/tsconfig.test.json
+/mobile/test/
+/mobile/integration_test/
+/mobile/TEST_REPORT.md
+/python/tests/
+/python/qa/
+/back-end/src/test/
+/compose.reporting-test.yml
+/demo/**/tests/
+
+# Generated test artifacts
+**/coverage/
+**/.pytest_cache/
+**/.ruff_cache/
+**/__pycache__/
+**/test-results/
+**/playwright-report/
+**/surefire-reports/
+**/failsafe-reports/
+*.lcov

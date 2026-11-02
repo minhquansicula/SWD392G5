@@ -9,6 +9,7 @@ class AudioRecorderService {
   FlutterSoundRecorder? _recorder;
   bool _isRecorderInitialized = false;
   bool _isRecording = false;
+  bool _disposed = false;
 
   final StreamController<Uint8List> _audioChunkController =
       StreamController<Uint8List>.broadcast();
@@ -23,28 +24,36 @@ class AudioRecorderService {
   // Buffer for cutting into 100ms - 200ms chunks (Default: 150ms = 4800 bytes @ 16kHz 16-bit Mono)
   // 16000 samples/sec * 2 bytes/sample = 32000 bytes/sec
   // 150ms chunk = 32000 * 0.15 = 4800 bytes
-  static const int _targetChunkSize = (AppConstants.audioSampleRate * 2 * AppConstants.audioChunkMs) ~/ 1000;
+  static const int _targetChunkSize =
+      (AppConstants.audioSampleRate * 2 * AppConstants.audioChunkMs) ~/ 1000;
   final List<int> _pcmBuffer = [];
 
   StreamSubscription? _recordingDataSubscription;
-  Timer? _fallbackAudioTimer;
+  StreamController<Uint8List>? _recordingController;
 
   Future<bool> init() async {
+    if (_disposed) return false;
     try {
       if (kIsWeb) {
-        _isRecorderInitialized = true;
-        return true;
+        return false;
       }
 
       final status = await Permission.microphone.request();
+      if (_disposed) return false;
       if (status != PermissionStatus.granted) {
-        debugPrint('[AudioRecorderService] Microphone permission not granted: $status');
+        debugPrint(
+          '[AudioRecorderService] Microphone permission not granted: $status',
+        );
         _isRecorderInitialized = false;
         return false;
       }
 
       _recorder = FlutterSoundRecorder();
       await _recorder!.openRecorder();
+      if (_disposed) {
+        await _recorder?.closeRecorder();
+        return false;
+      }
       _isRecorderInitialized = true;
       debugPrint('[AudioRecorderService] FlutterSoundRecorder initialized.');
       return true;
@@ -56,12 +65,14 @@ class AudioRecorderService {
   }
 
   Future<void> startRecording() async {
+    if (_disposed) throw StateError('Recorder disposed');
     if (_isRecording) return;
     _pcmBuffer.clear();
 
     if (_recorder != null && _isRecorderInitialized) {
       try {
         final streamSink = StreamController<Uint8List>();
+        _recordingController = streamSink;
         _recordingDataSubscription = streamSink.stream.listen((Uint8List data) {
           _handleIncomingRawBytes(data);
         });
@@ -74,18 +85,24 @@ class AudioRecorderService {
         );
 
         _isRecording = true;
-        debugPrint('[AudioRecorderService] Started recording Raw PCM 16kHz Mono.');
+        debugPrint(
+          '[AudioRecorderService] Started recording Raw PCM 16kHz Mono.',
+        );
         return;
       } catch (e) {
-        debugPrint('[AudioRecorderService] Native recorder start failed: $e. Falling back to simulator mode.');
+        await _recordingDataSubscription?.cancel();
+        _recordingDataSubscription = null;
+        await _recordingController?.close();
+        _recordingController = null;
+        debugPrint('[AudioRecorderService] Native recorder start failed: $e.');
       }
     }
 
-    // Fallback Simulation Mode (for desktop or simulator without mic)
-    _startSimulatedAudioChunks();
+    throw StateError('Không thể ghi âm. Kiểm tra quyền microphone và thử lại.');
   }
 
   void _handleIncomingRawBytes(Uint8List newBytes) {
+    if (_disposed) return;
     _pcmBuffer.addAll(newBytes);
 
     // Calculate real-time amplitude / decibel for waveform
@@ -117,36 +134,9 @@ class AudioRecorderService {
     _amplitudeController.add(normalized);
   }
 
-  void _startSimulatedAudioChunks() {
-    _isRecording = true;
-    _fallbackAudioTimer?.cancel();
-
-    // Emits a simulated 150ms 16kHz PCM chunk every 150ms
-    _fallbackAudioTimer = Timer.periodic(const Duration(milliseconds: AppConstants.audioChunkMs), (timer) {
-      if (!_isRecording) {
-        timer.cancel();
-        return;
-      }
-
-      // Generate 150ms of PCM 16-bit Mono bytes (4800 bytes) with a natural sine wave tone
-      final chunk = Uint8List(_targetChunkSize);
-      final randomLevel = 0.2 + (math.Random().nextDouble() * 0.7);
-      _amplitudeController.add(randomLevel);
-
-      for (int i = 0; i < _targetChunkSize - 1; i += 2) {
-        final sampleVal = (math.sin(i * 0.1) * 16000 * randomLevel).toInt();
-        chunk[i] = sampleVal & 0xFF;
-        chunk[i + 1] = (sampleVal >> 8) & 0xFF;
-      }
-
-      _audioChunkController.add(chunk);
-    });
-  }
-
   Future<void> stopRecording() async {
+    if (_amplitudeController.isClosed) return;
     _isRecording = false;
-    _fallbackAudioTimer?.cancel();
-    _fallbackAudioTimer = null;
 
     if (_recorder != null && _isRecorderInitialized) {
       try {
@@ -157,6 +147,10 @@ class AudioRecorderService {
         debugPrint('[AudioRecorderService] Error stopping recorder: $e');
       }
     }
+    await _recordingDataSubscription?.cancel();
+    _recordingDataSubscription = null;
+    await _recordingController?.close();
+    _recordingController = null;
 
     // Flush any remaining buffer if any
     if (_pcmBuffer.isNotEmpty) {
@@ -164,15 +158,17 @@ class AudioRecorderService {
       _pcmBuffer.clear();
     }
 
-    _amplitudeController.add(0.0);
+    if (!_amplitudeController.isClosed) _amplitudeController.add(0.0);
     debugPrint('[AudioRecorderService] Stopped recording.');
   }
 
-  void dispose() {
-    stopRecording();
-    _audioChunkController.close();
-    _amplitudeController.close();
-    _recorder?.closeRecorder();
+  Future<void> dispose() async {
+    if (_disposed) return;
+    _disposed = true;
+    await stopRecording();
+    await _recorder?.closeRecorder();
     _recorder = null;
+    await _audioChunkController.close();
+    await _amplitudeController.close();
   }
 }
