@@ -69,6 +69,7 @@ public class ExamDtoMapper {
                     .scheduledEndTime(s.getScheduledEndTime()).status(s.getStatus())
                     .finalScore(Boolean.TRUE.equals(s.getLecturerTotalPending()) ? null : s.getLecturerTotalScore() != null ? s.getLecturerTotalScore() : s.getFinalScore())
                     .lecturerTotalScore(s.getLecturerTotalScore()).lecturerTotalPending(s.getLecturerTotalPending())
+                    .scorePublished(s.getLecturerTotalScore() != null && !Boolean.TRUE.equals(s.getLecturerTotalPending()))
                     .lecturerCriteria(criterionGrades.getOrDefault(s.getId(), List.of()))
                     .assignedQuestionCount(Math.toIntExact(counts.getOrDefault(s.getId(), 0L)))
                     .isConnected(s.getIsConnected()).fullRecordingUrl(s.getFullRecordingUrl()).gradedById(s.getGradedById())

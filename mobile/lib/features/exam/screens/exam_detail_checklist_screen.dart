@@ -2,6 +2,8 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:permission_handler/permission_handler.dart';
 import 'package:provider/provider.dart';
+import '../../../core/network/api_client.dart';
+import '../../../core/constants/api_endpoints.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_text_styles.dart';
 import '../../../core/widgets/glass_card.dart';
@@ -17,13 +19,11 @@ import '../../report/screens/exam_result_report_screen.dart';
 class ExamDetailChecklistScreen extends StatefulWidget {
   final ExamScheduleModel exam;
 
-  const ExamDetailChecklistScreen({
-    super.key,
-    required this.exam,
-  });
+  const ExamDetailChecklistScreen({super.key, required this.exam});
 
   @override
-  State<ExamDetailChecklistScreen> createState() => _ExamDetailChecklistScreenState();
+  State<ExamDetailChecklistScreen> createState() =>
+      _ExamDetailChecklistScreenState();
 }
 
 class _ExamDetailChecklistScreenState extends State<ExamDetailChecklistScreen> {
@@ -34,7 +34,8 @@ class _ExamDetailChecklistScreenState extends State<ExamDetailChecklistScreen> {
   bool _profileVerified = false;
 
   // Cam kết nội quy phòng thi (duy nhất thí sinh xác nhận)
-  bool _rulesAgreed = true;
+  bool _rulesAgreed = false;
+  Timer? _clock;
 
   // Trạng thái kiểm tra giọng nói thật qua microphone phần cứng
   final AudioRecorderService _audioRecorder = AudioRecorderService();
@@ -46,30 +47,50 @@ class _ExamDetailChecklistScreenState extends State<ExamDetailChecklistScreen> {
   void initState() {
     super.initState();
     _runSystemDiagnostics();
+    _clock = Timer.periodic(const Duration(seconds: 1), (_) {
+      if (mounted) setState(() {});
+    });
   }
 
   @override
   void dispose() {
     _amplitudeSubscription?.cancel();
+    _clock?.cancel();
     _audioRecorder.dispose();
     super.dispose();
   }
 
   /// Hệ thống tự động kiểm tra điều kiện dự thi
   Future<void> _runSystemDiagnostics() async {
-    setState(() => _isCheckingSystem = true);
+    final expectedId = context.read<AuthProvider>().currentUser?.id;
+    setState(() {
+      _isCheckingSystem = true;
+      _serverConnectionReady = false;
+      _profileVerified = false;
+    });
 
     try {
       // 1. Tự động kiểm tra quyền Microphone
       final micStatus = await Permission.microphone.status;
       _micPermissionGranted = micStatus.isGranted;
 
-      // 2. Tự động kiểm tra đường truyền kết nối máy chủ thi
-      await Future.delayed(const Duration(milliseconds: 600));
-      _serverConnectionReady = true;
-
-      // 3. Tự động xác thực danh tính thí sinh
-      _profileVerified = true;
+      final responses = await Future.wait([
+        ApiClient.instance.get(ApiEndpoints.currentUser),
+        ApiClient.instance.get(
+          '/health',
+          baseUrl: ApiEndpoints.aiServiceBaseUrl,
+        ),
+      ]);
+      if (!mounted) return;
+      final identity = responses[0];
+      final health = responses[1];
+      _profileVerified =
+          identity.success &&
+          identity.data is Map &&
+          identity.data['id'] == expectedId &&
+          identity.data['role'] == 'STUDENT';
+      _serverConnectionReady =
+          health.success && health.data is Map && health.data['status'] == 'UP';
     } catch (e) {
       debugPrint('[ExamChecklist] Error during system diagnostics: $e');
     } finally {
@@ -110,7 +131,11 @@ class _ExamDetailChecklistScreenState extends State<ExamDetailChecklistScreen> {
       if (!initialized) {
         if (mounted) {
           ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(content: Text('Không thể truy cập Microphone. Vui lòng cấp quyền.')),
+            const SnackBar(
+              content: Text(
+                'Không thể truy cập Microphone. Vui lòng cấp quyền.',
+              ),
+            ),
           );
         }
         return;
@@ -125,7 +150,20 @@ class _ExamDetailChecklistScreenState extends State<ExamDetailChecklistScreen> {
         }
       });
 
-      await _audioRecorder.startRecording();
+      try {
+        await _audioRecorder.startRecording();
+      } catch (_) {
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content: Text(
+                'Chưa thu được âm thanh từ microphone. Vui lòng thử lại.',
+              ),
+            ),
+          );
+        }
+        return;
+      }
       if (mounted) {
         setState(() {
           _isTestingMic = true;
@@ -139,8 +177,19 @@ class _ExamDetailChecklistScreenState extends State<ExamDetailChecklistScreen> {
   Widget build(BuildContext context) {
     final currentUser = context.watch<AuthProvider>().currentUser;
     final isCompleted = widget.exam.status == ExamStatus.completed;
-    final allSystemReady = _micPermissionGranted && _serverConnectionReady && _profileVerified;
-    final canEnter = !isCompleted && allSystemReady && _rulesAgreed;
+    final allSystemReady =
+        _micPermissionGranted && _serverConnectionReady && _profileVerified;
+    final now = DateTime.now();
+    final inWindow =
+        !now.isBefore(widget.exam.scheduledAt) &&
+        (widget.exam.scheduledEndAt == null ||
+            now.isBefore(widget.exam.scheduledEndAt!));
+    final canEnter =
+        !isCompleted &&
+        !_isCheckingSystem &&
+        inWindow &&
+        allSystemReady &&
+        _rulesAgreed;
 
     return Scaffold(
       backgroundColor: AppColors.background,
@@ -159,9 +208,16 @@ class _ExamDetailChecklistScreenState extends State<ExamDetailChecklistScreen> {
                 ? const SizedBox(
                     width: 18,
                     height: 18,
-                    child: CircularProgressIndicator(strokeWidth: 2, color: AppColors.primaryLight),
+                    child: CircularProgressIndicator(
+                      strokeWidth: 2,
+                      color: AppColors.primaryLight,
+                    ),
                   )
-                : const Icon(Icons.refresh_rounded, color: AppColors.primaryLight, size: 22),
+                : const Icon(
+                    Icons.refresh_rounded,
+                    color: AppColors.primaryLight,
+                    size: 22,
+                  ),
             onPressed: _isCheckingSystem ? null : _runSystemDiagnostics,
           ),
           const SizedBox(width: 8),
@@ -187,12 +243,18 @@ class _ExamDetailChecklistScreenState extends State<ExamDetailChecklistScreen> {
                 Expanded(
                   child: Row(
                     children: [
-                      const Icon(Icons.verified_outlined, size: 20, color: AppColors.primaryLight),
+                      const Icon(
+                        Icons.verified_outlined,
+                        size: 20,
+                        color: AppColors.primaryLight,
+                      ),
                       const SizedBox(width: 8),
                       Expanded(
                         child: Text(
                           'Hệ thống kiểm tra điều kiện',
-                          style: AppTextStyles.labelBold.copyWith(fontSize: 15.5),
+                          style: AppTextStyles.labelBold.copyWith(
+                            fontSize: 15.5,
+                          ),
                           maxLines: 1,
                           overflow: TextOverflow.ellipsis,
                         ),
@@ -202,12 +264,21 @@ class _ExamDetailChecklistScreenState extends State<ExamDetailChecklistScreen> {
                 ),
                 const SizedBox(width: 8),
                 Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 10,
+                    vertical: 4,
+                  ),
                   decoration: BoxDecoration(
-                    color: (allSystemReady ? AppColors.success : AppColors.warning).withValues(alpha: 0.15),
+                    color:
+                        (allSystemReady ? AppColors.success : AppColors.warning)
+                            .withValues(alpha: 0.15),
                     borderRadius: BorderRadius.circular(12),
                     border: Border.all(
-                      color: (allSystemReady ? AppColors.success : AppColors.warning).withValues(alpha: 0.35),
+                      color:
+                          (allSystemReady
+                                  ? AppColors.success
+                                  : AppColors.warning)
+                              .withValues(alpha: 0.35),
                     ),
                   ),
                   child: Text(
@@ -215,7 +286,9 @@ class _ExamDetailChecklistScreenState extends State<ExamDetailChecklistScreen> {
                     style: TextStyle(
                       fontSize: 11,
                       fontWeight: FontWeight.w600,
-                      color: allSystemReady ? AppColors.success : AppColors.warning,
+                      color: allSystemReady
+                          ? AppColors.success
+                          : AppColors.warning,
                     ),
                   ),
                 ),
@@ -235,15 +308,26 @@ class _ExamDetailChecklistScreenState extends State<ExamDetailChecklistScreen> {
                   ? TextButton(
                       onPressed: _requestMicPermission,
                       style: TextButton.styleFrom(
-                        backgroundColor: AppColors.warning.withValues(alpha: 0.15),
-                        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                        backgroundColor: AppColors.warning.withValues(
+                          alpha: 0.15,
+                        ),
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 12,
+                          vertical: 6,
+                        ),
                         minimumSize: Size.zero,
                         tapTargetSize: MaterialTapTargetSize.shrinkWrap,
-                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(8),
+                        ),
                       ),
                       child: const Text(
                         'Cấp quyền',
-                        style: TextStyle(color: AppColors.warning, fontSize: 11.5, fontWeight: FontWeight.bold),
+                        style: TextStyle(
+                          color: AppColors.warning,
+                          fontSize: 11.5,
+                          fontWeight: FontWeight.bold,
+                        ),
                       ),
                     )
                   : null,
@@ -277,7 +361,9 @@ class _ExamDetailChecklistScreenState extends State<ExamDetailChecklistScreen> {
               shape: RoundedRectangleBorder(
                 borderRadius: BorderRadius.circular(16),
                 side: BorderSide(
-                  color: _rulesAgreed ? AppColors.primaryLight.withValues(alpha: 0.5) : AppColors.borderGlass,
+                  color: _rulesAgreed
+                      ? AppColors.primaryLight.withValues(alpha: 0.5)
+                      : AppColors.borderGlass,
                 ),
               ),
               clipBehavior: Clip.antiAlias,
@@ -292,7 +378,11 @@ class _ExamDetailChecklistScreenState extends State<ExamDetailChecklistScreen> {
                     color: AppColors.primary.withValues(alpha: 0.15),
                     shape: BoxShape.circle,
                   ),
-                  child: const Icon(Icons.record_voice_over_rounded, color: AppColors.primaryLight, size: 20),
+                  child: const Icon(
+                    Icons.record_voice_over_rounded,
+                    color: AppColors.primaryLight,
+                    size: 20,
+                  ),
                 ),
                 title: Text(
                   'Cam kết phòng thi độc lập & yên tĩnh',
@@ -300,9 +390,15 @@ class _ExamDetailChecklistScreenState extends State<ExamDetailChecklistScreen> {
                 ),
                 subtitle: Text(
                   'Tôi cam kết giữ không gian yên tĩnh và tự thực hiện 100% bài thi',
-                  style: AppTextStyles.bodySm.copyWith(fontSize: 11.5, color: AppColors.textMuted),
+                  style: AppTextStyles.bodySm.copyWith(
+                    fontSize: 11.5,
+                    color: AppColors.textMuted,
+                  ),
                 ),
-                contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 4),
+                contentPadding: const EdgeInsets.symmetric(
+                  horizontal: 14,
+                  vertical: 4,
+                ),
               ),
             ),
 
@@ -324,7 +420,11 @@ class _ExamDetailChecklistScreenState extends State<ExamDetailChecklistScreen> {
               ),
             ] else ...[
               PrimaryButton(
-                text: canEnter ? 'Vào Phòng Thi AI Viva' : 'Vui lòng hoàn tất điều kiện dự thi',
+                text: canEnter
+                    ? 'Vào Phòng Thi AI Viva'
+                    : !inWindow
+                    ? 'Chưa đến giờ hoặc đã hết giờ thi'
+                    : 'Vui lòng hoàn tất điều kiện dự thi',
                 icon: Icons.arrow_forward_rounded,
                 height: 54,
                 onPressed: canEnter
@@ -369,11 +469,16 @@ class _ExamDetailChecklistScreenState extends State<ExamDetailChecklistScreen> {
                 icon: Icons.school_rounded,
               ),
               Container(
-                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 10,
+                  vertical: 4,
+                ),
                 decoration: BoxDecoration(
                   color: AppColors.success.withValues(alpha: 0.15),
                   borderRadius: BorderRadius.circular(12),
-                  border: Border.all(color: AppColors.success.withValues(alpha: 0.3)),
+                  border: Border.all(
+                    color: AppColors.success.withValues(alpha: 0.3),
+                  ),
                 ),
                 child: Row(
                   children: [
@@ -388,7 +493,10 @@ class _ExamDetailChecklistScreenState extends State<ExamDetailChecklistScreen> {
                     const SizedBox(width: 6),
                     Text(
                       'Phòng Thi Đang Mở',
-                      style: AppTextStyles.labelSm.copyWith(color: AppColors.success, fontSize: 11),
+                      style: AppTextStyles.labelSm.copyWith(
+                        color: AppColors.success,
+                        fontSize: 11,
+                      ),
                     ),
                   ],
                 ),
@@ -413,7 +521,11 @@ class _ExamDetailChecklistScreenState extends State<ExamDetailChecklistScreen> {
               Expanded(
                 child: Row(
                   children: [
-                    const Icon(Icons.timer_outlined, size: 16, color: AppColors.warning),
+                    const Icon(
+                      Icons.timer_outlined,
+                      size: 16,
+                      color: AppColors.warning,
+                    ),
                     const SizedBox(width: 6),
                     Flexible(
                       child: Text(
@@ -430,7 +542,11 @@ class _ExamDetailChecklistScreenState extends State<ExamDetailChecklistScreen> {
               Expanded(
                 child: Row(
                   children: [
-                    const Icon(Icons.psychology_outlined, size: 16, color: AppColors.primaryLight),
+                    const Icon(
+                      Icons.psychology_outlined,
+                      size: 16,
+                      color: AppColors.primaryLight,
+                    ),
                     const SizedBox(width: 6),
                     Flexible(
                       child: Text(
@@ -457,7 +573,9 @@ class _ExamDetailChecklistScreenState extends State<ExamDetailChecklistScreen> {
         color: AppColors.surfaceCard,
         borderRadius: BorderRadius.circular(18),
         border: Border.all(
-          color: _isTestingMic ? AppColors.tertiary.withValues(alpha: 0.6) : AppColors.borderGlass,
+          color: _isTestingMic
+              ? AppColors.tertiary.withValues(alpha: 0.6)
+              : AppColors.borderGlass,
         ),
       ),
       child: Column(
@@ -468,12 +586,16 @@ class _ExamDetailChecklistScreenState extends State<ExamDetailChecklistScreen> {
               Container(
                 padding: const EdgeInsets.all(9),
                 decoration: BoxDecoration(
-                  color: (_isTestingMic ? AppColors.tertiary : AppColors.primary).withValues(alpha: 0.15),
+                  color:
+                      (_isTestingMic ? AppColors.tertiary : AppColors.primary)
+                          .withValues(alpha: 0.15),
                   shape: BoxShape.circle,
                 ),
                 child: Icon(
                   _isTestingMic ? Icons.mic_rounded : Icons.mic_none_rounded,
-                  color: _isTestingMic ? AppColors.tertiary : AppColors.primaryLight,
+                  color: _isTestingMic
+                      ? AppColors.tertiary
+                      : AppColors.primaryLight,
                   size: 20,
                 ),
               ),
@@ -488,9 +610,13 @@ class _ExamDetailChecklistScreenState extends State<ExamDetailChecklistScreen> {
                     ),
                     const SizedBox(height: 2),
                     Text(
-                      _isTestingMic ? 'Nói vào micro để thử âm lượng...' : 'Nhấn nút để kiểm tra âm lượng thu âm',
+                      _isTestingMic
+                          ? 'Nói vào micro để thử âm lượng...'
+                          : 'Nhấn nút để kiểm tra âm lượng thu âm',
                       style: AppTextStyles.bodySm.copyWith(
-                        color: _isTestingMic ? AppColors.tertiary : AppColors.textMuted,
+                        color: _isTestingMic
+                            ? AppColors.tertiary
+                            : AppColors.textMuted,
                         fontSize: 11.5,
                       ),
                       maxLines: 1,
@@ -506,20 +632,29 @@ class _ExamDetailChecklistScreenState extends State<ExamDetailChecklistScreen> {
                   backgroundColor: _isTestingMic
                       ? AppColors.dangerDark.withValues(alpha: 0.2)
                       : AppColors.primary.withValues(alpha: 0.2),
-                  padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 12,
+                    vertical: 8,
+                  ),
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(10),
+                  ),
                 ),
                 icon: Icon(
                   _isTestingMic ? Icons.stop_rounded : Icons.play_arrow_rounded,
                   size: 16,
-                  color: _isTestingMic ? AppColors.danger : AppColors.primaryLight,
+                  color: _isTestingMic
+                      ? AppColors.danger
+                      : AppColors.primaryLight,
                 ),
                 label: Text(
                   _isTestingMic ? 'Dừng' : 'Nói thử',
                   style: TextStyle(
                     fontSize: 12,
                     fontWeight: FontWeight.w600,
-                    color: _isTestingMic ? AppColors.danger : AppColors.primaryLight,
+                    color: _isTestingMic
+                        ? AppColors.danger
+                        : AppColors.primaryLight,
                   ),
                 ),
               ),
@@ -546,7 +681,9 @@ class _ExamDetailChecklistScreenState extends State<ExamDetailChecklistScreen> {
                     level: _testAudioLevel,
                     height: 28,
                     barCount: 9,
-                    color: _testAudioLevel > 0.15 ? AppColors.success : AppColors.primaryLight,
+                    color: _testAudioLevel > 0.15
+                        ? AppColors.success
+                        : AppColors.primaryLight,
                   ),
                   const SizedBox(width: 16),
                   Expanded(
@@ -558,7 +695,9 @@ class _ExamDetailChecklistScreenState extends State<ExamDetailChecklistScreen> {
                               ? 'Tín hiệu: ĐANG THU ÂM TỐT (${(_testAudioLevel * 100).toInt()}%)'
                               : 'Đang lắng nghe... Hãy nói thử vào micro',
                           style: AppTextStyles.labelSm.copyWith(
-                            color: _testAudioLevel > 0.15 ? AppColors.success : AppColors.primaryLight,
+                            color: _testAudioLevel > 0.15
+                                ? AppColors.success
+                                : AppColors.primaryLight,
                             fontSize: 11,
                           ),
                         ),
@@ -566,7 +705,10 @@ class _ExamDetailChecklistScreenState extends State<ExamDetailChecklistScreen> {
                           _testAudioLevel > 0.15
                               ? 'Biên độ sóng âm phản hồi trực tiếp từ phần cứng'
                               : 'Sóng âm sẽ nhảy khi phát hiện giọng nói của bạn',
-                          style: AppTextStyles.bodySm.copyWith(color: AppColors.textMuted, fontSize: 10.5),
+                          style: AppTextStyles.bodySm.copyWith(
+                            color: AppColors.textMuted,
+                            fontSize: 10.5,
+                          ),
                         ),
                       ],
                     ),
@@ -594,7 +736,9 @@ class _ExamDetailChecklistScreenState extends State<ExamDetailChecklistScreen> {
         color: AppColors.surfaceCard,
         borderRadius: BorderRadius.circular(16),
         border: Border.all(
-          color: isSuccess ? AppColors.success.withValues(alpha: 0.35) : AppColors.borderGlass,
+          color: isSuccess
+              ? AppColors.success.withValues(alpha: 0.35)
+              : AppColors.borderGlass,
         ),
       ),
       child: Row(
@@ -602,7 +746,8 @@ class _ExamDetailChecklistScreenState extends State<ExamDetailChecklistScreen> {
           Container(
             padding: const EdgeInsets.all(9),
             decoration: BoxDecoration(
-              color: (isSuccess ? AppColors.success : AppColors.warning).withValues(alpha: 0.15),
+              color: (isSuccess ? AppColors.success : AppColors.warning)
+                  .withValues(alpha: 0.15),
               shape: BoxShape.circle,
             ),
             child: Icon(
@@ -616,11 +761,17 @@ class _ExamDetailChecklistScreenState extends State<ExamDetailChecklistScreen> {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Text(title, style: AppTextStyles.labelBold.copyWith(fontSize: 13.5)),
+                Text(
+                  title,
+                  style: AppTextStyles.labelBold.copyWith(fontSize: 13.5),
+                ),
                 const SizedBox(height: 2),
                 Text(
                   subtitle,
-                  style: AppTextStyles.bodySm.copyWith(fontSize: 11.5, color: AppColors.textMuted),
+                  style: AppTextStyles.bodySm.copyWith(
+                    fontSize: 11.5,
+                    color: AppColors.textMuted,
+                  ),
                 ),
               ],
             ),
@@ -633,7 +784,8 @@ class _ExamDetailChecklistScreenState extends State<ExamDetailChecklistScreen> {
             Container(
               padding: const EdgeInsets.all(5),
               decoration: BoxDecoration(
-                color: (isSuccess ? AppColors.success : AppColors.warning).withValues(alpha: 0.15),
+                color: (isSuccess ? AppColors.success : AppColors.warning)
+                    .withValues(alpha: 0.15),
                 shape: BoxShape.circle,
               ),
               child: Icon(

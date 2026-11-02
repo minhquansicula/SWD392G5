@@ -33,6 +33,7 @@ class AudioRecorderService {
 
   Future<bool> init() async {
     if (_disposed) return false;
+    if (_isRecorderInitialized && _recorder != null) return true;
     try {
       if (kIsWeb) {
         return false;

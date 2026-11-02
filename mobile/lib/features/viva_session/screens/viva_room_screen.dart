@@ -1,8 +1,6 @@
 import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
-import '../../../core/constants/api_endpoints.dart';
-import '../../../core/network/api_client.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_text_styles.dart';
 import '../../../core/widgets/audio_pulse_orb.dart';
@@ -10,6 +8,7 @@ import '../../../core/widgets/glass_card.dart';
 import '../../../core/widgets/voice_wave_visualizer.dart';
 import '../../auth/providers/auth_provider.dart';
 import '../../exam/models/exam_schedule_model.dart';
+import '../../exam/providers/exam_provider.dart';
 import '../../report/screens/exam_result_report_screen.dart';
 import '../models/viva_question_model.dart';
 import '../providers/viva_session_provider.dart';
@@ -38,6 +37,8 @@ class _VivaRoomScreenState extends State<VivaRoomScreen>
   bool _hasShownFinishedDialog = false;
   String? _startError;
   late VivaSessionProvider _session;
+  bool _loading = false;
+  bool _allowPop = false;
 
   @override
   void initState() {
@@ -47,31 +48,42 @@ class _VivaRoomScreenState extends State<VivaRoomScreen>
 
     // 2. Tự động kết nối WebSocket demo/viva-ai-v2 với Token xác thực
     _session = context.read<VivaSessionProvider>();
+    _session.prepareRoom();
     WidgetsBinding.instance.addPostFrameCallback((_) async {
-      if (!mounted) return;
-      if (widget.exam.status != ExamStatus.inProgress &&
-          !await _initExamSessionOnBackend()) {
-        return;
-      }
-      if (!mounted) return;
+      await _startRoom();
+    });
+  }
+
+  Future<void> _startRoom() async {
+    if (!mounted || _loading) return;
+    setState(() {
+      _loading = true;
+      _startError = null;
+    });
+    try {
+      if (!await _initExamSessionOnBackend() || !mounted) return;
       final auth = context.read<AuthProvider>();
       await _session.startSession(
         examId: widget.exam.id,
         studentId: auth.currentUser?.id ?? '',
         token: auth.currentUser?.token,
       );
-    });
+    } finally {
+      if (mounted) setState(() => _loading = false);
+    }
   }
 
   /// Gọi API Backend Spring Boot để bắt đầu ca thi
   Future<bool> _initExamSessionOnBackend() async {
     try {
-      final result = await ApiClient.instance.post(
-        '${ApiEndpoints.studentScheduleStart}/${widget.exam.id}/start',
-        body: {},
-      );
-      if (!result.success) {
-        if (mounted) setState(() => _startError = result.message);
+      final exams = context.read<ExamProvider>();
+      if (!await exams.startExamOnBackend(widget.exam.id)) {
+        if (mounted) {
+          setState(
+            () =>
+                _startError = exams.errorMessage ?? 'Không thể bắt đầu ca thi.',
+          );
+        }
         return false;
       }
       debugPrint(
@@ -147,7 +159,7 @@ class _VivaRoomScreenState extends State<VivaRoomScreen>
           ],
         ),
         content: const Text(
-          'Chúc mừng bạn đã hoàn thành phiên thi vấn đáp AI! Giám khảo AI đã tổng hợp bảng điểm và nhận xét chi tiết Rubric.',
+          'Ca thi đã được ghi nhận hoàn tất. Kết quả AI là đề xuất; điểm chính thức sẽ hiển thị sau khi giảng viên chốt.',
           style: TextStyle(
             color: AppColors.textSecondary,
             fontSize: 13.5,
@@ -165,6 +177,8 @@ class _VivaRoomScreenState extends State<VivaRoomScreen>
             ),
             onPressed: () {
               Navigator.of(ctx).pop();
+              context.read<ExamProvider>().refreshExams();
+              setState(() => _allowPop = true);
               Navigator.of(context).pushReplacement(
                 MaterialPageRoute(
                   builder: (_) => ExamResultReportScreen(exam: widget.exam),
@@ -226,7 +240,10 @@ class _VivaRoomScreenState extends State<VivaRoomScreen>
             ),
             onPressed: () {
               Navigator.of(ctx).pop();
-              Navigator.of(context).pop();
+              setState(() => _allowPop = true);
+              WidgetsBinding.instance.addPostFrameCallback((_) {
+                if (mounted) Navigator.of(context).pop();
+              });
             },
             child: const Text(
               'Rời phòng',
@@ -267,116 +284,148 @@ class _VivaRoomScreenState extends State<VivaRoomScreen>
       });
     }
 
-    return Scaffold(
-      backgroundColor: AppColors.surfaceDeep,
-      body: SafeArea(
-        child: Column(
-          children: [
-            if (_startError != null || viva.errorMessage != null)
-              Padding(
-                padding: const EdgeInsets.all(12),
-                child: Text(
-                  _startError ?? viva.errorMessage!,
-                  style: const TextStyle(color: AppColors.danger),
+    return PopScope(
+      canPop: _allowPop,
+      onPopInvokedWithResult: (didPop, result) {
+        if (!didPop) _confirmExit();
+      },
+      child: Scaffold(
+        backgroundColor: AppColors.surfaceDeep,
+        body: SafeArea(
+          child: Column(
+            children: [
+              if (_startError != null || viva.errorMessage != null)
+                Padding(
+                  padding: const EdgeInsets.all(12),
+                  child: Text(
+                    _startError ?? viva.errorMessage!,
+                    style: const TextStyle(color: AppColors.danger),
+                  ),
                 ),
-              ),
-            // Top Telemetry Header
-            _buildTopTelemetryBar(viva),
+              if (_loading) const LinearProgressIndicator(),
+              if (!_loading &&
+                  (_startError != null || viva.errorMessage != null))
+                TextButton.icon(
+                  icon: const Icon(Icons.refresh),
+                  label: Text(
+                    _startError != null
+                        ? 'Thử vào phòng lại'
+                        : 'Kết nối lại / kiểm tra kết quả',
+                  ),
+                  onPressed: () async {
+                    if (_startError != null) {
+                      await _startRoom();
+                      return;
+                    }
+                    setState(() => _loading = true);
+                    try {
+                      await viva.recoverSession();
+                    } finally {
+                      if (mounted) setState(() => _loading = false);
+                    }
+                  },
+                ),
+              // Top Telemetry Header
+              _buildTopTelemetryBar(viva),
 
-            // Banner thông báo trạng thái kết nối WebSocket thật với Python
-            if (viva.wsStatus == WsConnectionStatus.connecting)
-              Container(
-                width: double.infinity,
-                color: AppColors.warning.withValues(alpha: 0.15),
-                padding: const EdgeInsets.symmetric(
-                  vertical: 6,
-                  horizontal: 14,
-                ),
-                child: Row(
-                  children: const [
-                    SizedBox(
-                      width: 12,
-                      height: 12,
-                      child: CircularProgressIndicator(
-                        strokeWidth: 2,
-                        color: AppColors.warning,
-                      ),
-                    ),
-                    SizedBox(width: 8),
-                    Expanded(
-                      child: Text(
-                        'Đang kết nối tới Python AI Examiner...',
-                        style: TextStyle(
+              // Banner thông báo trạng thái kết nối WebSocket thật với Python
+              if (viva.wsStatus == WsConnectionStatus.connecting)
+                Container(
+                  width: double.infinity,
+                  color: AppColors.warning.withValues(alpha: 0.15),
+                  padding: const EdgeInsets.symmetric(
+                    vertical: 6,
+                    horizontal: 14,
+                  ),
+                  child: Row(
+                    children: const [
+                      SizedBox(
+                        width: 12,
+                        height: 12,
+                        child: CircularProgressIndicator(
+                          strokeWidth: 2,
                           color: AppColors.warning,
-                          fontSize: 11,
                         ),
                       ),
-                    ),
-                  ],
-                ),
-              )
-            else if (viva.wsStatus == WsConnectionStatus.error ||
-                viva.wsStatus == WsConnectionStatus.disconnected)
-              Container(
-                width: double.infinity,
-                color: AppColors.danger.withValues(alpha: 0.2),
-                padding: const EdgeInsets.symmetric(
-                  vertical: 6,
-                  horizontal: 14,
-                ),
-                child: Row(
-                  children: const [
-                    Icon(
-                      Icons.error_outline_rounded,
-                      color: AppColors.danger,
-                      size: 14,
-                    ),
-                    SizedBox(width: 8),
-                    Expanded(
-                      child: Text(
-                        'Mất kết nối với AI Engine. Vui lòng kiểm tra Python server.',
-                        style: TextStyle(color: AppColors.danger, fontSize: 11),
+                      SizedBox(width: 8),
+                      Expanded(
+                        child: Text(
+                          'Đang kết nối tới Python AI Examiner...',
+                          style: TextStyle(
+                            color: AppColors.warning,
+                            fontSize: 11,
+                          ),
+                        ),
                       ),
-                    ),
-                  ],
+                    ],
+                  ),
+                )
+              else if (viva.wsStatus == WsConnectionStatus.error ||
+                  viva.wsStatus == WsConnectionStatus.disconnected)
+                Container(
+                  width: double.infinity,
+                  color: AppColors.danger.withValues(alpha: 0.2),
+                  padding: const EdgeInsets.symmetric(
+                    vertical: 6,
+                    horizontal: 14,
+                  ),
+                  child: Row(
+                    children: const [
+                      Icon(
+                        Icons.error_outline_rounded,
+                        color: AppColors.danger,
+                        size: 14,
+                      ),
+                      SizedBox(width: 8),
+                      Expanded(
+                        child: Text(
+                          'Mất kết nối với AI Engine. Vui lòng kiểm tra Python server.',
+                          style: TextStyle(
+                            color: AppColors.danger,
+                            fontSize: 11,
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+
+              // Scrollable Viva Interview Stage
+              Expanded(
+                child: SingleChildScrollView(
+                  controller: _scrollController,
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 18,
+                    vertical: 8,
+                  ),
+                  child: Column(
+                    children: [
+                      const SizedBox(height: 10),
+
+                      // Center Holographic Voice Presence Orb
+                      _buildHolographicPresenceOrb(viva),
+                      const SizedBox(height: 12),
+
+                      // Voice State Indicator Badge
+                      _buildVoiceStatusBadge(effectiveVoiceState),
+                      const SizedBox(height: 16),
+
+                      // Current Question Card (Highlighted)
+                      _buildQuestionCard(currentQ, isAdaptive),
+                      const SizedBox(height: 16),
+
+                      // Live Speech-to-Text Conversation Stream
+                      _buildLiveConversationBubbles(currentQ, viva),
+                      const SizedBox(height: 24),
+                    ],
+                  ),
                 ),
               ),
 
-            // Scrollable Viva Interview Stage
-            Expanded(
-              child: SingleChildScrollView(
-                controller: _scrollController,
-                padding: const EdgeInsets.symmetric(
-                  horizontal: 18,
-                  vertical: 8,
-                ),
-                child: Column(
-                  children: [
-                    const SizedBox(height: 10),
-
-                    // Center Holographic Voice Presence Orb
-                    _buildHolographicPresenceOrb(viva),
-                    const SizedBox(height: 12),
-
-                    // Voice State Indicator Badge
-                    _buildVoiceStatusBadge(effectiveVoiceState),
-                    const SizedBox(height: 16),
-
-                    // Current Question Card (Highlighted)
-                    _buildQuestionCard(currentQ, isAdaptive),
-                    const SizedBox(height: 16),
-
-                    // Live Speech-to-Text Conversation Stream
-                    _buildLiveConversationBubbles(currentQ, viva),
-                    const SizedBox(height: 24),
-                  ],
-                ),
-              ),
-            ),
-
-            // Bottom Audio Control Deck
-            _buildBottomControlDeck(viva),
-          ],
+              // Bottom Audio Control Deck
+              _buildBottomControlDeck(viva),
+            ],
+          ),
         ),
       ),
     );
@@ -385,8 +434,8 @@ class _VivaRoomScreenState extends State<VivaRoomScreen>
   /// Thanh Header trên cùng hiển thị chỉ số câu hỏi và đồng hồ đếm lùi thực
   Widget _buildTopTelemetryBar(VivaSessionProvider viva) {
     final isLiveWs = viva.wsStatus == WsConnectionStatus.authenticated;
-    final totalQ = viva.questions.isEmpty ? 1 : viva.questions.length;
-    final currentNum = (viva.currentQuestionIndex + 1).clamp(1, totalQ);
+    final totalQ = viva.currentQuestion.totalQuestions;
+    final currentNum = viva.currentQuestion.questionNumber.clamp(1, totalQ);
 
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
@@ -1032,15 +1081,42 @@ class _VivaRoomScreenState extends State<VivaRoomScreen>
                   size: 26,
                   color: AppColors.primaryLight,
                 ),
-                onPressed: viva.sessionState == VivaSessionState.processing
-                    ? null
-                    : _submitCurrentAnswer,
+                onPressed: viva.canSubmit ? _submitCurrentAnswer : null,
               ),
               Text(
                 'Nộp câu',
                 style: AppTextStyles.bodySm.copyWith(fontSize: 11),
               ),
             ],
+          ),
+          TextButton(
+            onPressed: viva.canFinish
+                ? () async {
+                    final confirmed = await showDialog<bool>(
+                      context: context,
+                      builder: (ctx) => AlertDialog(
+                        title: const Text('Kết thúc và nộp bài?'),
+                        content: const Text(
+                          'Các câu chưa trả lời sẽ được ghi nhận theo dữ liệu hiện có.',
+                        ),
+                        actions: [
+                          TextButton(
+                            onPressed: () => Navigator.pop(ctx, false),
+                            child: const Text('Tiếp tục thi'),
+                          ),
+                          TextButton(
+                            onPressed: () => Navigator.pop(ctx, true),
+                            child: const Text('Nộp bài'),
+                          ),
+                        ],
+                      ),
+                    );
+                    if (confirmed == true && mounted) {
+                      await viva.finishExamSession();
+                    }
+                  }
+                : null,
+            child: const Text('Nộp bài'),
           ),
         ],
       ),

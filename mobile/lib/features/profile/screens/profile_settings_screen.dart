@@ -6,7 +6,7 @@ import '../../../core/widgets/glass_card.dart';
 import '../../../core/widgets/primary_button.dart';
 import '../../../core/widgets/status_badge.dart';
 import '../../auth/providers/auth_provider.dart';
-import '../../auth/screens/login_screen.dart';
+import '../../viva_session/services/audio_recorder_service.dart';
 import '../../auth/screens/forgot_password_screen.dart';
 
 class ProfileSettingsScreen extends StatefulWidget {
@@ -17,7 +17,7 @@ class ProfileSettingsScreen extends StatefulWidget {
 }
 
 class _ProfileSettingsScreenState extends State<ProfileSettingsScreen> {
-  bool _examNotificationEnabled = true;
+  bool _testingMic = false;
 
   void _showRegulationDialog() {
     showDialog(
@@ -27,9 +27,16 @@ class _ProfileSettingsScreenState extends State<ProfileSettingsScreen> {
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
         title: Row(
           children: [
-            const Icon(Icons.menu_book_rounded, color: AppColors.primaryLight, size: 24),
+            const Icon(
+              Icons.menu_book_rounded,
+              color: AppColors.primaryLight,
+              size: 24,
+            ),
             const SizedBox(width: 8),
-            Text('Quy Chế Thi Vấn Đáp', style: AppTextStyles.headlineMd.copyWith(fontSize: 18)),
+            Text(
+              'Quy Chế Thi Vấn Đáp',
+              style: AppTextStyles.headlineMd.copyWith(fontSize: 18),
+            ),
           ],
         ),
         content: SingleChildScrollView(
@@ -37,13 +44,25 @@ class _ProfileSettingsScreenState extends State<ProfileSettingsScreen> {
             crossAxisAlignment: CrossAxisAlignment.start,
             mainAxisSize: MainAxisSize.min,
             children: [
-              Text('1. Thí sinh chuẩn bị không gian yên tĩnh, trang phục nghiêm túc.', style: AppTextStyles.bodySm),
+              Text(
+                '1. Thí sinh chuẩn bị không gian yên tĩnh, trang phục nghiêm túc.',
+                style: AppTextStyles.bodySm,
+              ),
               const SizedBox(height: 8),
-              Text('2. Giữ micro và kết nối mạng ổn định trong suốt buổi vấn đáp.', style: AppTextStyles.bodySm),
+              Text(
+                '2. Giữ micro và kết nối mạng ổn định trong suốt buổi vấn đáp.',
+                style: AppTextStyles.bodySm,
+              ),
               const SizedBox(height: 8),
-              Text('3. Điểm số do AI chấm là điểm đề xuất. Giảng viên phụ trách sẽ nghe lại ghi âm để chốt điểm chính thức.', style: AppTextStyles.bodySm),
+              Text(
+                '3. Điểm số do AI chấm là điểm đề xuất. Giảng viên phụ trách sẽ nghe lại ghi âm để chốt điểm chính thức.',
+                style: AppTextStyles.bodySm,
+              ),
               const SizedBox(height: 8),
-              Text('4. Kết quả thi sẽ hiển thị trong mục "Lịch thi & Kết quả" sau khi được giảng viên phê duyệt.', style: AppTextStyles.bodySm),
+              Text(
+                '4. Kết quả thi sẽ hiển thị trong mục "Lịch thi & Kết quả" sau khi được giảng viên phê duyệt.',
+                style: AppTextStyles.bodySm,
+              ),
             ],
           ),
         ),
@@ -51,7 +70,9 @@ class _ProfileSettingsScreenState extends State<ProfileSettingsScreen> {
           ElevatedButton(
             style: ElevatedButton.styleFrom(
               backgroundColor: AppColors.primary,
-              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(10),
+              ),
             ),
             onPressed: () => Navigator.of(ctx).pop(),
             child: const Text('Đã hiểu'),
@@ -61,20 +82,40 @@ class _ProfileSettingsScreenState extends State<ProfileSettingsScreen> {
     );
   }
 
-  void _testMicrophone() {
+  Future<void> _testMicrophone() async {
+    if (_testingMic) return;
+    _testingMic = true;
+    final recorder = AudioRecorderService();
+    bool working = false;
+    try {
+      if (await recorder.init()) {
+        await recorder.startRecording();
+        working = await recorder.audioChunkStream.first
+            .timeout(const Duration(seconds: 3))
+            .then((chunk) => chunk.isNotEmpty);
+      }
+    } catch (_) {
+      working = false;
+    } finally {
+      await recorder.dispose();
+      _testingMic = false;
+    }
+    if (!mounted) return;
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(
         backgroundColor: AppColors.successDark,
         behavior: SnackBarBehavior.floating,
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
         content: Row(
-          children: const [
-            Icon(Icons.mic_rounded, color: Colors.white, size: 20),
-            SizedBox(width: 10),
+          children: [
+            const Icon(Icons.mic_rounded, color: Colors.white, size: 20),
+            const SizedBox(width: 10),
             Expanded(
               child: Text(
-                'Microphone hoạt động tốt! Định dạng thu âm 16kHz PCM đã sẵn sàng.',
-                style: TextStyle(color: Colors.white, fontSize: 13),
+                working
+                    ? 'Đã nhận được âm thanh từ microphone.'
+                    : 'Chưa nhận được âm thanh. Kiểm tra quyền microphone và thử lại.',
+                style: const TextStyle(color: Colors.white, fontSize: 13),
               ),
             ),
           ],
@@ -94,7 +135,9 @@ class _ProfileSettingsScreenState extends State<ProfileSettingsScreen> {
     final department = user?.department.isNotEmpty == true
         ? user!.department
         : 'Kỹ thuật Phần mềm (FIT Dept)';
-    final initialLetter = displayName.isNotEmpty ? displayName[0].toUpperCase() : 'S';
+    final initialLetter = displayName.isNotEmpty
+        ? displayName[0].toUpperCase()
+        : 'S';
 
     return Scaffold(
       backgroundColor: AppColors.background,
@@ -126,12 +169,19 @@ class _ProfileSettingsScreenState extends State<ProfileSettingsScreen> {
                           offset: const Offset(0, 4),
                         ),
                       ],
-                      border: Border.all(color: Colors.white.withValues(alpha: 0.3), width: 2),
+                      border: Border.all(
+                        color: Colors.white.withValues(alpha: 0.3),
+                        width: 2,
+                      ),
                     ),
                     child: Center(
                       child: Text(
                         initialLetter,
-                        style: const TextStyle(fontSize: 26, fontWeight: FontWeight.bold, color: Colors.white),
+                        style: const TextStyle(
+                          fontSize: 26,
+                          fontWeight: FontWeight.bold,
+                          color: Colors.white,
+                        ),
                       ),
                     ),
                   ),
@@ -142,7 +192,9 @@ class _ProfileSettingsScreenState extends State<ProfileSettingsScreen> {
                       children: [
                         Text(
                           displayName,
-                          style: AppTextStyles.headlineMd.copyWith(fontSize: 18),
+                          style: AppTextStyles.headlineMd.copyWith(
+                            fontSize: 18,
+                          ),
                         ),
                         const SizedBox(height: 4),
                         Text(
@@ -155,7 +207,10 @@ class _ProfileSettingsScreenState extends State<ProfileSettingsScreen> {
                         const SizedBox(height: 2),
                         Text(
                           department,
-                          style: AppTextStyles.bodySm.copyWith(color: AppColors.textMuted, fontSize: 12),
+                          style: AppTextStyles.bodySm.copyWith(
+                            color: AppColors.textMuted,
+                            fontSize: 12,
+                          ),
                         ),
                       ],
                     ),
@@ -234,7 +289,11 @@ class _ProfileSettingsScreenState extends State<ProfileSettingsScreen> {
                       padding: const EdgeInsets.symmetric(vertical: 4),
                       child: Row(
                         children: [
-                          const Icon(Icons.lock_reset_rounded, size: 20, color: AppColors.primaryLight),
+                          const Icon(
+                            Icons.lock_reset_rounded,
+                            size: 20,
+                            color: AppColors.primaryLight,
+                          ),
                           const SizedBox(width: 12),
                           Expanded(
                             child: Column(
@@ -242,16 +301,24 @@ class _ProfileSettingsScreenState extends State<ProfileSettingsScreen> {
                               children: [
                                 Text(
                                   'Yêu cầu gửi link đổi mật khẩu',
-                                  style: AppTextStyles.bodyMd.copyWith(color: Colors.white),
+                                  style: AppTextStyles.bodyMd.copyWith(
+                                    color: Colors.white,
+                                  ),
                                 ),
                                 Text(
                                   'Gửi link bảo mật đến $userEmail',
-                                  style: AppTextStyles.bodySm.copyWith(color: AppColors.textMuted, fontSize: 11),
+                                  style: AppTextStyles.bodySm.copyWith(
+                                    color: AppColors.textMuted,
+                                    fontSize: 11,
+                                  ),
                                 ),
                               ],
                             ),
                           ),
-                          const Icon(Icons.chevron_right_rounded, color: AppColors.textMuted),
+                          const Icon(
+                            Icons.chevron_right_rounded,
+                            color: AppColors.textMuted,
+                          ),
                         ],
                       ),
                     ),
@@ -274,7 +341,11 @@ class _ProfileSettingsScreenState extends State<ProfileSettingsScreen> {
                       padding: const EdgeInsets.symmetric(vertical: 4),
                       child: Row(
                         children: [
-                          const Icon(Icons.key_rounded, size: 20, color: AppColors.primaryLight),
+                          const Icon(
+                            Icons.key_rounded,
+                            size: 20,
+                            color: AppColors.primaryLight,
+                          ),
                           const SizedBox(width: 12),
                           Expanded(
                             child: Column(
@@ -282,16 +353,24 @@ class _ProfileSettingsScreenState extends State<ProfileSettingsScreen> {
                               children: [
                                 Text(
                                   'Nhập Token & Đặt mật khẩu mới',
-                                  style: AppTextStyles.bodyMd.copyWith(color: Colors.white),
+                                  style: AppTextStyles.bodyMd.copyWith(
+                                    color: Colors.white,
+                                  ),
                                 ),
                                 Text(
                                   'Cập nhật mật khẩu ngay khi đã có mã từ email',
-                                  style: AppTextStyles.bodySm.copyWith(color: AppColors.textMuted, fontSize: 11),
+                                  style: AppTextStyles.bodySm.copyWith(
+                                    color: AppColors.textMuted,
+                                    fontSize: 11,
+                                  ),
                                 ),
                               ],
                             ),
                           ),
-                          const Icon(Icons.chevron_right_rounded, color: AppColors.textMuted),
+                          const Icon(
+                            Icons.chevron_right_rounded,
+                            color: AppColors.textMuted,
+                          ),
                         ],
                       ),
                     ),
@@ -312,22 +391,36 @@ class _ProfileSettingsScreenState extends State<ProfileSettingsScreen> {
                   // Dark Mode Indicator
                   Row(
                     children: [
-                      const Icon(Icons.dark_mode_rounded, size: 20, color: AppColors.primaryLight),
+                      const Icon(
+                        Icons.dark_mode_rounded,
+                        size: 20,
+                        color: AppColors.primaryLight,
+                      ),
                       const SizedBox(width: 12),
                       Expanded(
                         child: Text(
                           'Giao diện tối chuyên dụng',
-                          style: AppTextStyles.bodyMd.copyWith(color: Colors.white),
+                          style: AppTextStyles.bodyMd.copyWith(
+                            color: Colors.white,
+                          ),
                         ),
                       ),
                       Container(
-                        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 10,
+                          vertical: 4,
+                        ),
                         decoration: BoxDecoration(
                           color: AppColors.surfaceCardHigh,
                           borderRadius: BorderRadius.circular(8),
                           border: Border.all(color: AppColors.borderGlass),
                         ),
-                        child: Text('AI Dark', style: AppTextStyles.labelSm.copyWith(color: AppColors.textMuted)),
+                        child: Text(
+                          'AI Dark',
+                          style: AppTextStyles.labelSm.copyWith(
+                            color: AppColors.textMuted,
+                          ),
+                        ),
                       ),
                     ],
                   ),
@@ -335,7 +428,11 @@ class _ProfileSettingsScreenState extends State<ProfileSettingsScreen> {
                   // Exam Reminder Notification Toggle
                   Row(
                     children: [
-                      const Icon(Icons.notifications_active_outlined, size: 20, color: AppColors.warning),
+                      const Icon(
+                        Icons.notifications_active_outlined,
+                        size: 20,
+                        color: AppColors.warning,
+                      ),
                       const SizedBox(width: 12),
                       Expanded(
                         child: Column(
@@ -343,21 +440,24 @@ class _ProfileSettingsScreenState extends State<ProfileSettingsScreen> {
                           children: [
                             Text(
                               'Nhắc lịch thi vấn đáp',
-                              style: AppTextStyles.bodyMd.copyWith(color: Colors.white),
+                              style: AppTextStyles.bodyMd.copyWith(
+                                color: Colors.white,
+                              ),
                             ),
                             Text(
-                              'Thông báo trước giờ thi 15 phút',
-                              style: AppTextStyles.bodySm.copyWith(color: AppColors.textMuted, fontSize: 11),
+                              'Nhắc lịch tự động chưa được hỗ trợ',
+                              style: AppTextStyles.bodySm.copyWith(
+                                color: AppColors.textMuted,
+                                fontSize: 11,
+                              ),
                             ),
                           ],
                         ),
                       ),
                       Switch(
-                        value: _examNotificationEnabled,
+                        value: false,
                         activeThumbColor: AppColors.primary,
-                        onChanged: (val) {
-                          setState(() => _examNotificationEnabled = val);
-                        },
+                        onChanged: null,
                       ),
                     ],
                   ),
@@ -370,7 +470,11 @@ class _ProfileSettingsScreenState extends State<ProfileSettingsScreen> {
                       padding: const EdgeInsets.symmetric(vertical: 4),
                       child: Row(
                         children: [
-                          const Icon(Icons.mic_none_rounded, size: 20, color: AppColors.tertiary),
+                          const Icon(
+                            Icons.mic_none_rounded,
+                            size: 20,
+                            color: AppColors.tertiary,
+                          ),
                           const SizedBox(width: 12),
                           Expanded(
                             child: Column(
@@ -378,16 +482,24 @@ class _ProfileSettingsScreenState extends State<ProfileSettingsScreen> {
                               children: [
                                 Text(
                                   'Kiểm tra Microphone thiết bị',
-                                  style: AppTextStyles.bodyMd.copyWith(color: Colors.white),
+                                  style: AppTextStyles.bodyMd.copyWith(
+                                    color: Colors.white,
+                                  ),
                                 ),
                                 Text(
                                   'Đảm bảo micro thu âm rõ trước khi vào thi',
-                                  style: AppTextStyles.bodySm.copyWith(color: AppColors.textMuted, fontSize: 11),
+                                  style: AppTextStyles.bodySm.copyWith(
+                                    color: AppColors.textMuted,
+                                    fontSize: 11,
+                                  ),
                                 ),
                               ],
                             ),
                           ),
-                          const Icon(Icons.chevron_right_rounded, color: AppColors.textMuted),
+                          const Icon(
+                            Icons.chevron_right_rounded,
+                            color: AppColors.textMuted,
+                          ),
                         ],
                       ),
                     ),
@@ -412,15 +524,24 @@ class _ProfileSettingsScreenState extends State<ProfileSettingsScreen> {
                       padding: const EdgeInsets.symmetric(vertical: 4),
                       child: Row(
                         children: [
-                          const Icon(Icons.menu_book_rounded, size: 20, color: AppColors.primaryLight),
+                          const Icon(
+                            Icons.menu_book_rounded,
+                            size: 20,
+                            color: AppColors.primaryLight,
+                          ),
                           const SizedBox(width: 12),
                           Expanded(
                             child: Text(
                               'Quy chế thi Vấn đáp trực tuyến',
-                              style: AppTextStyles.bodyMd.copyWith(color: Colors.white),
+                              style: AppTextStyles.bodyMd.copyWith(
+                                color: Colors.white,
+                              ),
                             ),
                           ),
-                          const Icon(Icons.chevron_right_rounded, color: AppColors.textMuted),
+                          const Icon(
+                            Icons.chevron_right_rounded,
+                            color: AppColors.textMuted,
+                          ),
                         ],
                       ),
                     ),
@@ -431,7 +552,9 @@ class _ProfileSettingsScreenState extends State<ProfileSettingsScreen> {
                     onTap: () {
                       ScaffoldMessenger.of(context).showSnackBar(
                         const SnackBar(
-                          content: Text('Hotline Khảo thí FPT: (024) 7300 1866 • Email: khaothi@fpt.edu.vn'),
+                          content: Text(
+                            'Hotline Khảo thí FPT: (024) 7300 1866 • Email: khaothi@fpt.edu.vn',
+                          ),
                         ),
                       );
                     },
@@ -439,15 +562,24 @@ class _ProfileSettingsScreenState extends State<ProfileSettingsScreen> {
                       padding: const EdgeInsets.symmetric(vertical: 4),
                       child: Row(
                         children: [
-                          const Icon(Icons.support_agent_rounded, size: 20, color: AppColors.primaryLight),
+                          const Icon(
+                            Icons.support_agent_rounded,
+                            size: 20,
+                            color: AppColors.primaryLight,
+                          ),
                           const SizedBox(width: 12),
                           Expanded(
                             child: Text(
                               'Liên hệ Phòng Khảo Thí & Đảm Bảo Chất Lượng',
-                              style: AppTextStyles.bodyMd.copyWith(color: Colors.white),
+                              style: AppTextStyles.bodyMd.copyWith(
+                                color: Colors.white,
+                              ),
                             ),
                           ),
-                          const Icon(Icons.chevron_right_rounded, color: AppColors.textMuted),
+                          const Icon(
+                            Icons.chevron_right_rounded,
+                            color: AppColors.textMuted,
+                          ),
                         ],
                       ),
                     ),
@@ -464,10 +596,6 @@ class _ProfileSettingsScreenState extends State<ProfileSettingsScreen> {
               isOutlined: true,
               onPressed: () {
                 auth.logout();
-                Navigator.of(context).pushAndRemoveUntil(
-                  MaterialPageRoute(builder: (_) => const LoginScreen()),
-                  (route) => false,
-                );
               },
             ),
             const SizedBox(height: 32),
@@ -489,14 +617,20 @@ class _ProfileSettingsScreenState extends State<ProfileSettingsScreen> {
         children: [
           Icon(icon, size: 18, color: iconColor),
           const SizedBox(width: 12),
-          Text(label, style: AppTextStyles.bodySm.copyWith(color: AppColors.textMuted)),
+          Text(
+            label,
+            style: AppTextStyles.bodySm.copyWith(color: AppColors.textMuted),
+          ),
           const Spacer(),
           Flexible(
             child: Text(
               value,
               textAlign: TextAlign.end,
               overflow: TextOverflow.ellipsis,
-              style: AppTextStyles.bodySm.copyWith(color: Colors.white, fontWeight: FontWeight.w600),
+              style: AppTextStyles.bodySm.copyWith(
+                color: Colors.white,
+                fontWeight: FontWeight.w600,
+              ),
             ),
           ),
         ],

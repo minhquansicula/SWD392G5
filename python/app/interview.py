@@ -207,7 +207,7 @@ class InterviewService:
                 ],
             }
 
-    async def finish(self, schedule_id: UUID) -> dict:
+    async def finish(self, schedule_id: UUID, *, force: bool = False) -> dict:
         """Đánh giá và chấm điểm toàn bộ ca thi dựa trên transcript và Rubric."""
         async with self.lock(schedule_id):
             async with self.db.sessions() as db:
@@ -217,6 +217,11 @@ class InterviewService:
 
                 if schedule.status not in {"IN_PROGRESS", "COMPLETED"}:
                     raise AppError("Ca thi chưa được bắt đầu qua hệ thống lịch thi.", 409, "schedule_not_started")
+                if not force and schedule.status == "COMPLETED" and getattr(schedule, "ai_report", None) and not schedule.ai_report.get("grading_failed"):
+                    return schedule.ai_report | {
+                        "schedule_id": str(schedule_id), "status": "COMPLETED",
+                        "final_score": float(schedule.final_score) if schedule.final_score is not None else None,
+                    }
 
                 exam = await db.get(Exam, schedule.exam_id)
                 if not exam:

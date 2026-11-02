@@ -23,6 +23,7 @@ class ApiClient {
   ApiClient({http.Client? client}) : _client = client ?? http.Client();
   static final ApiClient instance = ApiClient();
   final http.Client _client;
+  void Function()? onUnauthorized;
 
   String _baseUrl = ApiEndpoints.defaultBaseUrl;
   String? _authToken;
@@ -61,9 +62,11 @@ class ApiClient {
     Map<String, dynamic>? body,
     bool authenticated = true,
     Duration timeout = const Duration(seconds: 15),
+    String? baseUrl,
   }) async {
+    final requestToken = _authToken;
     try {
-      final url = Uri.parse('$_baseUrl$endpoint');
+      final url = Uri.parse('${baseUrl ?? _baseUrl}$endpoint');
       final response = await _client
           .post(
             url,
@@ -72,6 +75,11 @@ class ApiClient {
           )
           .timeout(timeout);
 
+      if (authenticated &&
+          response.statusCode == 401 &&
+          requestToken == _authToken) {
+        onUnauthorized?.call();
+      }
       return _parseResponse(response);
     } on SocketException catch (e) {
       debugPrint('[ApiClient] POST connection failed: $e');
@@ -102,9 +110,11 @@ class ApiClient {
     String endpoint, {
     Map<String, String>? queryParams,
     Duration timeout = const Duration(seconds: 15),
+    String? baseUrl,
   }) async {
+    final requestToken = _authToken;
     try {
-      var uri = Uri.parse('$_baseUrl$endpoint');
+      var uri = Uri.parse('${baseUrl ?? _baseUrl}$endpoint');
       if (queryParams != null && queryParams.isNotEmpty) {
         uri = uri.replace(queryParameters: queryParams);
       }
@@ -112,6 +122,9 @@ class ApiClient {
           .get(uri, headers: _buildHeaders())
           .timeout(timeout);
 
+      if (response.statusCode == 401 && requestToken == _authToken) {
+        onUnauthorized?.call();
+      }
       return _parseResponse(response);
     } on SocketException catch (e) {
       debugPrint('[ApiClient] GET connection failed: $e');
@@ -168,6 +181,8 @@ class ApiClient {
         final errorMsg =
             decoded is Map<String, dynamic> && decoded.containsKey('message')
             ? decoded['message'].toString()
+            : decoded is Map && decoded['detail'] is String
+            ? decoded['detail'] as String
             : 'Lỗi máy chủ (${response.statusCode})';
 
         return ApiResponseData(

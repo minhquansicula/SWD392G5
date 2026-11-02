@@ -1,7 +1,4 @@
-enum VivaRole {
-  ai,
-  student,
-}
+enum VivaRole { ai, student }
 
 class VivaQuestionModel {
   final String id;
@@ -30,15 +27,28 @@ class VivaQuestionModel {
     this.expectedKeywords = '',
   });
 
-  factory VivaQuestionModel.fromAssignedQuestion(Map<String, dynamic> json, int total) {
-    final qData = json['question'] is Map ? json['question'] as Map<String, dynamic> : json;
+  factory VivaQuestionModel.fromAssignedQuestion(
+    Map<String, dynamic> json,
+    int total,
+  ) {
+    final qData = json['question'] is Map
+        ? json['question'] as Map<String, dynamic>
+        : json;
     final order = json['orderIndex'] ?? json['questionOrder'] ?? 1;
-    final bloom = qData['bloomTaxonomy'] ?? qData['bloomLevel'] ?? json['difficultyLevel']?.toString() ?? 'Vận dụng';
-    final contentText = qData['content'] ?? qData['questionText'] ?? json['contentSnapshot']?.toString() ?? '';
+    final bloom =
+        qData['bloomTaxonomy'] ??
+        qData['bloomLevel'] ??
+        json['difficultyLevel']?.toString() ??
+        'Vận dụng';
+    final contentText =
+        qData['content'] ??
+        qData['questionText'] ??
+        json['contentSnapshot']?.toString() ??
+        '';
     final isFollowUp = json['isFollowUp'] == true;
 
     return VivaQuestionModel(
-      id: json['id']?.toString() ?? '',
+      id: json['questionId']?.toString() ?? json['id']?.toString() ?? '',
       questionNumber: order is int ? order : 1,
       totalQuestions: total > 0 ? total : 1,
       bloomLevel: bloom.toString(),

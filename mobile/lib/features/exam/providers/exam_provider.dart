@@ -103,13 +103,30 @@ class ExamProvider extends ChangeNotifier {
 
   /// Báo cho Spring Boot biết sinh viên bắt đầu thi: POST /api/student/schedules/{id}/start
   Future<bool> startExamOnBackend(String scheduleId) async {
+    final version = _requestVersion;
     try {
       if (scheduleId.trim().isEmpty) return false;
       final res = await _api.post(
         '${ApiEndpoints.studentScheduleStart}/$scheduleId/start',
         body: {},
       );
-      return res.success;
+      if (_disposed || version != _requestVersion) return false;
+      if (!res.success || res.data is! Map<String, dynamic>) {
+        _errorMessage = res.message;
+        notifyListeners();
+        return false;
+      }
+      final started = ExamScheduleModel.fromJson(
+        res.data as Map<String, dynamic>,
+      );
+      _exams = [
+        for (final exam in _exams)
+          if (exam.id == started.id) started else exam,
+      ];
+      _selectedExam = started;
+      _errorMessage = null;
+      notifyListeners();
+      return true;
     } catch (e) {
       debugPrint('[ExamProvider] Start exam error: $e');
       return false;

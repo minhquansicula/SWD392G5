@@ -14,6 +14,8 @@ class ReportProvider extends ChangeNotifier {
   VivaReportModel? _latestReport;
   final List<VivaReportModel> _pastReports = [];
   bool _isLoading = false;
+  ExamScheduleModel? _schedule;
+  ExamScheduleModel? get schedule => _schedule;
 
   VivaReportModel? get latestReport => _latestReport;
   List<VivaReportModel> get pastReports => _pastReports;
@@ -28,6 +30,7 @@ class ReportProvider extends ChangeNotifier {
         exam.status == ExamStatus.completed && exam.finalScore != null
         ? VivaReportModel.fromExam(exam)
         : null;
+    _schedule = exam;
     notifyListeners();
   }
 
@@ -35,6 +38,7 @@ class ReportProvider extends ChangeNotifier {
   Future<void> fetchReportForExam(String examId) async {
     final version = ++_requestVersion;
     _latestReport = null;
+    _schedule = null;
     _errorMessage = null;
     _isLoading = true;
     notifyListeners();
@@ -53,8 +57,23 @@ class ReportProvider extends ChangeNotifier {
         final match = list.where((e) => e.id == examId).toList();
         if (match.isNotEmpty) {
           final exam = match.first;
+          _schedule = exam;
           if (exam.status == ExamStatus.completed && exam.finalScore != null) {
             _latestReport = VivaReportModel.fromExam(exam);
+            final detail = await _api.get(
+              '/api/v1/sessions/$examId',
+              baseUrl: ApiEndpoints.aiServiceBaseUrl,
+            );
+            if (_disposed || version != _requestVersion) return;
+            if (detail.success && detail.data is Map<String, dynamic>) {
+              _latestReport = VivaReportModel.fromSession(
+                exam,
+                detail.data as Map<String, dynamic>,
+              );
+            } else {
+              _errorMessage =
+                  'Đã tải tổng điểm; chưa tải được báo cáo chi tiết. ${detail.message}';
+            }
           } else {
             _errorMessage = 'Ca thi chưa có điểm cuối cùng.';
           }

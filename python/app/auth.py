@@ -88,6 +88,8 @@ class BackendAuthorization:
             if principal.role == "STUDENT":
                 if schedule.student_id != principal.id:
                     raise AppError("Bạn không có quyền truy cập ca thi này.", 403, "access_denied")
+                if not write and schedule.status not in {"IN_PROGRESS", "COMPLETED"}:
+                    raise AppError("Ca thi chưa bắt đầu; chưa được xem đề hoặc bản ghi.", 403, "questions_not_available")
             elif principal.role == "LECTURER":
                 # The backend checks creator OR assigned-course access for reads.
                 if not write:

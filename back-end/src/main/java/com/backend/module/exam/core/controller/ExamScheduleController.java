@@ -77,8 +77,9 @@ public class ExamScheduleController {
                 scheduleService.assignAllQuestionsForExam(examId)));
     }
 
-    @Operation(summary = "View assigned question snapshots as an authorized lecturer or admin")
+    @Operation(summary = "View assigned question snapshots for an accessible schedule")
     @GetMapping("/api/schedules/{scheduleId}/assigned-questions")
+    @PreAuthorize("hasAnyRole('STUDENT', 'LECTURER', 'ADMIN')")
     public ResponseEntity<ApiResponse<List<AssignedQuestionDto>>> questions(@PathVariable UUID scheduleId) {
         return ResponseEntity.ok(ApiResponse.ok("Get assigned questions successfully", scheduleService.getAssignedQuestions(scheduleId)));
     }

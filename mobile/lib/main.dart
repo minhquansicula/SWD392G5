@@ -31,18 +31,23 @@ class AivesApp extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return MultiProvider(
-      providers: [
-        ChangeNotifierProvider(create: (_) => AuthProvider()),
-        ChangeNotifierProvider(create: (_) => ExamProvider()),
-        ChangeNotifierProvider(create: (_) => VivaSessionProvider()),
-        ChangeNotifierProvider(create: (_) => ReportProvider()),
-      ],
-      child: MaterialApp(
-        title: 'AIVES Oral Exam',
-        debugShowCheckedModeBanner: false,
-        theme: AppTheme.darkTheme,
-        home: const AppRootGate(),
+    return ChangeNotifierProvider(
+      create: (_) => AuthProvider(),
+      child: Consumer<AuthProvider>(
+        builder: (context, auth, _) => MultiProvider(
+          key: ValueKey('${auth.currentUser?.id}:${auth.currentUser?.token}'),
+          providers: [
+            ChangeNotifierProvider(create: (_) => ExamProvider()),
+            ChangeNotifierProvider(create: (_) => VivaSessionProvider()),
+            ChangeNotifierProvider(create: (_) => ReportProvider()),
+          ],
+          child: MaterialApp(
+            title: 'AIVES Oral Exam',
+            debugShowCheckedModeBanner: false,
+            theme: AppTheme.darkTheme,
+            home: const AppRootGate(),
+          ),
+        ),
       ),
     );
   }

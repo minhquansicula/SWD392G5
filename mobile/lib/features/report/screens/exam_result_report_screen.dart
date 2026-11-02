@@ -13,8 +13,9 @@ import '../../home/screens/main_navigation_screen.dart';
 
 class ExamResultReportScreen extends StatefulWidget {
   final ExamScheduleModel? exam;
+  final bool autoLoad;
 
-  const ExamResultReportScreen({super.key, this.exam});
+  const ExamResultReportScreen({super.key, this.exam, this.autoLoad = true});
 
   @override
   State<ExamResultReportScreen> createState() => _ExamResultReportScreenState();
@@ -24,24 +25,40 @@ class _ExamResultReportScreenState extends State<ExamResultReportScreen> {
   int? _expandedQuestionIndex;
 
   @override
-  Widget build(BuildContext context) {
-    final isPendingOrNoScore =
-        widget.exam != null &&
-        (widget.exam!.status != ExamStatus.completed ||
-            widget.exam!.finalScore == null);
+  void initState() {
+    super.initState();
+    if (widget.autoLoad && widget.exam != null) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (mounted) {
+          context.read<ReportProvider>().fetchReportForExam(widget.exam!.id);
+        }
+      });
+    }
+  }
 
-    final latest = context.watch<ReportProvider>().latestReport;
+  @override
+  Widget build(BuildContext context) {
+    final provider = context.watch<ReportProvider>();
+    final selected = provider.schedule?.id == widget.exam?.id
+        ? provider.schedule
+        : widget.exam;
+    final latest = provider.latestReport;
     final report =
         (widget.exam == null || latest?.id == widget.exam!.id
             ? latest
             : null) ??
-        (widget.exam != null && widget.exam!.finalScore != null
-            ? VivaReportModel.fromExam(widget.exam!)
+        (selected != null &&
+                selected.status == ExamStatus.completed &&
+                selected.finalScore != null
+            ? VivaReportModel.fromExam(selected)
             : null);
+    final isPendingOrNoScore = report == null && selected != null;
 
     final Widget bodyContent;
-    if (isPendingOrNoScore) {
-      bodyContent = _buildNoScoreBody(context, widget.exam!);
+    if (provider.isLoading) {
+      bodyContent = const Center(child: CircularProgressIndicator());
+    } else if (isPendingOrNoScore) {
+      bodyContent = _buildNoScoreBody(context, selected);
     } else if (report == null) {
       bodyContent = _buildEmptyReportView(context);
     } else {
@@ -71,19 +88,10 @@ class _ExamResultReportScreenState extends State<ExamResultReportScreen> {
               children: [
                 Expanded(
                   child: PrimaryButton(
-                    text: 'Tải Báo Cáo PDF',
+                    text: 'PDF chưa hỗ trợ',
                     icon: Icons.download_rounded,
                     isOutlined: true,
-                    onPressed: () {
-                      ScaffoldMessenger.of(context).showSnackBar(
-                        const SnackBar(
-                          backgroundColor: AppColors.successDark,
-                          content: Text(
-                            'Chức năng xuất PDF chưa được triển khai.',
-                          ),
-                        ),
-                      );
-                    },
+                    onPressed: null,
                   ),
                 ),
                 const SizedBox(width: 12),
@@ -132,22 +140,29 @@ class _ExamResultReportScreenState extends State<ExamResultReportScreen> {
           },
         ),
         actions: [
-          if (!isPendingOrNoScore && report != null)
+          if (widget.exam != null)
             IconButton(
-              icon: const Icon(Icons.share_outlined, size: 20),
-              onPressed: () {
-                ScaffoldMessenger.of(context).showSnackBar(
-                  const SnackBar(
-                    content: Text(
-                      'Đang chuẩn bị liên kết chia sẻ bảng điểm...',
-                    ),
-                  ),
-                );
-              },
+              tooltip: 'Tải lại kết quả',
+              icon: const Icon(Icons.refresh),
+              onPressed: provider.isLoading
+                  ? null
+                  : () => provider.fetchReportForExam(widget.exam!.id),
             ),
         ],
       ),
-      body: bodyContent,
+      body: Column(
+        children: [
+          if (provider.errorMessage != null)
+            Padding(
+              padding: const EdgeInsets.all(12),
+              child: Semantics(
+                liveRegion: true,
+                child: Text(provider.errorMessage!),
+              ),
+            ),
+          Expanded(child: bodyContent),
+        ],
+      ),
     );
   }
 
@@ -295,7 +310,7 @@ class _ExamResultReportScreenState extends State<ExamResultReportScreen> {
         Row(
           mainAxisAlignment: MainAxisAlignment.spaceBetween,
           children: [
-            Text('Điểm thành phần theo Rubric', style: AppTextStyles.titleMd),
+            Text('Rubric AI tham khảo', style: AppTextStyles.titleMd),
             Text(
               '${report.rubricCriteria.length} Tiêu chí',
               style: AppTextStyles.bodySm,
@@ -336,7 +351,9 @@ class _ExamResultReportScreenState extends State<ExamResultReportScreen> {
                                 ),
                               ),
                               Text(
-                                '${c.score.toStringAsFixed(1)} / 10',
+                                c.score == null
+                                    ? 'Chưa đánh giá'
+                                    : '${c.score!.toStringAsFixed(1)} / 10',
                                 style: AppTextStyles.labelBold.copyWith(
                                   color: AppColors.primaryLight,
                                 ),
@@ -351,9 +368,9 @@ class _ExamResultReportScreenState extends State<ExamResultReportScreen> {
                               minHeight: 8,
                               backgroundColor: AppColors.surfaceCardHigh,
                               valueColor: AlwaysStoppedAnimation<Color>(
-                                c.score >= 8.5
+                                (c.score ?? 0) >= 8.5
                                     ? AppColors.success
-                                    : c.score >= 7.0
+                                    : (c.score ?? 0) >= 7.0
                                     ? AppColors.primaryLight
                                     : AppColors.warning,
                               ),
@@ -521,7 +538,7 @@ class _ExamResultReportScreenState extends State<ExamResultReportScreen> {
         Row(
           mainAxisAlignment: MainAxisAlignment.spaceBetween,
           children: [
-            Text('Phân tích câu hỏi vấn đáp', style: AppTextStyles.titleMd),
+            Text('Nhận xét AI từng câu', style: AppTextStyles.titleMd),
             Text(
               '${report.questionReports.length} câu hỏi',
               style: AppTextStyles.bodySm,
@@ -599,7 +616,9 @@ class _ExamResultReportScreenState extends State<ExamResultReportScreen> {
                         ),
                       ),
                       Text(
-                        '${q.score}/${q.maxScore}',
+                        q.score == null
+                            ? 'Chưa đánh giá'
+                            : '${q.score}/${q.maxScore}',
                         style: AppTextStyles.labelBold.copyWith(
                           color: AppColors.success,
                         ),

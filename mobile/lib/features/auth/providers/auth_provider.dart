@@ -24,6 +24,9 @@ class AuthProvider extends ChangeNotifier {
 
   AuthProvider({ApiClient? apiClient, bool autoRestore = true})
     : _api = apiClient ?? ApiClient.instance {
+    _api.onUnauthorized = () {
+      logout();
+    };
     if (autoRestore) {
       restoreSession();
     } else {
@@ -36,7 +39,7 @@ class AuthProvider extends ChangeNotifier {
       (user['id'] as String).isNotEmpty &&
       user['email'] is String &&
       (user['email'] as String).trim().isNotEmpty &&
-      const ['STUDENT', 'LECTURER', 'ADMIN'].contains(user['role']);
+      user['role'] == 'STUDENT';
 
   @override
   void notifyListeners() {
@@ -45,6 +48,7 @@ class AuthProvider extends ChangeNotifier {
 
   @override
   void dispose() {
+    _api.onUnauthorized = null;
     _disposed = true;
     _sessionVersion++;
     super.dispose();
@@ -75,6 +79,8 @@ class AuthProvider extends ChangeNotifier {
               : <String, dynamic>{};
           if (!_validUser(userObj)) {
             _currentUser = null;
+            _api.setAuthToken(null);
+            await prefs.remove(_tokenKey);
             _errorMessage =
                 'Thông tin tài khoản không hợp lệ. Vui lòng thử lại.';
             return;
@@ -155,7 +161,11 @@ class AuthProvider extends ChangeNotifier {
             : Map<String, dynamic>.from(data);
 
         if (token == null || token.trim().isEmpty || !_validUser(userObj)) {
-          _errorMessage = 'Phản hồi đăng nhập không hợp lệ.';
+          _api.setAuthToken(null);
+          _currentUser = null;
+          _errorMessage = userObj['role'] != 'STUDENT'
+              ? 'Ứng dụng này dành cho sinh viên. Vui lòng dùng trang web cho tài khoản giảng viên hoặc quản trị viên.'
+              : 'Phản hồi đăng nhập không hợp lệ.';
           _isLoading = false;
           notifyListeners();
           return false;
@@ -206,18 +216,18 @@ class AuthProvider extends ChangeNotifier {
 
   /// Đăng xuất và xóa sạch session token
   Future<void> logout() async {
-    _sessionVersion++;
+    final version = ++_sessionVersion;
     _api.setAuthToken(null);
     _currentUser = null;
     _isLoading = false;
     _isInitializing = false;
+    notifyListeners();
     try {
       final prefs = await SharedPreferences.getInstance();
-      await prefs.remove(_tokenKey);
+      if (version == _sessionVersion) await prefs.remove(_tokenKey);
     } catch (e) {
       debugPrint('[AuthProvider] Error clearing token on logout: $e');
     }
-    notifyListeners();
   }
 
   /// Gửi yêu cầu đặt lại mật khẩu: POST /api/auth/password/forgot

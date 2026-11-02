@@ -5,8 +5,6 @@ import '../../../core/theme/app_text_styles.dart';
 import '../../../core/widgets/glass_card.dart';
 import '../../../core/widgets/primary_button.dart';
 import '../providers/auth_provider.dart';
-import '../../exam/providers/exam_provider.dart';
-import '../../home/screens/main_navigation_screen.dart';
 import 'forgot_password_screen.dart';
 
 class LoginScreen extends StatefulWidget {
@@ -36,32 +34,36 @@ class _LoginScreenState extends State<LoginScreen> {
       role: 'STUDENT',
     );
 
-    if (success && mounted) {
-      context.read<ExamProvider>().refreshExams();
-      Navigator.of(context).pushReplacement(
-        MaterialPageRoute(builder: (_) => const MainNavigationScreen()),
-      );
-    } else if (mounted && auth.errorMessage != null) {
+    if (!success && mounted && auth.errorMessage != null) {
       ScaffoldMessenger.of(context).hideCurrentSnackBar();
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
           backgroundColor: AppColors.danger,
           behavior: SnackBarBehavior.floating,
           duration: const Duration(seconds: 4),
-          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(12),
+          ),
           content: Row(
             children: [
-              const Icon(Icons.error_outline_rounded, color: Colors.white, size: 20),
+              const Icon(
+                Icons.error_outline_rounded,
+                color: Colors.white,
+                size: 20,
+              ),
               const SizedBox(width: 8),
-              Expanded(child: Text(auth.errorMessage!, style: AppTextStyles.bodySm.copyWith(color: Colors.white))),
+              Expanded(
+                child: Text(
+                  auth.errorMessage!,
+                  style: AppTextStyles.bodySm.copyWith(color: Colors.white),
+                ),
+              ),
             ],
           ),
         ),
       );
     }
   }
-
-
 
   @override
   Widget build(BuildContext context) {
@@ -112,7 +114,10 @@ class _LoginScreenState extends State<LoginScreen> {
           SafeArea(
             child: Center(
               child: SingleChildScrollView(
-                padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 20),
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 24,
+                  vertical: 20,
+                ),
                 child: Column(
                   mainAxisAlignment: MainAxisAlignment.center,
                   crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -173,39 +178,59 @@ class _LoginScreenState extends State<LoginScreen> {
                         children: [
                           Text(
                             'Email FPT',
-                            style: AppTextStyles.labelBold.copyWith(fontSize: 12),
+                            style: AppTextStyles.labelBold.copyWith(
+                              fontSize: 12,
+                            ),
                           ),
                           const SizedBox(height: 8),
                           TextField(
                             controller: _emailController,
                             keyboardType: TextInputType.emailAddress,
-                            style: AppTextStyles.bodyMd.copyWith(color: AppColors.textPrimary),
+                            style: AppTextStyles.bodyMd.copyWith(
+                              color: AppColors.textPrimary,
+                            ),
                             decoration: const InputDecoration(
                               hintText: 'Nhập email FPT',
-                              prefixIcon: Icon(Icons.email_outlined, color: AppColors.primaryLight, size: 20),
+                              prefixIcon: Icon(
+                                Icons.email_outlined,
+                                color: AppColors.primaryLight,
+                                size: 20,
+                              ),
                             ),
                           ),
                           const SizedBox(height: 16),
                           Text(
                             'Mật khẩu',
-                            style: AppTextStyles.labelBold.copyWith(fontSize: 12),
+                            style: AppTextStyles.labelBold.copyWith(
+                              fontSize: 12,
+                            ),
                           ),
                           const SizedBox(height: 8),
                           TextField(
                             controller: _passwordController,
                             obscureText: _obscurePassword,
-                            style: AppTextStyles.bodyMd.copyWith(color: AppColors.textPrimary),
+                            style: AppTextStyles.bodyMd.copyWith(
+                              color: AppColors.textPrimary,
+                            ),
                             decoration: InputDecoration(
                               hintText: 'Nhập mật khẩu...',
-                              prefixIcon: const Icon(Icons.lock_outline_rounded, color: AppColors.primaryLight, size: 20),
+                              prefixIcon: const Icon(
+                                Icons.lock_outline_rounded,
+                                color: AppColors.primaryLight,
+                                size: 20,
+                              ),
                               suffixIcon: IconButton(
                                 icon: Icon(
-                                  _obscurePassword ? Icons.visibility_off : Icons.visibility,
+                                  _obscurePassword
+                                      ? Icons.visibility_off
+                                      : Icons.visibility,
                                   color: AppColors.textMuted,
                                   size: 20,
                                 ),
                                 onPressed: () {
-                                  setState(() => _obscurePassword = !_obscurePassword);
+                                  setState(
+                                    () => _obscurePassword = !_obscurePassword,
+                                  );
                                 },
                               ),
                             ),
@@ -221,14 +246,19 @@ class _LoginScreenState extends State<LoginScreen> {
                                   Navigator.of(context).push(
                                     MaterialPageRoute(
                                       builder: (_) => ForgotPasswordScreen(
-                                        prefilledEmail: _emailController.text.trim().isNotEmpty
+                                        prefilledEmail:
+                                            _emailController.text
+                                                .trim()
+                                                .isNotEmpty
                                             ? _emailController.text.trim()
                                             : null,
                                       ),
                                     ),
                                   );
                                 },
-                                style: TextButton.styleFrom(padding: EdgeInsets.zero),
+                                style: TextButton.styleFrom(
+                                  padding: EdgeInsets.zero,
+                                ),
                                 child: Text(
                                   'Quên mật khẩu?',
                                   style: AppTextStyles.bodySm.copyWith(
@@ -256,11 +286,17 @@ class _LoginScreenState extends State<LoginScreen> {
                     Row(
                       mainAxisAlignment: MainAxisAlignment.center,
                       children: [
-                        const Icon(Icons.school_outlined, size: 16, color: AppColors.textMuted),
+                        const Icon(
+                          Icons.school_outlined,
+                          size: 16,
+                          color: AppColors.textMuted,
+                        ),
                         const SizedBox(width: 6),
                         Text(
                           'FPT University • AIVES Mobile v1.0',
-                          style: AppTextStyles.bodySm.copyWith(color: AppColors.textDisabled),
+                          style: AppTextStyles.bodySm.copyWith(
+                            color: AppColors.textDisabled,
+                          ),
                         ),
                       ],
                     ),

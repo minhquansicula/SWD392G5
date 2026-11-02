@@ -23,6 +23,7 @@ public class ExamScheduleDto {
     private BigDecimal finalScore;
     private BigDecimal lecturerTotalScore;
     private Boolean lecturerTotalPending;
+    private Boolean scorePublished;
     private List<CriterionGrade> lecturerCriteria;
     private Integer assignedQuestionCount;
     private Boolean isConnected;

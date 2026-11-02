@@ -438,9 +438,12 @@ def create_app(settings=None, gateway=None, auth_transport=None) -> FastAPI:
         return await interviews.detail(schedule_id)
 
     @app.post("/api/v1/sessions/{schedule_id}/finish")
-    async def finish_and_grade(schedule_id: UUID, principal: Principal = Depends(current_principal)):
+    async def finish_and_grade(schedule_id: UUID, regrade: bool = False, principal: Principal = Depends(current_principal)):
         """Kích hoạt AI chấm điểm toàn bộ ca thi dựa trên transcript và Rubric."""
         await authorizer.require_schedule(principal, schedule_id, write=True)
+        if regrade:
+            authorizer.require_manager(principal)
+            return await interviews.finish(schedule_id, force=True)
         return await interviews.finish(schedule_id)
 
     @app.get("/api/v1/sessions/{schedule_id}/export")

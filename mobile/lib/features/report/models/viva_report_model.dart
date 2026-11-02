@@ -3,7 +3,7 @@ import '../../exam/models/exam_schedule_model.dart';
 class RubricCriterion {
   final String title;
   final String englishTitle;
-  final double score;
+  final double? score;
   final double maxScore;
 
   const RubricCriterion({
@@ -14,9 +14,9 @@ class RubricCriterion {
   });
 
   double get percentage =>
-      !score.isFinite || !maxScore.isFinite || maxScore <= 0
+      score == null || !score!.isFinite || !maxScore.isFinite || maxScore <= 0
       ? 0.0
-      : (score / maxScore).clamp(0.0, 1.0);
+      : (score! / maxScore).clamp(0.0, 1.0);
 }
 
 class QuestionReportItem {
@@ -24,7 +24,7 @@ class QuestionReportItem {
   final String title;
   final String fullQuestion;
   final String studentAnswer;
-  final double score;
+  final double? score;
   final double maxScore;
   final String audioDuration;
   final String bloomLevel;
@@ -97,9 +97,9 @@ class VivaReportModel {
       maxScore: 10.0,
       gradeRank: rank,
       isPassed: isPass,
-      verifiedByLecturer: exam.examiners.isNotEmpty
-          ? exam.examiners.join(', ')
-          : 'Hội đồng Giảng viên FPT',
+      verifiedByLecturer: exam.scorePublished
+          ? 'Giảng viên đã chốt điểm'
+          : 'Kết quả từ hệ thống',
       rubricCriteria: const [],
       strengths: const [],
       improvements: const [],
@@ -111,7 +111,9 @@ class VivaReportModel {
     final score =
         (json['totalScore'] ?? json['finalScore'] as num?)?.toDouble() ?? 0.0;
     final max = (json['maxScore'] as num?)?.toDouble() ?? 10.0;
-    final pass = json['isPassed'] is bool ? json['isPassed'] as bool : score >= 5.0;
+    final pass = json['isPassed'] is bool
+        ? json['isPassed'] as bool
+        : score >= 5.0;
 
     return VivaReportModel(
       id: json['id']?.toString() ?? '',
@@ -119,7 +121,8 @@ class VivaReportModel {
       courseCode: json['courseCode'] ?? '',
       courseName: json['courseName'] ?? '',
       examDate: json['examDate'] != null
-          ? DateTime.tryParse(json['examDate'].toString()) ?? DateTime.now()
+          ? DateTime.tryParse(json['examDate'].toString())?.toLocal() ??
+                DateTime.now()
           : DateTime.now(),
       totalScore: score,
       maxScore: max,
@@ -143,7 +146,7 @@ class VivaReportModel {
                 (c) => RubricCriterion(
                   title: c['title'] ?? '',
                   englishTitle: c['englishTitle'] ?? '',
-                  score: (c['score'] as num?)?.toDouble() ?? 0.0,
+                  score: (c['score'] as num?)?.toDouble(),
                   maxScore: (c['maxScore'] as num?)?.toDouble() ?? 10.0,
                 ),
               )
@@ -163,7 +166,7 @@ class VivaReportModel {
                   title: q['title'] ?? '',
                   fullQuestion: q['fullQuestion'] ?? '',
                   studentAnswer: q['studentAnswer'] ?? '',
-                  score: (q['score'] as num?)?.toDouble() ?? 0.0,
+                  score: (q['score'] as num?)?.toDouble(),
                   maxScore: (q['maxScore'] as num?)?.toDouble() ?? 2.5,
                   audioDuration: q['audioDuration'] ?? '00:00',
                   bloomLevel: q['bloomLevel'] ?? '',
@@ -173,5 +176,75 @@ class VivaReportModel {
               .toList() ??
           const [],
     );
+  }
+
+  factory VivaReportModel.fromSession(
+    ExamScheduleModel exam,
+    Map<String, dynamic> detail,
+  ) {
+    final ai = detail['ai_report'] is Map
+        ? Map<String, dynamic>.from(detail['ai_report'] as Map)
+        : <String, dynamic>{};
+    final criteria = (ai['criteria'] as List? ?? []).whereType<Map>().toList();
+    final results = (detail['results'] as List? ?? [])
+        .whereType<Map>()
+        .toList();
+    final transcripts = (detail['transcripts'] as List? ?? [])
+        .whereType<Map>()
+        .toList();
+    final questions = (detail['assigned_questions'] as List? ?? [])
+        .whereType<Map>()
+        .toList();
+    return VivaReportModel.fromJson({
+      'id': exam.id,
+      'examTitle': exam.examTitle,
+      'courseCode': exam.courseCode,
+      'courseName': exam.courseName,
+      'examDate': exam.scheduledAt.toIso8601String(),
+      'totalScore': exam.finalScore,
+      'verifiedByLecturer': 'Điểm chính thức do giảng viên chốt',
+      'rubricCriteria': [
+        for (final c in criteria)
+          {
+            'title': c['name'],
+            'englishTitle': 'Đánh giá AI tham khảo',
+            'score': c['assessed'] == true ? c['score'] : null,
+            'maxScore': 10.0,
+          },
+      ],
+      'strengths': [
+        for (final c in criteria)
+          if (c['assessed'] == true &&
+              (c['rationale']?.toString().isNotEmpty ?? false))
+            c['rationale'],
+      ],
+      'improvements': [
+        for (final c in criteria)
+          if (c['improvement']?.toString().isNotEmpty ?? false)
+            c['improvement'],
+      ],
+      'questionReports': [
+        for (final q in questions)
+          {
+            'questionNumber': q['order'],
+            'title': 'Câu ${q['order']}',
+            'fullQuestion': q['content'],
+            'studentAnswer': transcripts
+                .where(
+                  (t) =>
+                      t['question_id'] == q['question_id'] &&
+                      t['role'] == 'STUDENT',
+                )
+                .map((t) => t['text']?.toString() ?? '')
+                .join('\n'),
+            'score': results
+                .where((r) => r['question_id'] == q['question_id'])
+                .firstOrNull?['ai_score'],
+            'maxScore': 10.0,
+            'audioDuration': '',
+            'bloomLevel': '',
+          },
+      ],
+    });
   }
 }

@@ -1,8 +1,4 @@
-enum ExamStatus {
-  upcoming,
-  inProgress,
-  completed,
-}
+enum ExamStatus { upcoming, inProgress, completed }
 
 class ExamScheduleModel {
   final String id;
@@ -10,6 +6,8 @@ class ExamScheduleModel {
   final String courseName;
   final String examTitle;
   final DateTime scheduledAt;
+  final DateTime? scheduledEndAt;
+  final bool scorePublished;
   final String room;
   final String timeRemainingText;
   final List<String> examiners;
@@ -26,6 +24,8 @@ class ExamScheduleModel {
     required this.courseName,
     required this.examTitle,
     required this.scheduledAt,
+    this.scheduledEndAt,
+    this.scorePublished = false,
     required this.room,
     required this.timeRemainingText,
     required this.examiners,
@@ -41,7 +41,9 @@ class ExamScheduleModel {
     DateTime scheduledDate = DateTime.now();
     if (json['scheduledStartTime'] != null) {
       try {
-        scheduledDate = DateTime.parse(json['scheduledStartTime'].toString());
+        scheduledDate = DateTime.parse(
+          json['scheduledStartTime'].toString(),
+        ).toLocal();
       } catch (_) {}
     }
 
@@ -57,7 +59,8 @@ class ExamScheduleModel {
     if (json['finalScore'] != null) {
       score = double.tryParse(json['finalScore'].toString());
     }
-    if (json['lecturerTotalPending'] == true ||
+    if (json['scorePublished'] == false ||
+        json['lecturerTotalPending'] == true ||
         (score != null && (!score.isFinite || score < 0 || score > 10))) {
       score = null;
     }
@@ -65,13 +68,21 @@ class ExamScheduleModel {
     return ExamScheduleModel(
       id: json['id']?.toString() ?? '',
       courseCode: json['courseCode']?.toString() ?? 'SWD392',
-      courseName: json['courseName']?.toString() ?? 'Phát triển Kiến trúc Phần mềm',
+      courseName:
+          json['courseName']?.toString() ?? 'Phát triển Kiến trúc Phần mềm',
       examTitle: json['examTitle']?.toString() ?? 'Vấn đáp bảo vệ đồ án',
       scheduledAt: scheduledDate,
+      scheduledEndAt: DateTime.tryParse(
+        json['scheduledEndTime']?.toString() ?? '',
+      )?.toLocal(),
+      scorePublished: json['scorePublished'] == true,
       room: json['room']?.toString() ?? 'Phòng ảo AI-01',
-      timeRemainingText: '${scheduledDate.day}/${scheduledDate.month}/${scheduledDate.year}',
+      timeRemainingText:
+          '${scheduledDate.day}/${scheduledDate.month}/${scheduledDate.year}',
       examiners: ['Hội đồng Giám khảo AI'],
-      totalQuestions: json['assignedQuestionCount'] is int ? json['assignedQuestionCount'] : 5,
+      totalQuestions: json['assignedQuestionCount'] is int
+          ? json['assignedQuestionCount']
+          : 5,
       status: examStatus,
       finalScore: score,
       credits: 3,

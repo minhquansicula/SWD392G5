@@ -155,9 +155,14 @@ public class ExamScheduleServiceImpl implements ExamScheduleService {
 
     @Override
     public List<AssignedQuestionDto> getAssignedQuestions(UUID scheduleId) {
-        UserDto user = access.manager();
+        UserDto user = access.currentUser();
         ExamSchedule schedule = schedule(scheduleId);
-        access.requireRead(schedule.getExam(), user);
+        requireScheduleRead(schedule, user);
+        if ("STUDENT".equals(user.getRole())
+                && !"IN_PROGRESS".equals(schedule.getStatus()) && !"COMPLETED".equals(schedule.getStatus())) {
+            throw new AppException("Questions are only available after the schedule has started",
+                    FORBIDDEN, "QUESTIONS_NOT_AVAILABLE");
+        }
         return assignments.findByExamScheduleIdOrderByQuestionOrder(scheduleId).stream()
                 .map(mapper::assignedQuestion).toList();
     }
@@ -172,13 +177,17 @@ public class ExamScheduleServiceImpl implements ExamScheduleService {
         } else {
             access.requireOwner(schedule.getExam(), user);
         }
-        ExamRules.pending(schedule);
         ExamRules.scheduleTime(schedule.getScheduledStartTime(), schedule.getScheduledEndTime(), schedule.getExam());
         OffsetDateTime now = OffsetDateTime.now();
         if (now.isBefore(schedule.getScheduledStartTime()) || !now.isBefore(schedule.getScheduledEndTime())) {
             throw new AppException("The schedule is not within its examination time window",
                     BAD_REQUEST, "SCHEDULE_NOT_OPEN");
         }
+        // Retrying start after a lost response or re-entering a room is idempotent.
+        if ("IN_PROGRESS".equals(schedule.getStatus())) {
+            return dto(schedule);
+        }
+        ExamRules.pending(schedule);
         if (!assignments.existsByExamScheduleId(scheduleId)) {
             questionAssignment.assignQuestions(schedule);
         }
