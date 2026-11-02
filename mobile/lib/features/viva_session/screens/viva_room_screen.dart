@@ -35,7 +35,7 @@ class VivaRoomScreen extends StatefulWidget {
 }
 
 class _VivaRoomScreenState extends State<VivaRoomScreen>
-    with TickerProviderStateMixin {
+    with TickerProviderStateMixin, WidgetsBindingObserver {
   final ScrollController _scrollController = ScrollController();
   bool _hasShownFinishedDialog = false;
   String? _startError;
@@ -43,15 +43,22 @@ class _VivaRoomScreenState extends State<VivaRoomScreen>
   bool _loading = false;
   bool _allowPop = false;
 
+  // Track conversation state to auto-scroll when new speech/transcript arrives
+  int _lastTranscriptCount = 0;
+  String _lastTranscriptTail = '';
+  String _lastQuestionId = '';
+
   @override
   void initState() {
     super.initState();
+    WidgetsBinding.instance.addObserver(this);
 
     // 1. Kích hoạt API Backend Spring Boot bắt đầu ca thi
 
     // 2. Tự động kết nối WebSocket demo/viva-ai-v2 với Token xác thực
     _session = context.read<VivaSessionProvider>();
     _session.prepareRoom();
+    _session.addListener(_onSessionStateChanged);
     WidgetsBinding.instance.addPostFrameCallback((_) async {
       await _startRoom();
     });
@@ -66,10 +73,13 @@ class _VivaRoomScreenState extends State<VivaRoomScreen>
     try {
       if (!await _initExamSessionOnBackend() || !mounted) return;
       final auth = context.read<AuthProvider>();
+      final scheduledEnd = widget.exam.scheduledEndAt ??
+          widget.exam.scheduledAt.add(Duration(minutes: widget.exam.durationMinutes));
       await _session.startSession(
         examId: widget.exam.id,
         studentId: auth.currentUser?.id ?? '',
         token: auth.currentUser?.token,
+        scheduledEndTime: scheduledEnd,
       );
     } finally {
       if (mounted) setState(() => _loading = false);
@@ -106,10 +116,55 @@ class _VivaRoomScreenState extends State<VivaRoomScreen>
   }
 
   @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    super.didChangeAppLifecycleState(state);
+    // Khi thí sinh rời khỏi ứng dụng (nhấn Home, chuyển app, vuốt thông báo)
+    if (state == AppLifecycleState.paused || state == AppLifecycleState.inactive) {
+      if (_session.sessionState != VivaSessionState.completed && !_session.isFinishing) {
+        debugPrint('[VivaRoom] Thí sinh tạm rời ứng dụng (inactive/paused). Ghi nhận nhật ký giám sát.');
+        // Có thể gửi log/telemetry cảnh báo lên server nếu backend hỗ trợ
+      }
+    } else if (state == AppLifecycleState.resumed) {
+      // Khi thí sinh quay lại ứng dụng
+      if (_session.sessionState != VivaSessionState.completed && !_session.isFinishing && mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text(
+              'Cảnh báo: Bạn vừa rời khỏi màn hình thi. Hành vi này đã được ghi nhận vào nhật ký giám sát!',
+            ),
+            backgroundColor: AppColors.warning,
+            duration: Duration(seconds: 4),
+          ),
+        );
+      }
+    }
+  }
+
+  @override
   void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
+    _session.removeListener(_onSessionStateChanged);
     _session.stopSession();
     _scrollController.dispose();
     super.dispose();
+  }
+
+  void _onSessionStateChanged() {
+    if (!mounted) return;
+    final transcripts = _session.transcripts;
+    final qId = _session.currentQuestion.id;
+    final lastText = transcripts.isNotEmpty ? transcripts.last.text : '';
+
+    final hasNewQuestion = qId != _lastQuestionId;
+    final hasNewTranscripts = transcripts.length != _lastTranscriptCount;
+    final hasUpdatedText = lastText != _lastTranscriptTail;
+
+    if (hasNewQuestion || hasNewTranscripts || hasUpdatedText) {
+      _lastQuestionId = qId;
+      _lastTranscriptCount = transcripts.length;
+      _lastTranscriptTail = lastText;
+      _scrollToBottom();
+    }
   }
 
   void _scrollToBottom() {
@@ -117,7 +172,7 @@ class _VivaRoomScreenState extends State<VivaRoomScreen>
       if (_scrollController.hasClients) {
         _scrollController.animateTo(
           _scrollController.position.maxScrollExtent,
-          duration: const Duration(milliseconds: 350),
+          duration: const Duration(milliseconds: 300),
           curve: Curves.easeOut,
         );
       }
@@ -261,8 +316,19 @@ class _VivaRoomScreenState extends State<VivaRoomScreen>
   }
 
   void _confirmExit() {
+    final viva = context.read<VivaSessionProvider>();
+    // Nếu ca thi đã kết thúc hoặc đang trong quá trình nộp bài, không cần cảnh báo gắt
+    if (viva.sessionState == VivaSessionState.completed || viva.isFinishing) {
+      setState(() => _allowPop = true);
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (mounted) Navigator.of(context).pop();
+      });
+      return;
+    }
+
     showDialog(
       context: context,
+      barrierDismissible: false,
       builder: (ctx) => AlertDialog(
         backgroundColor: AppColors.surfaceCard,
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
@@ -274,42 +340,60 @@ class _VivaRoomScreenState extends State<VivaRoomScreen>
               size: 26,
             ),
             SizedBox(width: 8),
-            Text(
-              'Rời khỏi phòng thi?',
-              style: TextStyle(
-                color: Colors.white,
-                fontSize: 17,
-                fontWeight: FontWeight.bold,
+            Expanded(
+              child: Text(
+                'Cảnh báo thoát phòng thi!',
+                style: TextStyle(
+                  color: Colors.white,
+                  fontSize: 17,
+                  fontWeight: FontWeight.bold,
+                ),
               ),
             ),
           ],
         ),
         content: const Text(
-          'Phiên thi vấn đáp đang diễn ra. Bạn có chắc chắn muốn rời khỏi phòng thi không?',
-          style: TextStyle(color: AppColors.textSecondary, fontSize: 13),
+          'Ca thi vấn đáp đang diễn ra và được giám sát trực tiếp.\n\n'
+          'Bạn chỉ có thể hoàn tất bằng cách nộp bài. '
+          'Nếu vẫn cố tình thoát khỏi phòng thi, hệ thống sẽ TỰ ĐỘNG KẾT THÚC và nộp bài với kết quả hiện tại ngay lập tức!',
+          style: TextStyle(
+            color: AppColors.textSecondary,
+            fontSize: 13.5,
+            height: 1.45,
+          ),
         ),
         actions: [
-          TextButton(
+          ElevatedButton(
+            style: ElevatedButton.styleFrom(
+              backgroundColor: AppColors.primary,
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(10),
+              ),
+            ),
             onPressed: () => Navigator.of(ctx).pop(),
             child: const Text(
               'Tiếp tục thi',
-              style: TextStyle(color: Colors.white70),
+              style: TextStyle(
+                color: Colors.white,
+                fontWeight: FontWeight.bold,
+              ),
             ),
           ),
-          ElevatedButton(
-            style: ElevatedButton.styleFrom(
-              backgroundColor: AppColors.dangerDark,
+          TextButton(
+            style: TextButton.styleFrom(
+              foregroundColor: AppColors.danger,
             ),
             onPressed: () {
               Navigator.of(ctx).pop();
-              setState(() => _allowPop = true);
-              WidgetsBinding.instance.addPostFrameCallback((_) {
-                if (mounted) Navigator.of(context).pop();
-              });
+              // Thí sinh chủ động xác nhận nộp bài sớm để thoát
+              viva.finishExamSession();
             },
             child: const Text(
-              'Rời phòng',
-              style: TextStyle(color: Colors.white),
+              'Vẫn muốn thoát (Tự nộp bài)',
+              style: TextStyle(
+                fontWeight: FontWeight.bold,
+                fontSize: 12.5,
+              ),
             ),
           ),
         ],
@@ -510,7 +594,12 @@ class _VivaRoomScreenState extends State<VivaRoomScreen>
         ? viva.currentQuestion.questionNumber.clamp(1, total)
         : viva.currentQuestion.questionNumber;
     final back = IconButton(
-      icon: const Icon(Icons.arrow_back_ios_new_rounded, size: 18),
+      tooltip: 'Cảnh báo thoát phòng thi',
+      icon: const Icon(
+        Icons.lock_outline_rounded,
+        size: 18,
+        color: AppColors.textMuted,
+      ),
       onPressed: _confirmExit,
     );
     final title = Column(
@@ -561,12 +650,21 @@ class _VivaRoomScreenState extends State<VivaRoomScreen>
           ),
         );
     final counter = pill('Câu $current/$total');
-    final timer = pill(
-      viva.isFinishing ? 'Đã nộp' : viva.formattedTimer,
+    final examTimer = pill(
+      viva.isFinishing
+          ? 'Đã nộp'
+          : 'Ca: ${viva.formattedExamTimer}',
       icon: viva.isFinishing
           ? Icons.check_circle_outline_rounded
-          : Icons.timer_outlined,
-      color: viva.isFinishing ? AppColors.success : AppColors.warning,
+          : Icons.hourglass_top_rounded,
+      color: viva.isFinishing
+          ? AppColors.success
+          : (viva.examRemainingSeconds <= 180 ? AppColors.danger : AppColors.primaryLight),
+    );
+    final questionTimer = pill(
+      'Lượt: ${viva.formattedTimer}',
+      icon: Icons.timer_outlined,
+      color: viva.remainingSeconds <= 15 ? AppColors.danger : AppColors.warning,
     );
     final finish = TextButton(
       style: TextButton.styleFrom(
@@ -628,10 +726,12 @@ class _VivaRoomScreenState extends State<VivaRoomScreen>
                     finish,
                   ],
                 ),
-                const SizedBox(height: 4),
-                Row(
-                  mainAxisAlignment: MainAxisAlignment.end,
-                  children: [counter, const SizedBox(width: 6), timer],
+                const SizedBox(height: 6),
+                Wrap(
+                  spacing: 6,
+                  runSpacing: 4,
+                  alignment: WrapAlignment.end,
+                  children: [counter, questionTimer, examTimer],
                 ),
               ],
             );
@@ -642,7 +742,9 @@ class _VivaRoomScreenState extends State<VivaRoomScreen>
               Expanded(child: title),
               counter,
               const SizedBox(width: 6),
-              timer,
+              questionTimer,
+              const SizedBox(width: 6),
+              examTimer,
               const SizedBox(width: 6),
               finish,
             ],

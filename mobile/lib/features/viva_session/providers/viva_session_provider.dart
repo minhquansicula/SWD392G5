@@ -64,9 +64,14 @@ class VivaSessionProvider extends ChangeNotifier {
   double _currentAudioLevel = 0.0;
   final double _acousticAccuracy = 0.968; // Độ chính xác âm học 96.8%
 
-  // Đồng hồ đếm lùi phòng thi
+  // Đồng hồ đếm lùi thời gian trả lời câu hỏi hiện tại
   int _remainingSeconds = 0;
   Timer? _countdownTimer;
+
+  // Hạn kết thúc ca thi (ca thi theo lịch - scheduledEndTime)
+  DateTime? _scheduledEndTime;
+  int _examRemainingSeconds = 0;
+  Timer? _examCountdownTimer;
 
   StreamSubscription? _audioChunkSub;
   StreamSubscription? _amplitudeSub;
@@ -93,6 +98,8 @@ class VivaSessionProvider extends ChangeNotifier {
   double get currentAudioLevel => _currentAudioLevel;
   double get acousticAccuracy => _acousticAccuracy;
   int get remainingSeconds => _remainingSeconds;
+  int get examRemainingSeconds => _examRemainingSeconds;
+  DateTime? get scheduledEndTime => _scheduledEndTime;
   bool get isRecording => _recorderService.isRecording;
   WsConnectionStatus get wsStatus => _wsService.currentStatus;
   Map<String, dynamic>? get finalEvaluationReport => _finalEvaluationReport;
@@ -126,6 +133,7 @@ class VivaSessionProvider extends ChangeNotifier {
     }
   }
 
+  /// Thời gian trả lời còn lại của câu hỏi hiện tại
   String get formattedTimer {
     if (_finishing || _sessionState == VivaSessionState.completed) {
       return '00:00';
@@ -135,12 +143,30 @@ class VivaSessionProvider extends ChangeNotifier {
     return '$m:$s';
   }
 
+  /// Thời gian còn lại của cả ca thi
+  String get formattedExamTimer {
+    if (_finishing || _sessionState == VivaSessionState.completed) {
+      return '00:00';
+    }
+    if (_examRemainingSeconds <= 0 && _scheduledEndTime == null) {
+      return '--:--';
+    }
+    final h = _examRemainingSeconds ~/ 3600;
+    final m = (_examRemainingSeconds % 3600) ~/ 60;
+    final s = _examRemainingSeconds % 60;
+    if (h > 0) {
+      return '${h.toString().padLeft(2, '0')}:${m.toString().padLeft(2, '0')}:${s.toString().padLeft(2, '0')}';
+    }
+    return '${m.toString().padLeft(2, '0')}:${s.toString().padLeft(2, '0')}';
+  }
+
   /// Khởi tạo phiên thi và kết nối tới WebSocket viva-ai-v2
   Future<void> startSession({
     required String examId,
     required String studentId,
     String? token,
     String? customWsUrl,
+    DateTime? scheduledEndTime,
   }) async {
     if (_disposed || _starting || _active) return;
     final authToken = token ?? _api.authToken ?? '';
@@ -154,6 +180,7 @@ class VivaSessionProvider extends ChangeNotifier {
     _studentId = studentId;
     _token = authToken;
     _customWsUrl = customWsUrl;
+    _scheduledEndTime = scheduledEndTime;
     final generation = ++_generation;
     _errorMessage = null;
     _finishing = false;
@@ -165,6 +192,11 @@ class VivaSessionProvider extends ChangeNotifier {
     _questions = [];
     _transcripts.clear();
     _remainingSeconds = 0;
+    _examRemainingSeconds = _scheduledEndTime != null
+        ? (_scheduledEndTime!.difference(DateTime.now()).inMilliseconds / 1000)
+            .ceil()
+            .clamp(0, 86400)
+        : 0;
     _finalEvaluationReport = null;
     _sessionState = VivaSessionState.processing;
     notifyListeners();
@@ -246,6 +278,21 @@ class VivaSessionProvider extends ChangeNotifier {
           notifyListeners();
         }
       });
+      // Đồng hồ đếm lùi toàn bộ ca thi
+      _examCountdownTimer = Timer.periodic(const Duration(seconds: 1), (_) {
+        if (_scheduledEndTime != null) {
+          final diff = (_scheduledEndTime!.difference(DateTime.now()).inMilliseconds / 1000)
+              .ceil();
+          _examRemainingSeconds = diff.clamp(0, 86400);
+          notifyListeners();
+
+          // Khi hết thời gian ca thi (0 giây) -> Tự động kết thúc và nộp bài ngay lập tức!
+          if (diff <= 0 && !_finishing && _sessionState != VivaSessionState.completed) {
+            debugPrint('[VivaSessionProvider] Exam scheduled duration reached. Auto-finishing exam session...');
+            finishExamSession(isTimeout: true);
+          }
+        }
+      });
     } catch (error) {
       if (!_disposed && generation == _generation) {
         await stopSession();
@@ -263,8 +310,11 @@ class VivaSessionProvider extends ChangeNotifier {
     _active = false;
     _starting = false;
     _countdownTimer?.cancel();
+    _examCountdownTimer?.cancel();
     _finishTimer?.cancel();
     _submitTimer?.cancel();
+    _countdownTimer = null;
+    _examCountdownTimer = null;
     await _audioChunkSub?.cancel();
     await _amplitudeSub?.cancel();
     await _wsMessageSub?.cancel();
@@ -385,8 +435,11 @@ class VivaSessionProvider extends ChangeNotifier {
     _errorMessage = null;
     _finishTimer?.cancel();
     _countdownTimer?.cancel();
+    _examCountdownTimer?.cancel();
     _countdownTimer = null;
+    _examCountdownTimer = null;
     _remainingSeconds = 0;
+    _examRemainingSeconds = 0;
     await _recorderService.stopRecording();
     await _playerService.stop();
     if (_disposed || generation != _generation) return;
@@ -708,6 +761,11 @@ class VivaSessionProvider extends ChangeNotifier {
         }
         _finishTimer?.cancel();
         _countdownTimer?.cancel();
+        _examCountdownTimer?.cancel();
+        _countdownTimer = null;
+        _examCountdownTimer = null;
+        _remainingSeconds = 0;
+        _examRemainingSeconds = 0;
         _recorderService.stopRecording();
         _playerService.stop();
         _finalEvaluationReport = report;
