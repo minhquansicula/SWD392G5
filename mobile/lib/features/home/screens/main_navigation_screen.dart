@@ -1,4 +1,3 @@
-import 'dart:ui';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../../../core/theme/app_colors.dart';
@@ -11,10 +10,7 @@ import '../../profile/screens/profile_settings_screen.dart';
 class MainNavigationScreen extends StatefulWidget {
   final int initialIndex;
 
-  const MainNavigationScreen({
-    super.key,
-    this.initialIndex = 0,
-  });
+  const MainNavigationScreen({super.key, this.initialIndex = 0});
 
   @override
   State<MainNavigationScreen> createState() => _MainNavigationScreenState();
@@ -49,14 +45,16 @@ class _MainNavigationScreenState extends State<MainNavigationScreen> {
       backgroundColor: AppColors.background,
       body: IndexedStack(
         index: _currentIndex,
-        children: _screens,
+        children: [
+          for (var i = 0; i < _screens.length; i++)
+            TickerMode(enabled: i == _currentIndex, child: _screens[i]),
+        ],
       ),
       bottomNavigationBar: ClipRRect(
-        child: BackdropFilter(
-          filter: ImageFilter.blur(sigmaX: 16, sigmaY: 16),
+        child: RepaintBoundary(
           child: Container(
             decoration: BoxDecoration(
-              color: AppColors.surfaceDeep.withValues(alpha: 0.88),
+              color: AppColors.surfaceDeep,
               border: const Border(
                 top: BorderSide(color: AppColors.borderGlass, width: 1),
               ),
@@ -69,7 +67,9 @@ class _MainNavigationScreenState extends State<MainNavigationScreen> {
               type: BottomNavigationBarType.fixed,
               selectedItemColor: AppColors.primaryLight,
               unselectedItemColor: AppColors.textMuted,
-              selectedLabelStyle: AppTextStyles.labelSm.copyWith(fontWeight: FontWeight.w700),
+              selectedLabelStyle: AppTextStyles.labelSm.copyWith(
+                fontWeight: FontWeight.w700,
+              ),
               unselectedLabelStyle: AppTextStyles.labelSm,
               items: const [
                 BottomNavigationBarItem(

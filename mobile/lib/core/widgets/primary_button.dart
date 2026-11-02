@@ -32,110 +32,67 @@ class PrimaryButton extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final effectivePadding = padding ?? const EdgeInsets.symmetric(horizontal: 14);
-
-    if (isOutlined) {
-      return SizedBox(
-        height: height,
-        child: OutlinedButton(
-          onPressed: isLoading ? null : onPressed,
-          style: OutlinedButton.styleFrom(
-            side: const BorderSide(color: AppColors.borderGlass, width: 1.2),
-            backgroundColor: AppColors.surfaceCard.withValues(alpha: 0.5),
-            shape: RoundedRectangleBorder(
-              borderRadius: BorderRadius.circular(borderRadius),
-            ),
-            padding: effectivePadding,
+    final foreground =
+        textColor ?? (isOutlined ? AppColors.primaryLight : Colors.white);
+    final child = Row(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        if (isLoading) ...[
+          SizedBox(
+            width: 20,
+            height: 20,
+            child: CircularProgressIndicator(strokeWidth: 2, color: foreground),
           ),
-          child: _buildChild(context),
+          const SizedBox(width: 8),
+        ] else if (icon != null) ...[
+          Icon(icon, size: 20),
+          const SizedBox(width: 8),
+        ],
+        Flexible(
+          child: Text(
+            isLoading ? '$text…' : text,
+            textAlign: TextAlign.center,
+            style: AppTextStyles.labelBold.copyWith(
+              color: onPressed == null && !isLoading
+                  ? AppColors.textDisabled
+                  : foreground,
+            ),
+          ),
         ),
-      );
-    }
-
-    final effGradient = gradient ?? AppColors.primaryGradient;
-
-    return Container(
-      height: height,
-      decoration: BoxDecoration(
-        gradient: onPressed == null ? null : (backgroundColor != null ? null : effGradient),
-        color: onPressed == null
-            ? AppColors.surfaceCardHigh
-            : (backgroundColor ?? AppColors.primary),
-        borderRadius: BorderRadius.circular(borderRadius),
-        border: Border.all(
-          color: onPressed == null ? AppColors.borderGlass : AppColors.borderGlow,
-          width: 1,
-        ),
-        boxShadow: onPressed == null
-            ? null
-            : [
-                BoxShadow(
-                  color: (backgroundColor ?? AppColors.primary).withValues(alpha: 0.25),
-                  blurRadius: 10,
-                  offset: const Offset(0, 3),
-                ),
-              ],
+      ],
+    );
+    final style = ButtonStyle(
+      minimumSize: WidgetStatePropertyAll(Size(48, height < 48 ? 48 : height)),
+      padding: WidgetStatePropertyAll(
+        padding ?? const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
       ),
-      child: Material(
-        color: Colors.transparent,
-        child: InkWell(
-          onTap: isLoading ? null : onPressed,
+      foregroundColor: WidgetStatePropertyAll(foreground),
+      backgroundColor: WidgetStatePropertyAll(
+        isOutlined
+            ? Colors.transparent
+            : onPressed == null
+            ? AppColors.surfaceCardHigh
+            : backgroundColor ?? AppColors.primary,
+      ),
+      shape: WidgetStatePropertyAll(
+        RoundedRectangleBorder(
           borderRadius: BorderRadius.circular(borderRadius),
-          child: Padding(
-            padding: effectivePadding,
-            child: Center(
-              child: _buildChild(context),
-            ),
-          ),
         ),
       ),
     );
-  }
-
-  Widget _buildChild(BuildContext context) {
-    if (isLoading) {
-      return const SizedBox(
-        width: 22,
-        height: 22,
-        child: CircularProgressIndicator(
-          strokeWidth: 2.5,
-          valueColor: AlwaysStoppedAnimation<Color>(Colors.white),
-        ),
-      );
-    }
-
-    final effectiveTextColor = textColor ?? Colors.white;
-
-    if (icon != null) {
-      return Row(
-        mainAxisSize: MainAxisSize.min,
-        mainAxisAlignment: MainAxisAlignment.center,
-        children: [
-          Icon(icon, size: 18, color: effectiveTextColor),
-          const SizedBox(width: 6),
-          Flexible(
-            child: Text(
-              text,
-              style: AppTextStyles.labelBold.copyWith(
-                color: effectiveTextColor,
-                fontSize: 13,
-              ),
-              maxLines: 1,
-              overflow: TextOverflow.ellipsis,
+    return Semantics(
+      liveRegion: isLoading,
+      child: isOutlined
+          ? OutlinedButton(
+              style: style,
+              onPressed: isLoading ? null : onPressed,
+              child: child,
+            )
+          : ElevatedButton(
+              style: style,
+              onPressed: isLoading ? null : onPressed,
+              child: child,
             ),
-          ),
-        ],
-      );
-    }
-
-    return Text(
-      text,
-      style: AppTextStyles.labelBold.copyWith(
-        color: effectiveTextColor,
-        fontSize: 14,
-      ),
-      maxLines: 1,
-      overflow: TextOverflow.ellipsis,
     );
   }
 }

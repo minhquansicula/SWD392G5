@@ -7,19 +7,38 @@ class AppTheme {
 
   static ThemeData get darkTheme {
     return ThemeData(
+      useMaterial3: true,
+      materialTapTargetSize: MaterialTapTargetSize.padded,
+      visualDensity: VisualDensity.standard,
+      iconButtonTheme: IconButtonThemeData(
+        style: IconButton.styleFrom(minimumSize: const Size(48, 48)),
+      ),
+      textButtonTheme: TextButtonThemeData(
+        style: TextButton.styleFrom(minimumSize: const Size(48, 48)),
+      ),
+      outlinedButtonTheme: OutlinedButtonThemeData(
+        style: OutlinedButton.styleFrom(minimumSize: const Size(48, 48)),
+      ),
       brightness: Brightness.dark,
+      textTheme: TextTheme(
+        bodyLarge: AppTextStyles.bodyLg,
+        bodyMedium: AppTextStyles.bodyMd,
+        bodySmall: AppTextStyles.bodySm,
+        labelLarge: AppTextStyles.labelBold,
+        titleLarge: AppTextStyles.headlineMd,
+      ),
       scaffoldBackgroundColor: AppColors.background,
       primaryColor: AppColors.primary,
       colorScheme: const ColorScheme.dark(
-        primary: AppColors.primary,
+        primary: AppColors.primaryLight,
         secondary: AppColors.secondary,
         tertiary: AppColors.primaryLight,
         surface: AppColors.surfaceCard,
         error: AppColors.danger,
-        onPrimary: Colors.white,
-        onSecondary: Colors.white,
+        onPrimary: AppColors.surfaceDeep,
+        onSecondary: AppColors.surfaceDeep,
         onSurface: AppColors.textPrimary,
-        onError: Colors.white,
+        onError: AppColors.surfaceDeep,
       ),
       appBarTheme: AppBarTheme(
         backgroundColor: Colors.transparent,
@@ -40,7 +59,10 @@ class AppTheme {
         filled: true,
         fillColor: AppColors.surfaceCardLow,
         hintStyle: AppTextStyles.bodyMd.copyWith(color: AppColors.textDisabled),
-        contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+        contentPadding: const EdgeInsets.symmetric(
+          horizontal: 16,
+          vertical: 14,
+        ),
         border: OutlineInputBorder(
           borderRadius: BorderRadius.circular(12),
           borderSide: const BorderSide(color: AppColors.borderGlass, width: 1),
@@ -51,7 +73,10 @@ class AppTheme {
         ),
         focusedBorder: OutlineInputBorder(
           borderRadius: BorderRadius.circular(12),
-          borderSide: const BorderSide(color: AppColors.primaryLight, width: 1.5),
+          borderSide: const BorderSide(
+            color: AppColors.primaryLight,
+            width: 1.5,
+          ),
         ),
         errorBorder: OutlineInputBorder(
           borderRadius: BorderRadius.circular(12),
@@ -91,7 +116,9 @@ class AppTheme {
       ),
       snackBarTheme: SnackBarThemeData(
         backgroundColor: AppColors.surfaceCardHigh,
-        contentTextStyle: AppTextStyles.bodySm.copyWith(color: AppColors.textPrimary),
+        contentTextStyle: AppTextStyles.bodySm.copyWith(
+          color: AppColors.textPrimary,
+        ),
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
         behavior: SnackBarBehavior.floating,
       ),

@@ -2,12 +2,7 @@ import 'dart:math' as math;
 import 'package:flutter/material.dart';
 import '../theme/app_colors.dart';
 
-enum OrbState {
-  idle,
-  aiSpeaking,
-  listening,
-  processing,
-}
+enum OrbState { idle, aiSpeaking, listening, processing }
 
 class AudioPulseOrb extends StatefulWidget {
   final OrbState state;
@@ -35,7 +30,28 @@ class _AudioPulseOrbState extends State<AudioPulseOrb>
     _controller = AnimationController(
       vsync: this,
       duration: const Duration(milliseconds: 2400),
-    )..repeat();
+    );
+  }
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    _syncMotion();
+  }
+
+  @override
+  void didUpdateWidget(covariant AudioPulseOrb oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    _syncMotion();
+  }
+
+  void _syncMotion() {
+    final animate =
+        !MediaQuery.disableAnimationsOf(context) &&
+        TickerMode.valuesOf(context).enabled &&
+        widget.state != OrbState.idle;
+    if (animate && !_controller.isAnimating) _controller.repeat();
+    if (!animate) _controller.stop();
   }
 
   @override
@@ -59,9 +75,7 @@ class _AudioPulseOrbState extends State<AudioPulseOrb>
           child: SizedBox(
             width: widget.size,
             height: widget.size,
-            child: Center(
-              child: _buildInnerIcon(),
-            ),
+            child: Center(child: _buildInnerIcon()),
           ),
         );
       },
@@ -77,11 +91,7 @@ class _AudioPulseOrbState extends State<AudioPulseOrb>
           size: 42,
         );
       case OrbState.listening:
-        return const Icon(
-          Icons.mic_rounded,
-          color: Colors.white,
-          size: 42,
-        );
+        return const Icon(Icons.mic_rounded, color: Colors.white, size: 42);
       case OrbState.processing:
         return const Icon(
           Icons.auto_awesome_rounded,
@@ -122,8 +132,11 @@ class _OrbPainter extends CustomPainter {
         final opacity = (1.0 - progress) * (0.35 + audioLevel * 0.4);
 
         final wavePaint = Paint()
-          ..color = (state == OrbState.listening ? AppColors.primaryLight : AppColors.secondary)
-              .withValues(alpha: opacity.clamp(0.0, 1.0))
+          ..color =
+              (state == OrbState.listening
+                      ? AppColors.primaryLight
+                      : AppColors.secondary)
+                  .withValues(alpha: opacity.clamp(0.0, 1.0))
           ..style = PaintingStyle.stroke
           ..strokeWidth = 1.8;
 
@@ -151,7 +164,9 @@ class _OrbPainter extends CustomPainter {
     if (state == OrbState.listening || state == OrbState.aiSpeaking) {
       final barCount = 36;
       final ringPaint = Paint()
-        ..color = state == OrbState.listening ? AppColors.primaryGlow : AppColors.primaryLight
+        ..color = state == OrbState.listening
+            ? AppColors.primaryGlow
+            : AppColors.primaryLight
         ..strokeCap = StrokeCap.round
         ..strokeWidth = 2.5;
 
@@ -174,8 +189,16 @@ class _OrbPainter extends CustomPainter {
       ..shader = RadialGradient(
         center: const Alignment(-0.3, -0.3),
         colors: state == OrbState.listening
-            ? [const Color(0xFFABE1D2), AppColors.primaryLight, AppColors.primary]
-            : [AppColors.primaryLight, AppColors.primary, const Color(0xFF134E48)],
+            ? [
+                const Color(0xFFABE1D2),
+                AppColors.primaryLight,
+                AppColors.primary,
+              ]
+            : [
+                AppColors.primaryLight,
+                AppColors.primary,
+                const Color(0xFF134E48),
+              ],
       ).createShader(Rect.fromCircle(center: center, radius: baseRadius));
 
     canvas.drawCircle(center, baseRadius, orbPaint);

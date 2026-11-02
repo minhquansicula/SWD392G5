@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/foundation.dart';
 import 'package:flutter/services.dart';
 import 'package:provider/provider.dart';
 import 'core/theme/app_colors.dart';
@@ -12,13 +13,20 @@ import 'features/viva_session/providers/viva_session_provider.dart';
 
 void main() {
   WidgetsFlutterBinding.ensureInitialized();
+  LicenseRegistry.addLicense(() async* {
+    for (final font in ['BeVietnamPro', 'JetBrainsMono']) {
+      yield LicenseEntryWithLineBreaks([
+        font,
+      ], await rootBundle.loadString('assets/fonts/$font-OFL.txt'));
+    }
+  });
 
   // Set immersive dark status bar and navigation bar styling
   SystemChrome.setSystemUIOverlayStyle(
     const SystemUiOverlayStyle(
       statusBarColor: Colors.transparent,
       statusBarIconBrightness: Brightness.light,
-      systemNavigationBarColor: Colors.black,
+      systemNavigationBarColor: AppColors.surfaceDeep,
       systemNavigationBarIconBrightness: Brightness.light,
     ),
   );
@@ -45,6 +53,15 @@ class AivesApp extends StatelessWidget {
             title: 'AIVES Oral Exam',
             debugShowCheckedModeBanner: false,
             theme: AppTheme.darkTheme,
+            builder: (context, child) => ColoredBox(
+              color: AppColors.background,
+              child: Center(
+                child: ConstrainedBox(
+                  constraints: const BoxConstraints(maxWidth: 720),
+                  child: child!,
+                ),
+              ),
+            ),
             home: const AppRootGate(),
           ),
         ),

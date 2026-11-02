@@ -3,28 +3,25 @@ import 'package:intl/intl.dart';
 import 'package:provider/provider.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_text_styles.dart';
+import '../../../core/widgets/app_content.dart';
 import '../../../core/widgets/glass_card.dart';
 import '../../../core/widgets/primary_button.dart';
 import '../../../core/widgets/status_badge.dart';
 import '../../exam/models/exam_schedule_model.dart';
 import '../../exam/providers/exam_provider.dart';
+import '../../home/screens/main_navigation_screen.dart';
 import '../models/viva_report_model.dart';
 import '../providers/report_provider.dart';
-import '../../home/screens/main_navigation_screen.dart';
 
 class ExamResultReportScreen extends StatefulWidget {
   final ExamScheduleModel? exam;
   final bool autoLoad;
-
   const ExamResultReportScreen({super.key, this.exam, this.autoLoad = true});
-
   @override
   State<ExamResultReportScreen> createState() => _ExamResultReportScreenState();
 }
 
 class _ExamResultReportScreenState extends State<ExamResultReportScreen> {
-  int? _expandedQuestionIndex;
-
   @override
   void initState() {
     super.initState();
@@ -37,6 +34,10 @@ class _ExamResultReportScreenState extends State<ExamResultReportScreen> {
     }
   }
 
+  void _home() => Navigator.of(context).pushAndRemoveUntil(
+    MaterialPageRoute(builder: (_) => const MainNavigationScreen()),
+    (route) => false,
+  );
   @override
   Widget build(BuildContext context) {
     final provider = context.watch<ReportProvider>();
@@ -53,95 +54,22 @@ class _ExamResultReportScreenState extends State<ExamResultReportScreen> {
                 selected.finalScore != null
             ? VivaReportModel.fromExam(selected)
             : null);
-    final isPendingOrNoScore = report == null && selected != null;
-
-    final Widget bodyContent;
-    if (provider.isLoading) {
-      bodyContent = const Center(child: CircularProgressIndicator());
-    } else if (isPendingOrNoScore) {
-      bodyContent = _buildNoScoreBody(context, selected);
-    } else if (report == null) {
-      bodyContent = _buildEmptyReportView(context);
-    } else {
-      bodyContent = SingleChildScrollView(
-        padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            // Score Summary Hero Card
-            _buildScoreHeroCard(report),
-            const SizedBox(height: 20),
-
-            // Rubric Criteria Section
-            _buildRubricSection(report),
-            const SizedBox(height: 20),
-
-            // AI Examiner Feedback Section
-            _buildAiFeedbackSection(report),
-            const SizedBox(height: 20),
-
-            // Questions & Transcripts Breakdown Section
-            _buildQuestionsSection(report),
-            const SizedBox(height: 28),
-
-            // Action Buttons
-            Row(
-              children: [
-                Expanded(
-                  child: PrimaryButton(
-                    text: 'PDF chưa hỗ trợ',
-                    icon: Icons.download_rounded,
-                    isOutlined: true,
-                    onPressed: null,
-                  ),
-                ),
-                const SizedBox(width: 12),
-                Expanded(
-                  child: PrimaryButton(
-                    text: 'Về Trang Chủ',
-                    icon: Icons.home_rounded,
-                    onPressed: () {
-                      Navigator.of(context).pushAndRemoveUntil(
-                        MaterialPageRoute(
-                          builder: (_) => const MainNavigationScreen(),
-                        ),
-                        (route) => false,
-                      );
-                    },
-                  ),
-                ),
-              ],
-            ),
-            const SizedBox(height: 32),
-          ],
-        ),
-      );
-    }
-
     final exams = context.read<ExamProvider?>();
     return PopScope(
-      onPopInvokedWithResult: (didPop, result) {
+      onPopInvokedWithResult: (didPop, _) {
         if (didPop) exams?.refreshExams();
       },
       child: Scaffold(
-        backgroundColor: AppColors.background,
         appBar: AppBar(
-          title: Text(
-            isPendingOrNoScore ? 'Trạng Thái Điểm Số' : 'Báo Cáo Đánh Giá Viva',
-            style: AppTextStyles.headlineMd,
-          ),
+          title: Text(report == null ? 'Trạng Thái Điểm Số' : 'Kết quả thi'),
           leading: IconButton(
-            icon: const Icon(Icons.arrow_back_ios_new_rounded, size: 18),
+            tooltip: 'Quay lại',
+            icon: const Icon(Icons.arrow_back),
             onPressed: () {
               if (Navigator.of(context).canPop()) {
                 Navigator.of(context).pop();
               } else {
-                Navigator.of(context).pushAndRemoveUntil(
-                  MaterialPageRoute(
-                    builder: (_) => const MainNavigationScreen(initialIndex: 1),
-                  ),
-                  (route) => false,
-                );
+                _home();
               }
             },
           ),
@@ -156,869 +84,220 @@ class _ExamResultReportScreenState extends State<ExamResultReportScreen> {
               ),
           ],
         ),
-        body: Column(
-          children: [
-            if (provider.errorMessage != null)
-              Padding(
-                padding: const EdgeInsets.all(12),
-                child: Semantics(
-                  liveRegion: true,
-                  child: Text(provider.errorMessage!),
+        body: SafeArea(
+          child: AppContent(
+            child: ListView(
+              padding: const EdgeInsets.symmetric(vertical: 16),
+              children: [
+                if (provider.isLoading) const LinearProgressIndicator(),
+                if (provider.errorMessage != null) ...[
+                  AppMessage(message: provider.errorMessage!, isError: true),
+                  const SizedBox(height: 16),
+                ],
+                if (report != null)
+                  ..._report(report)
+                else ...[
+                  if (selected != null) ...[
+                    Text(selected.examTitle, style: AppTextStyles.headlineLg),
+                    const SizedBox(height: 8),
+                    Text(selected.courseName, style: AppTextStyles.bodyMd),
+                    const SizedBox(height: 16),
+                    AppMessage(
+                      message: switch (selected.status) {
+                        ExamStatus.completed =>
+                          'Ca thi đã hoàn tất. Điểm chính thức đang chờ giảng viên công bố.',
+                        ExamStatus.inProgress =>
+                          'Ca thi đang diễn ra. Kết quả sẽ được cập nhật sau khi hoàn tất.',
+                        ExamStatus.upcoming =>
+                          'Ca thi chưa bắt đầu. Chưa có kết quả đánh giá.',
+                      },
+                    ),
+                  ] else
+                    const AppMessage(
+                      message: 'Chưa có báo cáo cho ca thi này.',
+                    ),
+                ],
+                const SizedBox(height: 24),
+                PrimaryButton(
+                  text: 'Về Trang Chủ',
+                  icon: Icons.home_outlined,
+                  isOutlined: true,
+                  onPressed: _home,
                 ),
-              ),
-            Expanded(child: bodyContent),
-          ],
+                const SizedBox(height: 24),
+              ],
+            ),
+          ),
         ),
       ),
     );
   }
 
-  Widget _buildScoreHeroCard(VivaReportModel report) {
-    return GlassCard(
-      padding: const EdgeInsets.all(22),
-      borderRadius: 22,
-      border: Border.all(color: AppColors.borderGlow),
+  List<Widget> _report(VivaReportModel report) => [
+    GlassCard(
       child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+          Text(
+            report.courseCode,
+            style: AppTextStyles.labelBold.copyWith(
+              color: AppColors.primaryLight,
+            ),
+          ),
+          const SizedBox(height: 8),
+          Text(report.examTitle, style: AppTextStyles.headlineLg),
+          const SizedBox(height: 8),
+          Text(report.courseName, style: AppTextStyles.bodyMd),
+          const SizedBox(height: 8),
+          Text(
+            DateFormat('dd/MM/yyyy • HH:mm').format(report.examDate),
+            style: AppTextStyles.bodySm,
+          ),
+          const SizedBox(height: 24),
+          Wrap(
+            spacing: 12,
+            runSpacing: 8,
+            crossAxisAlignment: WrapCrossAlignment.center,
             children: [
-              Container(
-                padding: const EdgeInsets.symmetric(
-                  horizontal: 10,
-                  vertical: 4,
-                ),
-                decoration: BoxDecoration(
-                  color: AppColors.primary.withValues(alpha: 0.15),
-                  borderRadius: BorderRadius.circular(8),
-                ),
-                child: Text(
-                  report.courseCode,
-                  style: AppTextStyles.labelBold.copyWith(
-                    color: AppColors.primaryLight,
-                  ),
-                ),
+              Text(
+                report.totalScore.toStringAsFixed(1),
+                style: AppTextStyles.headlineXl,
               ),
-              const StatusBadge(
-                label: 'Báo cáo AIVES',
-                type: BadgeType.success,
-                icon: Icons.verified_user_rounded,
+              Text(
+                '/ ${report.maxScore.toStringAsFixed(0)}',
+                style: AppTextStyles.bodyMd,
               ),
             ],
           ),
           const SizedBox(height: 12),
-          Text(
-            report.courseName,
-            style: AppTextStyles.headlineLg,
-            textAlign: TextAlign.center,
-          ),
-          const SizedBox(height: 4),
-          Text(
-            '${report.examTitle} • ${DateFormat('dd/MM/yyyy').format(report.examDate)}',
-            style: AppTextStyles.bodySm.copyWith(color: AppColors.textMuted),
-          ),
-          const SizedBox(height: 20),
-
-          // Big Score Display
-          Container(
-            width: 130,
-            height: 130,
-            decoration: BoxDecoration(
-              shape: BoxShape.circle,
-              gradient: RadialGradient(
-                colors: [
-                  AppColors.primary.withValues(alpha: 0.25),
-                  AppColors.secondary.withValues(alpha: 0.05),
-                ],
-              ),
-              border: Border.all(color: AppColors.primaryLight, width: 3),
-              boxShadow: [
-                BoxShadow(
-                  color: AppColors.primary.withValues(alpha: 0.35),
-                  blurRadius: 20,
-                  spreadRadius: 2,
-                ),
-              ],
-            ),
-            child: Column(
-              mainAxisAlignment: MainAxisAlignment.center,
-              children: [
-                Text(
-                  'Tổng điểm',
-                  style: AppTextStyles.labelSm.copyWith(
-                    color: AppColors.textMuted,
-                  ),
-                ),
-                Text(
-                  report.totalScore.toStringAsFixed(1),
-                  style: AppTextStyles.headlineXl.copyWith(
-                    fontSize: 38,
-                    fontWeight: FontWeight.w800,
-                    color: Colors.white,
-                  ),
-                ),
-                Text(
-                  '/10',
-                  style: AppTextStyles.labelBold.copyWith(
-                    color: AppColors.primaryLight,
-                    fontSize: 13,
-                  ),
-                ),
-              ],
+          Align(
+            alignment: Alignment.centerLeft,
+            child: StatusBadge(
+              label: report.isPassed ? 'ĐẠT (PASSED)' : 'KHÔNG ĐẠT (FAILED)',
+              type: report.isPassed ? BadgeType.success : BadgeType.danger,
             ),
           ),
-          const SizedBox(height: 14),
-
-          // Status & Rank
-          Row(
-            mainAxisAlignment: MainAxisAlignment.center,
-            children: [
-              StatusBadge(
-                label: report.isPassed ? 'ĐẠT (PASSED)' : 'KHÔNG ĐẠT (FAILED)',
-                type: report.isPassed ? BadgeType.success : BadgeType.danger,
-                icon: report.isPassed
-                    ? Icons.check_circle_rounded
-                    : Icons.cancel_outlined,
-              ),
-              const SizedBox(width: 8),
-              Container(
-                padding: const EdgeInsets.symmetric(
-                  horizontal: 10,
-                  vertical: 4,
-                ),
-                decoration: BoxDecoration(
-                  color: AppColors.surfaceCardHigh,
-                  borderRadius: BorderRadius.circular(16),
-                ),
-                child: Text(
-                  report.gradeRank,
-                  style: AppTextStyles.labelSm.copyWith(color: Colors.white70),
-                ),
-              ),
-            ],
-          ),
-          const SizedBox(height: 14),
+          const SizedBox(height: 16),
           Text(
             'Nguồn đánh giá: ${report.verifiedByLecturer}',
-            style: AppTextStyles.bodySm.copyWith(
-              color: AppColors.textDisabled,
-              fontSize: 11,
-            ),
+            style: AppTextStyles.bodySm,
           ),
         ],
       ),
-    );
-  }
-
-  Widget _buildRubricSection(VivaReportModel report) {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Row(
-          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+    ),
+    const SizedBox(height: 24),
+    Text('Rubric AI tham khảo', style: AppTextStyles.headlineMd),
+    const SizedBox(height: 8),
+    const AppMessage(
+      message:
+          'Nhận xét và điểm từng câu của AI chỉ mang tính tham khảo. Điểm tổng chính thức do giảng viên công bố.',
+    ),
+    const SizedBox(height: 12),
+    if (report.rubricCriteria.isEmpty)
+      const AppMessage(message: 'Chưa có dữ liệu đánh giá chi tiết.')
+    else
+      GlassCard(
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
-            Text('Rubric AI tham khảo', style: AppTextStyles.titleMd),
-            Text(
-              '${report.rubricCriteria.length} Tiêu chí',
-              style: AppTextStyles.bodySm,
-            ),
-          ],
-        ),
-        const SizedBox(height: 12),
-        GlassCard(
-          padding: const EdgeInsets.all(16),
-          borderRadius: 18,
-          child: report.rubricCriteria.isEmpty
-              ? Padding(
-                  padding: const EdgeInsets.symmetric(vertical: 8),
-                  child: Center(
-                    child: Text(
-                      'Bảng phân rã tiêu chí rubric chi tiết đang được cập nhật từ Hội đồng Chấm thi.',
-                      textAlign: TextAlign.center,
-                      style: AppTextStyles.bodySm.copyWith(
-                        color: AppColors.textMuted,
-                      ),
-                    ),
-                  ),
-                )
-              : Column(
-                  children: report.rubricCriteria.map((c) {
-                    return Padding(
-                      padding: const EdgeInsets.only(bottom: 14),
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Row(
-                            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              Expanded(
-                                child: Text(
-                                  c.title,
-                                  style: AppTextStyles.labelBold.copyWith(
-                                    fontSize: 13,
-                                  ),
-                                ),
-                              ),
-                              const SizedBox(width: 8),
-                              Text(
-                                c.score == null
-                                    ? 'Chưa đánh giá'
-                                    : '${c.score!.toStringAsFixed(1)} / 10',
-                                style: AppTextStyles.labelBold.copyWith(
-                                  color: AppColors.primaryLight,
-                                ),
-                              ),
-                            ],
-                          ),
-                          const SizedBox(height: 6),
-                          ClipRRect(
-                            borderRadius: BorderRadius.circular(6),
-                            child: LinearProgressIndicator(
-                              value: c.percentage,
-                              minHeight: 8,
-                              backgroundColor: AppColors.surfaceCardHigh,
-                              valueColor: AlwaysStoppedAnimation<Color>(
-                                (c.score ?? 0) >= 8.5
-                                    ? AppColors.success
-                                    : (c.score ?? 0) >= 7.0
-                                    ? AppColors.primaryLight
-                                    : AppColors.warning,
-                              ),
-                            ),
-                          ),
-                        ],
-                      ),
-                    );
-                  }).toList(),
-                ),
-        ),
-      ],
-    );
-  }
-
-  Widget _buildAiFeedbackSection(VivaReportModel report) {
-    if (report.strengths.isEmpty && report.improvements.isEmpty) {
-      return Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Row(
-            children: [
-              const Icon(
-                Icons.auto_awesome_rounded,
-                color: AppColors.primaryLight,
-                size: 20,
-              ),
-              const SizedBox(width: 8),
-              Text(
-                'Nhận xét chi tiết từ AI Examiner',
-                style: AppTextStyles.titleMd,
-              ),
-            ],
-          ),
-          const SizedBox(height: 12),
-          GlassCard(
-            padding: const EdgeInsets.all(16),
-            borderRadius: 18,
-            child: Center(
-              child: Padding(
-                padding: const EdgeInsets.symmetric(vertical: 8),
-                child: Text(
-                  'Nhận xét đánh giá chi tiết buổi thi đang được đồng bộ.',
-                  style: AppTextStyles.bodySm.copyWith(
-                    color: AppColors.textMuted,
-                  ),
-                ),
-              ),
-            ),
-          ),
-        ],
-      );
-    }
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Row(
-          children: [
-            const Icon(
-              Icons.auto_awesome_rounded,
-              color: AppColors.primaryLight,
-              size: 20,
-            ),
-            const SizedBox(width: 8),
-            Text(
-              'Nhận xét chi tiết từ AI Examiner',
-              style: AppTextStyles.titleMd,
-            ),
-          ],
-        ),
-        const SizedBox(height: 12),
-        GlassCard(
-          padding: const EdgeInsets.all(16),
-          borderRadius: 18,
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              // Strengths
-              Row(
-                children: [
-                  const Icon(
-                    Icons.verified_rounded,
-                    color: AppColors.success,
-                    size: 18,
-                  ),
-                  const SizedBox(width: 6),
-                  Text(
-                    'Điểm mạnh',
-                    style: AppTextStyles.labelBold.copyWith(
-                      color: AppColors.success,
-                    ),
-                  ),
-                ],
-              ),
-              const SizedBox(height: 8),
-              ...report.strengths.map(
-                (s) => Padding(
-                  padding: const EdgeInsets.only(left: 8, bottom: 6),
-                  child: Row(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      const Text(
-                        '• ',
-                        style: TextStyle(
-                          color: AppColors.success,
-                          fontWeight: FontWeight.bold,
-                        ),
-                      ),
-                      Expanded(child: Text(s, style: AppTextStyles.bodyMd)),
-                    ],
-                  ),
-                ),
-              ),
-              const SizedBox(height: 12),
-              const Divider(color: AppColors.borderGlass),
-              const SizedBox(height: 10),
-
-              // Improvements
-              Row(
-                children: [
-                  const Icon(
-                    Icons.lightbulb_outline_rounded,
-                    color: AppColors.warning,
-                    size: 18,
-                  ),
-                  const SizedBox(width: 6),
-                  Text(
-                    'Cần cải thiện',
-                    style: AppTextStyles.labelBold.copyWith(
-                      color: AppColors.warning,
-                    ),
-                  ),
-                ],
-              ),
-              const SizedBox(height: 8),
-              ...report.improvements.map(
-                (imp) => Padding(
-                  padding: const EdgeInsets.only(left: 8, bottom: 6),
-                  child: Row(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      const Text(
-                        '• ',
-                        style: TextStyle(
-                          color: AppColors.warning,
-                          fontWeight: FontWeight.bold,
-                        ),
-                      ),
-                      Expanded(child: Text(imp, style: AppTextStyles.bodyMd)),
-                    ],
-                  ),
-                ),
-              ),
-            ],
-          ),
-        ),
-      ],
-    );
-  }
-
-  Widget _buildQuestionsSection(VivaReportModel report) {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Row(
-          mainAxisAlignment: MainAxisAlignment.spaceBetween,
-          children: [
-            Text('Nhận xét AI từng câu', style: AppTextStyles.titleMd),
-            Text(
-              '${report.questionReports.length} câu hỏi',
-              style: AppTextStyles.bodySm,
-            ),
-          ],
-        ),
-        const SizedBox(height: 12),
-        if (report.questionReports.isEmpty)
-          GlassCard(
-            padding: const EdgeInsets.all(16),
-            borderRadius: 18,
-            child: Center(
-              child: Padding(
-                padding: const EdgeInsets.symmetric(vertical: 8),
-                child: Text(
-                  'Bản ghi câu hỏi và câu trả lời đang được lưu trữ trong hồ sơ ca thi.',
-                  style: AppTextStyles.bodySm.copyWith(
-                    color: AppColors.textMuted,
-                  ),
-                ),
-              ),
-            ),
-          )
-        else
-          ...List.generate(report.questionReports.length, (index) {
-            final q = report.questionReports[index];
-            final isExpanded = _expandedQuestionIndex == index;
-
-            return GlassCard(
-              margin: const EdgeInsets.only(bottom: 12),
-              padding: const EdgeInsets.all(16),
-              borderRadius: 16,
-              onTap: () {
-                setState(() {
-                  _expandedQuestionIndex = isExpanded ? null : index;
-                });
-              },
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Row(
-                    children: [
-                      Container(
-                        width: 28,
-                        height: 28,
-                        decoration: BoxDecoration(
-                          color: q.isFollowUp
-                              ? AppColors.secondary.withValues(alpha: 0.2)
-                              : AppColors.primary.withValues(alpha: 0.2),
-                          shape: BoxShape.circle,
-                        ),
-                        child: Center(
-                          child: Text(
-                            '${index + 1}',
-                            style: AppTextStyles.labelBold.copyWith(
-                              color: q.isFollowUp
-                                  ? AppColors.secondaryLight
-                                  : AppColors.primaryLight,
-                              fontSize: 12,
-                            ),
-                          ),
-                        ),
-                      ),
-                      const SizedBox(width: 10),
-                      Expanded(
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Text(q.title, style: AppTextStyles.labelBold),
-                            Text(
-                              'Mức độ: ${q.bloomLevel}',
-                              style: AppTextStyles.bodySm,
-                            ),
-                          ],
-                        ),
-                      ),
-                      Text(
-                        q.score == null
-                            ? 'Chưa đánh giá'
-                            : '${q.score}/${q.maxScore}',
-                        style: AppTextStyles.labelBold.copyWith(
-                          color: AppColors.success,
-                        ),
-                      ),
-                      const SizedBox(width: 6),
-                      Icon(
-                        isExpanded
-                            ? Icons.keyboard_arrow_up_rounded
-                            : Icons.keyboard_arrow_down_rounded,
-                        color: AppColors.textMuted,
-                        size: 20,
-                      ),
-                    ],
-                  ),
-                  if (isExpanded) ...[
-                    const SizedBox(height: 12),
-                    const Divider(color: AppColors.borderGlass),
+            for (final criterion in report.rubricCriteria)
+              Padding(
+                padding: const EdgeInsets.only(bottom: 16),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: [
+                    Text(criterion.title, style: AppTextStyles.labelBold),
                     const SizedBox(height: 8),
                     Text(
-                      'Câu hỏi AI đặt:',
-                      style: AppTextStyles.labelSm.copyWith(
-                        color: AppColors.primaryLight,
-                      ),
+                      criterion.score == null
+                          ? 'Chưa đánh giá'
+                          : '${criterion.score!.toStringAsFixed(1)} / ${criterion.maxScore.toStringAsFixed(0)}',
+                      style: AppTextStyles.bodyMd,
                     ),
-                    const SizedBox(height: 4),
-                    Text(q.fullQuestion, style: AppTextStyles.bodyMd),
-                    const SizedBox(height: 10),
-                    Text(
-                      'Câu trả lời của bạn:',
-                      style: AppTextStyles.labelSm.copyWith(
-                        color: AppColors.primaryLight,
-                      ),
-                    ),
-                    const SizedBox(height: 4),
-                    Text(
-                      q.studentAnswer,
-                      style: AppTextStyles.bodyMd.copyWith(
-                        color: Colors.white70,
-                      ),
-                    ),
-                    const SizedBox(height: 12),
-                    Row(
-                      children: [
-                        Container(
-                          padding: const EdgeInsets.symmetric(
-                            horizontal: 10,
-                            vertical: 4,
-                          ),
-                          decoration: BoxDecoration(
-                            color: AppColors.surfaceCardHigh,
-                            borderRadius: BorderRadius.circular(12),
-                          ),
-                          child: Row(
-                            children: [
-                              const Icon(
-                                Icons.play_arrow_rounded,
-                                size: 16,
-                                color: AppColors.primaryLight,
-                              ),
-                              const SizedBox(width: 4),
-                              Text(
-                                'Nghe lại âm thanh • ${q.audioDuration}',
-                                style: AppTextStyles.bodySm,
-                              ),
-                            ],
-                          ),
-                        ),
-                      ],
-                    ),
-                  ],
-                ],
-              ),
-            );
-          }),
-      ],
-    );
-  }
-
-  Widget _buildNoScoreBody(BuildContext context, ExamScheduleModel exam) {
-    final status = exam.status;
-    final isInProgress = status == ExamStatus.inProgress;
-    final isCompleted = status == ExamStatus.completed;
-
-    String badgeLabel = 'CHƯA THI • SẮP DIỄN RA';
-    Color badgeColor = AppColors.warning;
-    IconData statusIcon = Icons.calendar_today_rounded;
-    String title = 'Chưa có kết quả điểm thi';
-    String desc =
-        'Thí sinh chưa bước vào ca thi này. Điểm số, biên bản đối thoại và phiếu đánh giá năng lực sẽ xuất hiện sau khi hoàn thành buổi thi.';
-
-    if (isInProgress) {
-      badgeLabel = 'ĐANG THI VẤN ĐÁP';
-      badgeColor = AppColors.primaryLight;
-      statusIcon = Icons.play_circle_outline_rounded;
-      title = 'Ca thi đang diễn ra — Chưa có điểm';
-      desc =
-          'Thí sinh đang trong phòng thi vấn đáp trực tiếp với AI. Kết quả sẽ được tổng hợp ngay sau khi ca thi kết thúc.';
-    } else if (isCompleted) {
-      badgeLabel = 'ĐANG CHỜ CHỐT ĐIỂM';
-      badgeColor = AppColors.primaryLight;
-      statusIcon = Icons.hourglass_top_rounded;
-      title = 'Ca thi đã hoàn thành — Chờ thẩm định';
-      desc =
-          'Thí sinh đã hoàn thành phần thi vấn đáp. Biên bản hội thoại đang được AI và Hội đồng Giảng viên thẩm định trước khi công bố điểm chính thức.';
-    }
-
-    return SingleChildScrollView(
-      padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          // Hero Pending Card
-          GlassCard(
-            padding: const EdgeInsets.all(22),
-            borderRadius: 22,
-            border: Border.all(color: badgeColor.withValues(alpha: 0.4)),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Row(
-                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                  children: [
-                    Container(
-                      padding: const EdgeInsets.symmetric(
-                        horizontal: 10,
-                        vertical: 4,
-                      ),
-                      decoration: BoxDecoration(
-                        color: badgeColor.withValues(alpha: 0.15),
-                        borderRadius: BorderRadius.circular(20),
-                        border: Border.all(
-                          color: badgeColor.withValues(alpha: 0.4),
+                    if (criterion.score != null)
+                      Padding(
+                        padding: const EdgeInsets.only(top: 8),
+                        child: LinearProgressIndicator(
+                          value: criterion.percentage,
+                          semanticsLabel: criterion.title,
+                          minHeight: 6,
                         ),
                       ),
-                      child: Row(
-                        children: [
-                          Icon(statusIcon, size: 14, color: badgeColor),
-                          const SizedBox(width: 6),
-                          Text(
-                            badgeLabel,
-                            style: AppTextStyles.labelBold.copyWith(
-                              color: badgeColor,
-                              fontSize: 11,
-                            ),
-                          ),
-                        ],
-                      ),
-                    ),
-                    Text(
-                      exam.courseCode,
-                      style: AppTextStyles.labelBold.copyWith(
-                        color: AppColors.primaryLight,
-                      ),
-                    ),
                   ],
                 ),
-                const SizedBox(height: 16),
-                Text(
-                  title,
-                  style: AppTextStyles.headlineLg.copyWith(fontSize: 20),
-                ),
-                const SizedBox(height: 8),
-                Text(
-                  desc,
-                  style: AppTextStyles.bodyMd.copyWith(
-                    color: AppColors.textMuted,
-                    height: 1.4,
-                  ),
-                ),
-                const SizedBox(height: 20),
-
-                // Meta Grid
-                Container(
-                  padding: const EdgeInsets.all(14),
-                  decoration: BoxDecoration(
-                    color: AppColors.surfaceCardLow.withValues(alpha: 0.6),
-                    borderRadius: BorderRadius.circular(14),
-                    border: Border.all(color: AppColors.borderGlass),
-                  ),
-                  child: Column(
-                    children: [
-                      _buildMetaRow(
-                        'Môn học & Kỳ thi',
-                        '${exam.courseCode} - ${exam.examTitle}',
-                      ),
-                      const Divider(color: AppColors.borderGlass, height: 16),
-                      _buildMetaRow('Thời gian ca thi', exam.timeRemainingText),
-                      const Divider(color: AppColors.borderGlass, height: 16),
-                      _buildMetaRow('Phòng thi / Hội đồng', exam.room),
-                      const Divider(color: AppColors.borderGlass, height: 16),
-                      _buildMetaRow(
-                        'Trạng thái điểm',
-                        'Chưa có điểm (Đang xử lý)',
-                        valueColor: AppColors.warning,
-                      ),
-                    ],
-                  ),
-                ),
-              ],
-            ),
-          ),
-          const SizedBox(height: 20),
-
-          // 3-step Examination flow
-          _buildFlowExplanation(),
-          const SizedBox(height: 24),
-
-          // Back to Home Button
-          PrimaryButton(
-            text: 'Về Trang Chủ',
-            icon: Icons.home_rounded,
-            onPressed: () {
-              Navigator.of(context).pushAndRemoveUntil(
-                MaterialPageRoute(builder: (_) => const MainNavigationScreen()),
-                (route) => false,
-              );
-            },
-          ),
-          const SizedBox(height: 24),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildMetaRow(String label, String value, {Color? valueColor}) {
-    return Row(
-      mainAxisAlignment: MainAxisAlignment.spaceBetween,
-      children: [
-        Text(
-          label,
-          style: AppTextStyles.bodySm.copyWith(color: AppColors.textMuted),
-        ),
-        const SizedBox(width: 8),
-        Expanded(
-          child: Text(
-            value,
-            textAlign: TextAlign.right,
-            style: AppTextStyles.labelBold.copyWith(
-              fontSize: 12,
-              color: valueColor ?? Colors.white,
-            ),
-            maxLines: 1,
-            overflow: TextOverflow.ellipsis,
-          ),
-        ),
-      ],
-    );
-  }
-
-  Widget _buildFlowExplanation() {
-    return GlassCard(
-      padding: const EdgeInsets.all(18),
-      borderRadius: 18,
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Row(
-            children: [
-              const Icon(
-                Icons.help_outline_rounded,
-                size: 18,
-                color: AppColors.primaryLight,
               ),
-              const SizedBox(width: 8),
-              Text(
-                'Quy trình khảo thí & Công bố điểm',
-                style: AppTextStyles.labelBold.copyWith(fontSize: 13),
-              ),
-            ],
-          ),
-          const SizedBox(height: 14),
-          _buildFlowStep(
-            '1',
-            'Thi vấn đáp AI (Mobile)',
-            'Thí sinh trả lời trực tiếp các câu hỏi của AI Examiner trên ứng dụng điện thoại.',
-          ),
-          const SizedBox(height: 10),
-          _buildFlowStep(
-            '2',
-            'AI Phân tích Rubric & Điểm',
-            'Hệ thống tự động đối chiếu câu trả lời với tiêu chí Rubric và xuất đề xuất điểm.',
-          ),
-          const SizedBox(height: 10),
-          _buildFlowStep(
-            '3',
-            'Hội đồng Chốt & Công bố',
-            'Giảng viên thẩm định bài thi, điều chỉnh nếu cần và chốt điểm chính thức.',
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildFlowStep(String step, String title, String desc) {
-    return Row(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Container(
-          width: 22,
-          height: 22,
-          decoration: const BoxDecoration(
-            color: AppColors.primary,
-            shape: BoxShape.circle,
-          ),
-          child: Center(
-            child: Text(
-              step,
-              style: const TextStyle(
-                fontSize: 11,
-                fontWeight: FontWeight.bold,
-                color: Colors.white,
-              ),
-            ),
-          ),
-        ),
-        const SizedBox(width: 10),
-        Expanded(
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Text(
-                title,
-                style: AppTextStyles.labelBold.copyWith(fontSize: 12),
-              ),
-              const SizedBox(height: 2),
-              Text(
-                desc,
-                style: AppTextStyles.bodySm.copyWith(
-                  color: AppColors.textMuted,
-                  fontSize: 11,
-                  height: 1.3,
-                ),
-              ),
-            ],
-          ),
-        ),
-      ],
-    );
-  }
-
-  Widget _buildEmptyReportView(BuildContext context) {
-    return Center(
-      child: Padding(
-        padding: const EdgeInsets.all(24),
-        child: Column(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            Container(
-              width: 80,
-              height: 80,
-              decoration: BoxDecoration(
-                color: AppColors.surfaceCardHigh,
-                shape: BoxShape.circle,
-                border: Border.all(color: AppColors.borderGlass),
-              ),
-              child: const Icon(
-                Icons.description_outlined,
-                size: 40,
-                color: AppColors.textMuted,
-              ),
-            ),
-            const SizedBox(height: 18),
-            Text('Chưa có báo cáo điểm số', style: AppTextStyles.headlineMd),
-            const SizedBox(height: 8),
-            Text(
-              'Hệ thống chưa tìm thấy dữ liệu đánh giá hoặc ca thi chưa được giảng viên phê duyệt điểm.',
-              textAlign: TextAlign.center,
-              style: AppTextStyles.bodyMd.copyWith(color: AppColors.textMuted),
-            ),
-            const SizedBox(height: 24),
-            PrimaryButton(
-              text: 'Quay lại Lịch thi',
-              onPressed: () {
-                if (Navigator.of(context).canPop()) {
-                  Navigator.of(context).pop();
-                } else {
-                  Navigator.of(context).pushAndRemoveUntil(
-                    MaterialPageRoute(
-                      builder: (_) =>
-                          const MainNavigationScreen(initialIndex: 1),
-                    ),
-                    (route) => false,
-                  );
-                }
-              },
-            ),
           ],
         ),
       ),
-    );
-  }
+    const SizedBox(height: 24),
+    Text('Nhận xét AI', style: AppTextStyles.headlineMd),
+    const SizedBox(height: 12),
+    if (report.strengths.isEmpty && report.improvements.isEmpty)
+      const AppMessage(message: 'Chưa có nhận xét được ghi nhận.')
+    else
+      GlassCard(
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            if (report.strengths.isNotEmpty) ...[
+              Text('Điểm mạnh', style: AppTextStyles.labelBold),
+              const SizedBox(height: 8),
+              ...report.strengths.map(
+                (text) => Padding(
+                  padding: const EdgeInsets.only(bottom: 8),
+                  child: Text(text, style: AppTextStyles.bodyMd),
+                ),
+              ),
+            ],
+            if (report.improvements.isNotEmpty) ...[
+              Text('Cần cải thiện', style: AppTextStyles.labelBold),
+              const SizedBox(height: 8),
+              ...report.improvements.map(
+                (text) => Padding(
+                  padding: const EdgeInsets.only(bottom: 8),
+                  child: Text(text, style: AppTextStyles.bodyMd),
+                ),
+              ),
+            ],
+          ],
+        ),
+      ),
+    const SizedBox(height: 24),
+    Text('Câu hỏi và câu trả lời', style: AppTextStyles.headlineMd),
+    const SizedBox(height: 12),
+    if (report.questionReports.isEmpty)
+      const AppMessage(message: 'Chưa tải được bản ghi câu hỏi và câu trả lời.')
+    else
+      ...report.questionReports.map(
+        (question) => GlassCard(
+          margin: const EdgeInsets.only(bottom: 12),
+          padding: EdgeInsets.zero,
+          child: ExpansionTile(
+            title: Text(
+              'Câu ${question.questionNumber}${question.isFollowUp ? " · Bổ sung" : ""}',
+              style: AppTextStyles.labelBold,
+            ),
+            subtitle: Text(question.title, style: AppTextStyles.bodyMd),
+            childrenPadding: const EdgeInsets.all(16),
+            children: [
+              Text(question.fullQuestion, style: AppTextStyles.bodyMd),
+              const SizedBox(height: 16),
+              Text(
+                question.studentAnswer.isEmpty
+                    ? 'Chưa có câu trả lời được ghi nhận.'
+                    : question.studentAnswer,
+                style: AppTextStyles.bodyMd,
+              ),
+              const SizedBox(height: 16),
+              Text(
+                question.score == null
+                    ? 'Chưa đánh giá'
+                    : 'AI tham khảo: ${question.score!.toStringAsFixed(1)} / ${question.maxScore}',
+                style: AppTextStyles.bodyMd,
+              ),
+            ],
+          ),
+        ),
+      ),
+  ];
 }

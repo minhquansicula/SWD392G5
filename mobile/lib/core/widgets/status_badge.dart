@@ -2,19 +2,14 @@ import 'package:flutter/material.dart';
 import '../theme/app_colors.dart';
 import '../theme/app_text_styles.dart';
 
-enum BadgeType {
-  success,
-  warning,
-  info,
-  danger,
-  purple,
-}
+enum BadgeType { success, warning, info, danger, purple }
 
 class StatusBadge extends StatelessWidget {
   final String label;
   final BadgeType type;
   final IconData? icon;
   final bool isPill;
+  final TextStyle? textStyle;
 
   const StatusBadge({
     super.key,
@@ -22,6 +17,7 @@ class StatusBadge extends StatelessWidget {
     this.type = BadgeType.info,
     this.icon,
     this.isPill = true,
+    this.textStyle,
   });
 
   @override
@@ -75,12 +71,12 @@ class StatusBadge extends StatelessWidget {
           Flexible(
             child: Text(
               label,
-              style: AppTextStyles.labelSm.copyWith(
+              style: (textStyle ?? AppTextStyles.labelSm).copyWith(
                 color: text,
                 fontWeight: FontWeight.w600,
-                fontSize: 11,
+                fontSize: textStyle?.fontSize ?? 12,
               ),
-              maxLines: 1,
+              maxLines: 3,
               overflow: TextOverflow.ellipsis,
             ),
           ),

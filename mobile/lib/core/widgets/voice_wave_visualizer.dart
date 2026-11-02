@@ -34,7 +34,28 @@ class _VoiceWaveVisualizerState extends State<VoiceWaveVisualizer>
     _controller = AnimationController(
       vsync: this,
       duration: const Duration(milliseconds: 1200),
-    )..repeat();
+    );
+  }
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    _syncMotion();
+  }
+
+  @override
+  void didUpdateWidget(covariant VoiceWaveVisualizer oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    _syncMotion();
+  }
+
+  void _syncMotion() {
+    final animate =
+        !MediaQuery.disableAnimationsOf(context) &&
+        TickerMode.valuesOf(context).enabled &&
+        widget.isActive;
+    if (animate && !_controller.isAnimating) _controller.repeat();
+    if (!animate) _controller.stop();
   }
 
   @override
@@ -59,13 +80,20 @@ class _VoiceWaveVisualizerState extends State<VoiceWaveVisualizer>
             children: List.generate(widget.barCount, (index) {
               final progress = _controller.value;
               final wavePhase = (index / widget.barCount) * 2 * math.pi;
-              final sinValue = (math.sin(progress * 2 * math.pi + wavePhase) + 1) / 2;
+              final sinValue =
+                  (math.sin(progress * 2 * math.pi + wavePhase) + 1) / 2;
 
               final scale = widget.isActive
-                  ? 0.2 + (sinValue * 0.8 * (0.4 + widget.level.clamp(0.0, 1.0) * 0.6))
+                  ? 0.2 +
+                        (sinValue *
+                            0.8 *
+                            (0.4 + widget.level.clamp(0.0, 1.0) * 0.6))
                   : 0.15;
 
-              final barHeight = (widget.height * scale).clamp(4.0, widget.height);
+              final barHeight = (widget.height * scale).clamp(
+                4.0,
+                widget.height,
+              );
 
               return Container(
                 width: 3.5,

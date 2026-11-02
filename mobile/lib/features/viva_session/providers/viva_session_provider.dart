@@ -372,7 +372,10 @@ class VivaSessionProvider extends ChangeNotifier {
   }
 
   /// Kết thúc toàn bộ ca thi và kích hoạt AI chấm điểm Rubric
-  Future<void> finishExamSession({bool isTimeout = false, String? examScheduleId}) async {
+  Future<void> finishExamSession({
+    bool isTimeout = false,
+    String? examScheduleId,
+  }) async {
     if (!_active || _finishing || _disposed) return;
     if (examScheduleId != null && examScheduleId != _scheduleId) {
       _errorMessage = 'Mã ca thi không khớp phiên hiện tại.';
@@ -384,9 +387,6 @@ class VivaSessionProvider extends ChangeNotifier {
     final generation = _generation;
     _errorMessage = null;
     _finishTimer?.cancel();
-    _countdownTimer?.cancel();
-    _countdownTimer = null;
-    _remainingSeconds = 0;
     await _recorderService.stopRecording();
     await _playerService.stop();
     if (_disposed || generation != _generation) return;
@@ -402,10 +402,20 @@ class VivaSessionProvider extends ChangeNotifier {
       return;
     }
 
+    // Only stop the question clock once the finish command was sent.
+    _countdownTimer?.cancel();
+    _countdownTimer = null;
+    _remainingSeconds = 0;
+    _watchForFinishResult();
+  }
+
+  void _watchForFinishResult() {
+    // A server acknowledgement must not cancel or extend the existing timeout.
+    if (_finishTimer?.isActive == true) return;
     // A timeout leaves the outcome unknown; only a server report completes the exam.
     _finishTimer = Timer(_finishTimeout, () {
       if (!_disposed &&
-          _active &&
+          _finishing &&
           _sessionState != VivaSessionState.completed) {
         _errorMessage =
             'Chưa nhận được kết quả chấm điểm. Bấm kiểm tra kết quả để đối soát với máy chủ.';
@@ -479,14 +489,16 @@ class VivaSessionProvider extends ChangeNotifier {
         _currentTurnId++;
         final kind = msg['kind']?.toString() ?? msg['type']?.toString();
         final content = msg['content']?.toString() ?? '';
-        final parsedNumber = (msg['number'] is num
+        final parsedNumber =
+            (msg['number'] is num
                 ? (msg['number'] as num).toInt()
                 : int.tryParse(msg['number']?.toString() ?? '')) ??
             (msg['question_order'] is num
                 ? (msg['question_order'] as num).toInt()
                 : int.tryParse(msg['question_order']?.toString() ?? '')) ??
             (_currentQuestionIndex + 1);
-        final parsedTotal = (msg['total'] is num
+        final parsedTotal =
+            (msg['total'] is num
                 ? (msg['total'] as num).toInt()
                 : int.tryParse(msg['total']?.toString() ?? '')) ??
             (msg['max'] is num
@@ -517,7 +529,9 @@ class VivaSessionProvider extends ChangeNotifier {
         int mainIndex = -1;
         if (qId != null && qId.isNotEmpty) {
           mainIndex = _questions.indexWhere(
-            (q) => !q.isAdaptiveFollowUp && (q.id == qId || q.parentQuestionId == qId),
+            (q) =>
+                !q.isAdaptiveFollowUp &&
+                (q.id == qId || q.parentQuestionId == qId),
           );
         }
         if (mainIndex < 0) {
@@ -525,7 +539,9 @@ class VivaSessionProvider extends ChangeNotifier {
             (q) => !q.isAdaptiveFollowUp && q.questionNumber == parsedNumber,
           );
         }
-        if (mainIndex < 0 && parsedNumber >= 1 && parsedNumber <= _questions.length) {
+        if (mainIndex < 0 &&
+            parsedNumber >= 1 &&
+            parsedNumber <= _questions.length) {
           mainIndex = parsedNumber - 1;
         }
 
@@ -592,7 +608,7 @@ class VivaSessionProvider extends ChangeNotifier {
       // 3. Sự kiện Finishing từ server
       else if (type == 'finishing') {
         _finishing = true;
-        _finishTimer?.cancel();
+        _watchForFinishResult();
         _countdownTimer?.cancel();
         _countdownTimer = null;
         _remainingSeconds = 0;

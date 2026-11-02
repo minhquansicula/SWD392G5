@@ -1,358 +1,96 @@
 import 'package:flutter/material.dart';
-import 'package:intl/intl.dart';
 import 'package:provider/provider.dart';
-import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_text_styles.dart';
-import '../../../core/widgets/glass_card.dart';
-import '../../../core/widgets/status_badge.dart';
-import '../models/exam_schedule_model.dart';
-import '../providers/exam_provider.dart';
+import '../../../core/widgets/app_content.dart';
+import '../../../core/widgets/exam_card.dart';
+import '../../exam/models/exam_schedule_model.dart';
+import '../../exam/providers/exam_provider.dart';
 import 'exam_detail_checklist_screen.dart';
 import '../../report/screens/exam_result_report_screen.dart';
 
 class ExamScheduleScreen extends StatefulWidget {
   const ExamScheduleScreen({super.key});
-
   @override
   State<ExamScheduleScreen> createState() => _ExamScheduleScreenState();
 }
 
 class _ExamScheduleScreenState extends State<ExamScheduleScreen> {
-  // 0: Tất cả, 1: Sắp thi, 2: Chờ duyệt điểm, 3: Đã có điểm
-  int _selectedFilter = 0;
-
-  @override
-  void initState() {
-    super.initState();
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      final examProv = context.read<ExamProvider>();
-      if (examProv.exams.isEmpty && !examProv.isLoading) {
-        examProv.refreshExams();
-      }
-    });
-  }
-
+  int _filter = 0;
+  static const _filters = [
+    'Tất cả',
+    'Sắp/đang thi',
+    'Chờ công bố',
+    'Đã có điểm',
+  ];
+  bool _matches(ExamScheduleModel exam) => switch (_filter) {
+    1 => exam.status != ExamStatus.completed,
+    2 => exam.status == ExamStatus.completed && exam.finalScore == null,
+    3 => exam.status == ExamStatus.completed && exam.finalScore != null,
+    _ => true,
+  };
   @override
   Widget build(BuildContext context) {
-    final examProvider = context.watch<ExamProvider>();
-    final allExams = examProvider.exams;
-
-    final filteredExams = allExams.where((exam) {
-      if (_selectedFilter == 1) {
-        return exam.status == ExamStatus.upcoming || exam.status == ExamStatus.inProgress;
-      }
-      if (_selectedFilter == 2) {
-        return exam.status == ExamStatus.completed && exam.finalScore == null;
-      }
-      if (_selectedFilter == 3) {
-        return exam.status == ExamStatus.completed && exam.finalScore != null;
-      }
-      return true;
-    }).toList();
-
-    final upcomingCount = allExams.where((e) => e.status == ExamStatus.upcoming || e.status == ExamStatus.inProgress).length;
-    final pendingCount = allExams.where((e) => e.status == ExamStatus.completed && e.finalScore == null).length;
-    final gradedCount = allExams.where((e) => e.status == ExamStatus.completed && e.finalScore != null).length;
-
+    final provider = context.watch<ExamProvider>();
+    final exams = provider.exams.where(_matches).toList()
+      ..sort((a, b) => b.scheduledAt.compareTo(a.scheduledAt));
     return Scaffold(
-      backgroundColor: AppColors.background,
-      appBar: AppBar(
-        title: Text('Lịch Thi & Kết Quả', style: AppTextStyles.headlineMd),
-        actions: [
-          IconButton(
-            icon: const Icon(Icons.refresh_rounded),
-            onPressed: () => examProvider.refreshExams(),
-          ),
-        ],
-      ),
-      body: Column(
-        children: [
-          // Filter Tabs (Scrollable pills)
-          SingleChildScrollView(
-            scrollDirection: Axis.horizontal,
-            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-            child: Row(
+      body: SafeArea(
+        child: AppContent(
+          child: RefreshIndicator(
+            onRefresh: provider.refreshExams,
+            child: ListView(
+              padding: const EdgeInsets.symmetric(vertical: 24),
               children: [
-                _buildFilterTab(0, 'Tất cả (${allExams.length})'),
-                const SizedBox(width: 8),
-                _buildFilterTab(1, 'Sắp & Đang thi ($upcomingCount)'),
-                const SizedBox(width: 8),
-                _buildFilterTab(2, 'Chờ duyệt điểm ($pendingCount)'),
-                const SizedBox(width: 8),
-                _buildFilterTab(3, 'Đã có điểm ($gradedCount)'),
+                Text('Lịch thi', style: AppTextStyles.headlineLg),
+                const SizedBox(height: 8),
+                Text(
+                  'Theo dõi ca thi và điểm đã công bố.',
+                  style: AppTextStyles.bodyMd,
+                ),
+                const SizedBox(height: 16),
+                Wrap(
+                  spacing: 8,
+                  runSpacing: 8,
+                  children: [
+                    for (var i = 0; i < _filters.length; i++)
+                      ChoiceChip(
+                        label: Text(_filters[i]),
+                        selected: _filter == i,
+                        onSelected: (_) => setState(() => _filter = i),
+                      ),
+                  ],
+                ),
+                const SizedBox(height: 24),
+                if (provider.isLoading) const LinearProgressIndicator(),
+                if (provider.errorMessage != null)
+                  AppMessage(
+                    message: provider.errorMessage!,
+                    isError: true,
+                    onRetry: provider.refreshExams,
+                  )
+                else if (!provider.isLoading && exams.isEmpty)
+                  AppMessage(
+                    message: _filter == 0
+                        ? 'Bạn chưa có lịch thi.'
+                        : 'Chưa có ca thi trong mục ${_filters[_filter].toLowerCase()}.',
+                  )
+                else
+                  ...exams.map(
+                    (exam) => ExamCard(
+                      exam: exam,
+                      onOpen: () => Navigator.of(context).push(
+                        MaterialPageRoute(
+                          builder: (_) => exam.status == ExamStatus.completed
+                              ? ExamResultReportScreen(exam: exam)
+                              : ExamDetailChecklistScreen(exam: exam),
+                        ),
+                      ),
+                    ),
+                  ),
               ],
             ),
           ),
-          const SizedBox(height: 6),
-
-          // Exams List
-          Expanded(
-            child: examProvider.isLoading && allExams.isEmpty
-                ? const Center(
-                    child: CircularProgressIndicator(
-                      valueColor: AlwaysStoppedAnimation<Color>(AppColors.primaryLight),
-                    ),
-                  )
-                : filteredExams.isEmpty
-                ? Center(
-                    child: Padding(
-                      padding: const EdgeInsets.all(32),
-                      child: Column(
-                        mainAxisAlignment: MainAxisAlignment.center,
-                        children: [
-                          Icon(
-                            _selectedFilter == 3
-                                ? Icons.verified_outlined
-                                : (_selectedFilter == 2 ? Icons.hourglass_top_rounded : Icons.event_note_rounded),
-                            size: 48,
-                            color: AppColors.textDisabled,
-                          ),
-                          const SizedBox(height: 12),
-                          Text(
-                            _selectedFilter == 3
-                                ? 'Chưa có ca thi nào được duyệt điểm chính thức'
-                                : (_selectedFilter == 2
-                                    ? 'Không có ca thi nào đang chờ giảng viên duyệt'
-                                    : 'Không có kỳ thi nào trong danh mục này'),
-                            textAlign: TextAlign.center,
-                            style: AppTextStyles.bodyMd.copyWith(color: AppColors.textMuted),
-                          ),
-                        ],
-                      ),
-                    ),
-                  )
-                : ListView.builder(
-                    key: const PageStorageKey<String>('exam_schedule_list'),
-                    physics: const AlwaysScrollableScrollPhysics(),
-                    padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 8),
-                    itemCount: filteredExams.length,
-                    itemBuilder: (context, index) {
-                      final exam = filteredExams[index];
-                      return KeyedSubtree(
-                        key: ValueKey<String>('exam_${exam.id}'),
-                        child: _buildExamCard(exam),
-                      );
-                    },
-                  ),
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildFilterTab(int index, String title) {
-    final isSelected = _selectedFilter == index;
-    return GestureDetector(
-      onTap: () => setState(() => _selectedFilter = index),
-      child: AnimatedContainer(
-        duration: const Duration(milliseconds: 180),
-        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
-        decoration: BoxDecoration(
-          color: isSelected ? AppColors.primary : AppColors.surfaceCardLow,
-          borderRadius: BorderRadius.circular(20),
-          border: Border.all(
-            color: isSelected ? AppColors.primaryLight : AppColors.borderGlass,
-          ),
         ),
-        child: Text(
-          title,
-          style: AppTextStyles.labelBold.copyWith(
-            fontSize: 12,
-            color: isSelected ? Colors.white : AppColors.textMuted,
-          ),
-        ),
-      ),
-    );
-  }
-
-  Widget _buildExamCard(ExamScheduleModel exam) {
-    final isCompleted = exam.status == ExamStatus.completed;
-    final isInProgress = exam.status == ExamStatus.inProgress;
-    final isUpcoming = exam.status == ExamStatus.upcoming;
-    final isGraded = isCompleted && exam.finalScore != null;
-    final dateStr = DateFormat('dd/MM/yyyy • HH:mm').format(exam.scheduledAt);
-
-    return GlassCard(
-      margin: const EdgeInsets.only(bottom: 14),
-      padding: const EdgeInsets.all(16),
-      onTap: () {
-        if (isCompleted) {
-          Navigator.of(context).push(
-            MaterialPageRoute(
-              builder: (_) => ExamResultReportScreen(exam: exam),
-            ),
-          );
-        } else {
-          Navigator.of(context).push(
-            MaterialPageRoute(
-              builder: (_) => ExamDetailChecklistScreen(exam: exam),
-            ),
-          );
-        }
-      },
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-            children: [
-              Container(
-                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
-                decoration: BoxDecoration(
-                  color: AppColors.primary.withValues(alpha: 0.15),
-                  borderRadius: BorderRadius.circular(8),
-                ),
-                child: Text(
-                  exam.courseCode,
-                  style: AppTextStyles.labelBold.copyWith(color: AppColors.primaryLight),
-                ),
-              ),
-              if (isInProgress)
-                const StatusBadge(
-                  label: 'Đang diễn ra',
-                  type: BadgeType.purple,
-                  icon: Icons.sensors_rounded,
-                )
-              else if (isUpcoming)
-                const StatusBadge(
-                  label: 'Sắp diễn ra',
-                  type: BadgeType.warning,
-                  icon: Icons.schedule_rounded,
-                )
-              else if (isGraded)
-                const StatusBadge(
-                  label: 'Đã duyệt điểm',
-                  type: BadgeType.success,
-                  icon: Icons.verified_rounded,
-                )
-              else
-                const StatusBadge(
-                  label: 'Chờ GV duyệt',
-                  type: BadgeType.warning,
-                  icon: Icons.hourglass_top_rounded,
-                ),
-            ],
-          ),
-          const SizedBox(height: 10),
-          Text(exam.courseName, style: AppTextStyles.headlineMd.copyWith(fontSize: 17)),
-          const SizedBox(height: 4),
-          Text(exam.examTitle, style: AppTextStyles.bodySm.copyWith(color: AppColors.textSecondary)),
-          const SizedBox(height: 12),
-          const Divider(color: AppColors.borderGlass),
-          const SizedBox(height: 8),
-
-          // Date & Room info
-          Row(
-            children: [
-              const Icon(Icons.meeting_room_outlined, size: 16, color: AppColors.textMuted),
-              const SizedBox(width: 6),
-              Expanded(
-                child: Text(exam.room, style: AppTextStyles.bodySm, overflow: TextOverflow.ellipsis),
-              ),
-              const Icon(Icons.calendar_today_rounded, size: 14, color: AppColors.textMuted),
-              const SizedBox(width: 6),
-              Text(dateStr, style: AppTextStyles.bodySm),
-            ],
-          ),
-
-          // Action Row based on status
-          const SizedBox(height: 12),
-          if (isInProgress || isUpcoming) ...[
-            SizedBox(
-              width: double.infinity,
-              height: 38,
-              child: ElevatedButton.icon(
-                onPressed: () {
-                  Navigator.of(context).push(
-                    MaterialPageRoute(
-                      builder: (_) => ExamDetailChecklistScreen(exam: exam),
-                    ),
-                  );
-                },
-                icon: Icon(isInProgress ? Icons.sensors_rounded : Icons.mic_none_rounded, size: 18),
-                label: Text(
-                  isInProgress ? 'Tiếp tục vào phòng thi' : 'Xem điều kiện & Vào thi',
-                  style: const TextStyle(fontSize: 13),
-                ),
-                style: ElevatedButton.styleFrom(
-                  backgroundColor: isInProgress ? AppColors.secondary : AppColors.primary,
-                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
-                ),
-              ),
-            ),
-          ] else if (isGraded) ...[
-            Container(
-              padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
-              decoration: BoxDecoration(
-                color: AppColors.surfaceCardHigh,
-                borderRadius: BorderRadius.circular(12),
-                border: Border.all(color: AppColors.primaryLight.withValues(alpha: 0.35)),
-              ),
-              child: Row(
-                children: [
-                  Expanded(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text('Điểm chính thức:', style: AppTextStyles.labelSm.copyWith(color: AppColors.textMuted)),
-                        const SizedBox(height: 2),
-                        Text(
-                          '${exam.finalScore} / 10',
-                          style: AppTextStyles.headlineMd.copyWith(
-                            color: AppColors.primaryLight,
-                            fontWeight: FontWeight.w800,
-                          ),
-                        ),
-                      ],
-                    ),
-                  ),
-                  const SizedBox(width: 8),
-                  ElevatedButton.icon(
-                    onPressed: () {
-                      Navigator.of(context).push(
-                        MaterialPageRoute(
-                          builder: (_) => ExamResultReportScreen(exam: exam),
-                        ),
-                      );
-                    },
-                    icon: const Icon(Icons.analytics_outlined, size: 16),
-                    label: const Text('Xem nhận xét', style: TextStyle(fontSize: 12)),
-                    style: ElevatedButton.styleFrom(
-                      backgroundColor: AppColors.primary,
-                      foregroundColor: Colors.white,
-                      minimumSize: Size.zero,
-                      tapTargetSize: MaterialTapTargetSize.shrinkWrap,
-                      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
-                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
-                    ),
-                  ),
-                ],
-              ),
-            ),
-          ] else ...[
-            // Completed but waiting for lecturer approval
-            Container(
-              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
-              decoration: BoxDecoration(
-                color: AppColors.warning.withValues(alpha: 0.1),
-                borderRadius: BorderRadius.circular(12),
-                border: Border.all(color: AppColors.warning.withValues(alpha: 0.3)),
-              ),
-              child: Row(
-                children: [
-                  const Icon(Icons.hourglass_top_rounded, size: 18, color: AppColors.warning),
-                  const SizedBox(width: 8),
-                  Expanded(
-                    child: Text(
-                      'Đã thi xong. Giảng viên đang xem lại ghi âm và chốt điểm chính thức.',
-                      style: AppTextStyles.bodySm.copyWith(color: AppColors.warning, fontSize: 11),
-                    ),
-                  ),
-                ],
-              ),
-            ),
-          ],
-        ],
       ),
     );
   }

@@ -1,11 +1,9 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:provider/provider.dart';
-import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_text_styles.dart';
-import '../../../core/widgets/glass_card.dart';
 import '../../../core/widgets/primary_button.dart';
-import '../../../core/widgets/status_badge.dart';
+import '../../../core/widgets/app_content.dart';
 import '../models/password_link_model.dart';
 import '../providers/auth_provider.dart';
 
@@ -96,7 +94,8 @@ class _ForgotPasswordScreenState extends State<ForgotPasswordScreen>
     final email = _emailController.text.trim();
     if (email.isEmpty) {
       setState(() {
-        _sendEmailErrorMessage = 'Vui lòng nhập địa chỉ Email tài khoản của bạn';
+        _sendEmailErrorMessage =
+            'Vui lòng nhập địa chỉ Email tài khoản của bạn';
         _sendEmailSuccessMessage = null;
       });
       return;
@@ -240,747 +239,198 @@ class _ForgotPasswordScreenState extends State<ForgotPasswordScreen>
   }
 
   @override
-  Widget build(BuildContext context) {
-    return Scaffold(
-      backgroundColor: AppColors.background,
-      appBar: AppBar(
-        backgroundColor: Colors.transparent,
-        elevation: 0,
-        title: Text(
-          widget.isFromProfile ? 'Đổi & Cập Nhật Mật Khẩu' : 'Khôi Phục Mật Khẩu',
-          style: AppTextStyles.headlineMd.copyWith(fontSize: 18),
+  Widget build(BuildContext context) => Scaffold(
+    appBar: AppBar(
+      title: Text(widget.isFromProfile ? 'Đổi mật khẩu' : 'Khôi phục mật khẩu'),
+    ),
+    body: SafeArea(
+      child: AppContent(
+        child: Column(
+          children: [
+            if (!_isSuccessCompleted)
+              TabBar(
+                controller: _tabController,
+                isScrollable: true,
+                tabAlignment: TabAlignment.start,
+                tabs: const [
+                  Tab(text: '1. Gửi email'),
+                  Tab(text: '2. Đặt mật khẩu'),
+                ],
+              ),
+            Expanded(
+              child: _isSuccessCompleted
+                  ? ListView(
+                      padding: const EdgeInsets.symmetric(vertical: 24),
+                      children: [
+                        const AppMessage(
+                          message:
+                              'Mật khẩu đã được cập nhật. Vui lòng đăng nhập bằng mật khẩu mới.',
+                        ),
+                        const SizedBox(height: 16),
+                        PrimaryButton(
+                          text: 'Quay lại',
+                          onPressed: () => Navigator.of(context).pop(),
+                        ),
+                      ],
+                    )
+                  : TabBarView(
+                      controller: _tabController,
+                      children: [_requestForm(), _passwordForm()],
+                    ),
+            ),
+          ],
         ),
-        leading: IconButton(
-          icon: const Icon(Icons.arrow_back_ios_new_rounded, size: 20, color: Colors.white),
-          onPressed: () => Navigator.of(context).pop(),
+      ),
+    ),
+  );
+
+  Widget _requestForm() => ListView(
+    padding: const EdgeInsets.symmetric(vertical: 24),
+    children: [
+      Text('Nhận liên kết khôi phục', style: AppTextStyles.headlineMd),
+      const SizedBox(height: 12),
+      Text(
+        'Nhập email tài khoản của bạn. Kiểm tra cả hộp thư rác sau khi gửi yêu cầu.',
+        style: AppTextStyles.bodyMd,
+      ),
+      const SizedBox(height: 24),
+      TextField(
+        controller: _emailController,
+        enabled: !_isSendingEmail,
+        autofillHints: const [AutofillHints.email],
+        keyboardType: TextInputType.emailAddress,
+        textInputAction: TextInputAction.done,
+        onSubmitted: (_) {
+          if (!_isSendingEmail) _handleSendResetLink();
+        },
+        decoration: InputDecoration(
+          labelText: 'Email tài khoản',
+          errorText: _sendEmailErrorMessage,
+          errorMaxLines: 5,
         ),
       ),
-      body: Stack(
-        children: [
-          // Ambient Glow Background
-          Positioned(
-            top: -60,
-            left: -40,
-            child: Container(
-              width: 260,
-              height: 260,
-              decoration: BoxDecoration(
-                shape: BoxShape.circle,
-                color: AppColors.primary.withValues(alpha: 0.18),
-              ),
-            ),
-          ),
-          Positioned(
-            bottom: -50,
-            right: -50,
-            child: Container(
-              width: 240,
-              height: 240,
-              decoration: BoxDecoration(
-                shape: BoxShape.circle,
-                color: AppColors.secondary.withValues(alpha: 0.14),
-              ),
-            ),
-          ),
-
-          SafeArea(
-            child: _isSuccessCompleted
-                ? _buildSuccessView()
-                : Column(
-                    children: [
-                      const SizedBox(height: 8),
-                      // Custom Tab Selector
-                      Padding(
-                        padding: const EdgeInsets.symmetric(horizontal: 20),
-                        child: Container(
-                          padding: const EdgeInsets.all(4),
-                          decoration: BoxDecoration(
-                            color: AppColors.surfaceCardHigh,
-                            borderRadius: BorderRadius.circular(16),
-                            border: Border.all(color: AppColors.borderGlass),
-                          ),
-                          child: TabBar(
-                            controller: _tabController,
-                            indicator: BoxDecoration(
-                              gradient: AppColors.primaryGradient,
-                              borderRadius: BorderRadius.circular(12),
-                              boxShadow: [
-                                BoxShadow(
-                                  color: AppColors.primary.withValues(alpha: 0.35),
-                                  blurRadius: 10,
-                                  offset: const Offset(0, 2),
-                                ),
-                              ],
-                            ),
-                            labelColor: Colors.white,
-                            unselectedLabelColor: AppColors.textMuted,
-                            labelStyle: AppTextStyles.labelBold.copyWith(fontSize: 12),
-                            unselectedLabelStyle: AppTextStyles.labelSm.copyWith(fontSize: 12),
-                            dividerColor: Colors.transparent,
-                            tabs: const [
-                              Tab(
-                                icon: Icon(Icons.mark_email_read_rounded, size: 18),
-                                text: '1. Gửi Link Email',
-                              ),
-                              Tab(
-                                icon: Icon(Icons.lock_reset_rounded, size: 18),
-                                text: '2. Đặt Lại Mật Khẩu',
-                              ),
-                            ],
-                          ),
-                        ),
-                      ),
-
-                      const SizedBox(height: 12),
-
-                      Expanded(
-                        child: TabBarView(
-                          controller: _tabController,
-                          children: [
-                            _buildTabRequestReset(),
-                            _buildTabSetNewPassword(),
-                          ],
-                        ),
-                      ),
-                    ],
-                  ),
-          ),
-        ],
+      const SizedBox(height: 16),
+      PrimaryButton(
+        text: 'Gửi liên kết',
+        icon: Icons.mail_outline,
+        isLoading: _isSendingEmail,
+        onPressed: _handleSendResetLink,
       ),
-    );
-  }
+      if (_sendEmailSuccessMessage != null)
+        Padding(
+          padding: const EdgeInsets.only(top: 16),
+          child: AppMessage(message: _sendEmailSuccessMessage!),
+        ),
+    ],
+  );
 
-  // ==========================================
-  // TAB 1: YÊU CẦU LINK GỬI QUA EMAIL
-  // ==========================================
-  Widget _buildTabRequestReset() {
-    return SingleChildScrollView(
-      padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.stretch,
-        children: [
-          GlassCard(
-            padding: const EdgeInsets.all(22),
-            borderRadius: 22,
-            border: Border.all(color: AppColors.borderGlass),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Row(
-                  children: [
-                    Container(
-                      padding: const EdgeInsets.all(10),
-                      decoration: BoxDecoration(
-                        color: AppColors.primary.withValues(alpha: 0.15),
-                        borderRadius: BorderRadius.circular(12),
-                      ),
-                      child: const Icon(Icons.alternate_email_rounded,
-                          color: AppColors.primaryLight, size: 22),
-                    ),
-                    const SizedBox(width: 12),
-                    Expanded(
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Text(
-                            'Quên mật khẩu đăng nhập?',
-                            style: AppTextStyles.headlineMd.copyWith(fontSize: 16),
-                          ),
-                          const SizedBox(height: 2),
-                          Text(
-                            'Hệ thống sẽ gửi link một lần đến email của bạn',
-                            style: AppTextStyles.bodySm
-                                .copyWith(color: AppColors.textMuted, fontSize: 11),
-                          ),
-                        ],
-                      ),
-                    ),
-                  ],
-                ),
-                const SizedBox(height: 20),
-
-                Text(
-                  'Email FPT hoặc Email Tài Khoản',
-                  style: AppTextStyles.labelBold.copyWith(fontSize: 12),
-                ),
-                const SizedBox(height: 8),
-                TextField(
-                  controller: _emailController,
-                  keyboardType: TextInputType.emailAddress,
-                  style: AppTextStyles.bodyMd.copyWith(color: Colors.white),
-                  decoration: InputDecoration(
-                    hintText: 'ví dụ: student@fpt.edu.vn',
-                    prefixIcon: const Icon(Icons.email_outlined,
-                        color: AppColors.primaryLight, size: 20),
-                    suffixIcon: _emailController.text.isNotEmpty
-                        ? IconButton(
-                            icon: const Icon(Icons.clear_rounded,
-                                size: 18, color: AppColors.textMuted),
-                            onPressed: () {
-                              _emailController.clear();
-                              setState(() {});
-                            },
-                          )
-                        : null,
-                  ),
-                ),
-
-                const SizedBox(height: 16),
-
-                // Error alert
-                if (_sendEmailErrorMessage != null) ...[
-                  Container(
-                    padding: const EdgeInsets.all(12),
-                    decoration: BoxDecoration(
-                      color: AppColors.danger.withValues(alpha: 0.15),
-                      borderRadius: BorderRadius.circular(12),
-                      border: Border.all(
-                          color: AppColors.danger.withValues(alpha: 0.3)),
-                    ),
-                    child: Row(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        const Icon(Icons.error_outline_rounded,
-                            color: AppColors.danger, size: 18),
-                        const SizedBox(width: 10),
-                        Expanded(
-                          child: Text(
-                            _sendEmailErrorMessage!,
-                            style: AppTextStyles.bodySm
-                                .copyWith(color: AppColors.danger, fontSize: 12),
-                          ),
-                        ),
-                      ],
-                    ),
-                  ),
-                  const SizedBox(height: 16),
-                ],
-
-                // Success alert
-                if (_sendEmailSuccessMessage != null) ...[
-                  Container(
-                    padding: const EdgeInsets.all(14),
-                    decoration: BoxDecoration(
-                      color: AppColors.success.withValues(alpha: 0.15),
-                      borderRadius: BorderRadius.circular(14),
-                      border: Border.all(
-                          color: AppColors.success.withValues(alpha: 0.3)),
-                    ),
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Row(
-                          children: [
-                            const Icon(Icons.check_circle_rounded,
-                                color: AppColors.success, size: 20),
-                            const SizedBox(width: 8),
-                            Text(
-                              'Đã gửi yêu cầu thành công',
-                              style: AppTextStyles.labelBold.copyWith(
-                                color: AppColors.success,
-                                fontSize: 13,
-                              ),
-                            ),
-                          ],
-                        ),
-                        const SizedBox(height: 6),
-                        Text(
-                          _sendEmailSuccessMessage!,
-                          style: AppTextStyles.bodySm.copyWith(
-                            color: AppColors.textSecondary,
-                            fontSize: 12,
-                            height: 1.4,
-                          ),
-                        ),
-                        const SizedBox(height: 12),
-                        InkWell(
-                          onTap: () {
-                            _tabController.animateTo(1);
-                          },
-                          child: Container(
-                            padding: const EdgeInsets.symmetric(
-                                horizontal: 12, vertical: 8),
-                            decoration: BoxDecoration(
-                              color: AppColors.success.withValues(alpha: 0.2),
-                              borderRadius: BorderRadius.circular(8),
-                            ),
-                            child: Row(
-                              mainAxisSize: MainAxisSize.min,
-                              children: [
-                                Text(
-                                  'Chuyển sang Bước 2: Đặt Lại Mật Khẩu',
-                                  style: AppTextStyles.labelBold.copyWith(
-                                    color: Colors.white,
-                                    fontSize: 12,
-                                  ),
-                                ),
-                                const SizedBox(width: 6),
-                                const Icon(Icons.arrow_forward_rounded,
-                                    color: Colors.white, size: 16),
-                              ],
-                            ),
-                          ),
-                        ),
-                      ],
-                    ),
-                  ),
-                  const SizedBox(height: 16),
-                ],
-
-                PrimaryButton(
-                  text: 'Gửi Link Đặt Lại Mật Khẩu',
-                  icon: Icons.send_rounded,
-                  isLoading: _isSendingEmail,
-                  onPressed: _handleSendResetLink,
-                ),
-              ],
-            ),
-          ),
-          const SizedBox(height: 16),
-
-          // Security Tips Card
-          GlassCard(
-            padding: const EdgeInsets.all(16),
-            borderRadius: 16,
-            child: Row(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                const Icon(Icons.shield_outlined,
-                    color: AppColors.primaryLight, size: 20),
-                const SizedBox(width: 12),
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(
-                        'Cơ chế bảo mật link dùng 1 lần',
-                        style: AppTextStyles.labelBold.copyWith(fontSize: 13),
-                      ),
-                      const SizedBox(height: 4),
-                      Text(
-                        'Link và Token đặt lại mật khẩu có thời hạn sử dụng và sẽ bị hủy ngay sau khi bạn đổi mật khẩu thành công.',
-                        style: AppTextStyles.bodySm
-                            .copyWith(color: AppColors.textMuted, fontSize: 11),
-                      ),
-                    ],
-                  ),
-                ),
-              ],
-            ),
-          ),
-        ],
+  Widget _passwordForm() => ListView(
+    padding: const EdgeInsets.symmetric(vertical: 24),
+    children: [
+      Text('Đặt mật khẩu mới', style: AppTextStyles.headlineMd),
+      const SizedBox(height: 12),
+      Text(
+        'Dán liên kết hoặc mã xác nhận nhận được từ email.',
+        style: AppTextStyles.bodyMd,
       ),
-    );
-  }
-
-  // ==========================================
-  // TAB 2: ĐẶT LẠI MẬT KHẨU BẰNG TOKEN
-  // ==========================================
-  Widget _buildTabSetNewPassword() {
-    final eval = PasswordPolicyUtils.evaluatePassword(_newPasswordController.text);
-    final passwordsMatch = _newPasswordController.text.isNotEmpty &&
-        _newPasswordController.text == _confirmPasswordController.text;
-
-    return SingleChildScrollView(
-      padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.stretch,
-        children: [
-          // Step 2A: Token Input & Verification
-          GlassCard(
-            padding: const EdgeInsets.all(20),
-            borderRadius: 20,
-            border: Border.all(
-              color: _verifiedLinkInfo != null
-                  ? AppColors.success.withValues(alpha: 0.5)
-                  : AppColors.borderGlass,
-            ),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Row(
-                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                  children: [
-                    Text(
-                      'Mã Token hoặc Link từ Email',
-                      style: AppTextStyles.labelBold.copyWith(fontSize: 12),
-                    ),
-                    TextButton.icon(
-                      onPressed: _pasteFromClipboard,
-                      style: TextButton.styleFrom(
-                        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
-                        minimumSize: Size.zero,
-                        tapTargetSize: MaterialTapTargetSize.shrinkWrap,
-                      ),
-                      icon: const Icon(Icons.content_paste_rounded,
-                          size: 14, color: AppColors.primaryLight),
-                      label: Text(
-                        'Dán mã / link',
-                        style: AppTextStyles.labelSm
-                            .copyWith(color: AppColors.primaryLight),
-                      ),
-                    ),
-                  ],
-                ),
-                const SizedBox(height: 8),
-
-                TextField(
-                  controller: _tokenController,
-                  style: AppTextStyles.bodySm.copyWith(
-                    color: Colors.white,
-                    fontFamily: 'monospace',
-                  ),
-                  decoration: InputDecoration(
-                    hintText: 'Dán link hoặc mã token nhận được từ email...',
-                    hintStyle: AppTextStyles.bodySm
-                        .copyWith(color: AppColors.textMuted, fontSize: 11),
-                    prefixIcon: const Icon(Icons.key_rounded,
-                        color: AppColors.primaryLight, size: 20),
-                    suffixIcon: _isCheckingToken
-                        ? const Padding(
-                            padding: EdgeInsets.all(12),
-                            child: SizedBox(
-                              width: 16,
-                              height: 16,
-                              child: CircularProgressIndicator(
-                                strokeWidth: 2,
-                                valueColor: AlwaysStoppedAnimation<Color>(
-                                    AppColors.primaryLight),
-                              ),
-                            ),
-                          )
-                        : IconButton(
-                            icon: const Icon(Icons.arrow_circle_right_rounded,
-                                color: AppColors.primaryLight, size: 24),
-                            onPressed: _validateToken,
-                            tooltip: 'Kiểm tra mã',
-                          ),
-                  ),
-                  onSubmitted: (_) => _validateToken(),
-                ),
-
-                // Error checking token
-                if (_tokenError != null) ...[
-                  const SizedBox(height: 10),
-                  Container(
-                    padding: const EdgeInsets.all(10),
-                    decoration: BoxDecoration(
-                      color: AppColors.danger.withValues(alpha: 0.12),
-                      borderRadius: BorderRadius.circular(10),
-                      border: Border.all(
-                          color: AppColors.danger.withValues(alpha: 0.25)),
-                    ),
-                    child: Row(
-                      children: [
-                        const Icon(Icons.warning_amber_rounded,
-                            color: AppColors.danger, size: 16),
-                        const SizedBox(width: 8),
-                        Expanded(
-                          child: Text(
-                            _tokenError!,
-                            style: AppTextStyles.bodySm
-                                .copyWith(color: AppColors.danger, fontSize: 11),
-                          ),
-                        ),
-                      ],
-                    ),
-                  ),
-                ],
-
-                // Verified account info card
-                if (_verifiedLinkInfo != null) ...[
-                  const SizedBox(height: 12),
-                  Container(
-                    padding: const EdgeInsets.all(12),
-                    decoration: BoxDecoration(
-                      color: AppColors.success.withValues(alpha: 0.1),
-                      borderRadius: BorderRadius.circular(12),
-                      border: Border.all(
-                          color: AppColors.success.withValues(alpha: 0.3)),
-                    ),
-                    child: Row(
-                      children: [
-                        Container(
-                          padding: const EdgeInsets.all(8),
-                          decoration: const BoxDecoration(
-                            shape: BoxShape.circle,
-                            color: AppColors.success,
-                          ),
-                          child: const Icon(Icons.verified_user_rounded,
-                              size: 16, color: Colors.white),
-                        ),
-                        const SizedBox(width: 12),
-                        Expanded(
-                          child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              Text(
-                                _verifiedLinkInfo!.fullName,
-                                style: AppTextStyles.labelBold.copyWith(
-                                  color: Colors.white,
-                                  fontSize: 13,
-                                ),
-                              ),
-                              Text(
-                                _verifiedLinkInfo!.email,
-                                style: AppTextStyles.bodySm.copyWith(
-                                  color: AppColors.textMuted,
-                                  fontSize: 11,
-                                ),
-                              ),
-                            ],
-                          ),
-                        ),
-                        StatusBadge(
-                          label: _verifiedLinkInfo!.activation
-                              ? 'KÍCH HOẠT'
-                              : 'HỢP LỆ',
-                          type: BadgeType.success,
-                        ),
-                      ],
-                    ),
-                  ),
-                ],
-              ],
-            ),
-          ),
-
-          const SizedBox(height: 16),
-
-          // Step 2B: New Password Form
-          GlassCard(
-            padding: const EdgeInsets.all(20),
-            borderRadius: 20,
-            border: Border.all(color: AppColors.borderGlass),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  'Mật khẩu mới',
-                  style: AppTextStyles.labelBold.copyWith(fontSize: 12),
-                ),
-                const SizedBox(height: 8),
-                TextField(
-                  controller: _newPasswordController,
-                  obscureText: _obscureNewPass,
-                  style: AppTextStyles.bodyMd.copyWith(color: Colors.white),
-                  decoration: InputDecoration(
-                    hintText: 'Nhập ít nhất 8 ký tự...',
-                    prefixIcon: const Icon(Icons.lock_outline_rounded,
-                        color: AppColors.primaryLight, size: 20),
-                    suffixIcon: IconButton(
-                      icon: Icon(
-                        _obscureNewPass
-                            ? Icons.visibility_off_rounded
-                            : Icons.visibility_rounded,
-                        color: AppColors.textMuted,
-                        size: 20,
-                      ),
-                      onPressed: () =>
-                          setState(() => _obscureNewPass = !_obscureNewPass),
-                    ),
-                  ),
-                ),
-
-                // Password strength meter
-                if (_newPasswordController.text.isNotEmpty) ...[
-                  const SizedBox(height: 8),
-                  Row(
-                    children: [
-                      Expanded(
-                        child: ClipRRect(
-                          borderRadius: BorderRadius.circular(4),
-                          child: LinearProgressIndicator(
-                            value: eval.strengthScore,
-                            minHeight: 4,
-                            backgroundColor: AppColors.surfaceCardHigh,
-                            valueColor: AlwaysStoppedAnimation<Color>(
-                              eval.strengthScore >= 0.8
-                                  ? AppColors.success
-                                  : eval.strengthScore >= 0.6
-                                      ? AppColors.primaryLight
-                                      : eval.strengthScore >= 0.4
-                                          ? AppColors.warning
-                                          : AppColors.danger,
-                            ),
-                          ),
-                        ),
-                      ),
-                      const SizedBox(width: 10),
-                      Text(
-                        'Độ mạnh: ${eval.strengthLabel}',
-                        style: AppTextStyles.labelSm.copyWith(
-                          fontSize: 11,
-                          color: eval.strengthScore >= 0.6
-                              ? AppColors.success
-                              : AppColors.textMuted,
-                        ),
-                      ),
-                    ],
-                  ),
-                ],
-
-                const SizedBox(height: 16),
-
-                Text(
-                  'Nhập lại mật khẩu mới',
-                  style: AppTextStyles.labelBold.copyWith(fontSize: 12),
-                ),
-                const SizedBox(height: 8),
-                TextField(
-                  controller: _confirmPasswordController,
-                  obscureText: _obscureConfirmPass,
-                  style: AppTextStyles.bodyMd.copyWith(color: Colors.white),
-                  decoration: InputDecoration(
-                    hintText: 'Xác nhận lại mật khẩu...',
-                    prefixIcon: const Icon(Icons.lock_clock_outlined,
-                        color: AppColors.primaryLight, size: 20),
-                    suffixIcon: IconButton(
-                      icon: Icon(
-                        _obscureConfirmPass
-                            ? Icons.visibility_off_rounded
-                            : Icons.visibility_rounded,
-                        color: AppColors.textMuted,
-                        size: 20,
-                      ),
-                      onPressed: () => setState(
-                          () => _obscureConfirmPass = !_obscureConfirmPass),
-                    ),
-                  ),
-                ),
-
-                if (_confirmPasswordController.text.isNotEmpty) ...[
-                  const SizedBox(height: 6),
-                  Row(
-                    children: [
-                      Icon(
-                        passwordsMatch
-                            ? Icons.check_circle_outline_rounded
-                            : Icons.highlight_off_rounded,
-                        size: 14,
-                        color: passwordsMatch
-                            ? AppColors.success
-                            : AppColors.danger,
-                      ),
-                      const SizedBox(width: 6),
-                      Text(
-                        passwordsMatch
-                            ? 'Mật khẩu trùng khớp'
-                            : 'Mật khẩu nhập lại chưa khớp',
-                        style: AppTextStyles.bodySm.copyWith(
-                          fontSize: 11,
-                          color: passwordsMatch
-                            ? AppColors.success
-                            : AppColors.danger,
-                        ),
-                      ),
-                    ],
-                  ),
-                ],
-
-                // Error message
-                if (_setPasswordError != null) ...[
-                  const SizedBox(height: 14),
-                  Container(
-                    padding: const EdgeInsets.all(10),
-                    decoration: BoxDecoration(
-                      color: AppColors.danger.withValues(alpha: 0.15),
-                      borderRadius: BorderRadius.circular(10),
-                      border: Border.all(
-                          color: AppColors.danger.withValues(alpha: 0.3)),
-                    ),
-                    child: Row(
-                      children: [
-                        const Icon(Icons.error_outline_rounded,
-                            color: AppColors.danger, size: 18),
-                        const SizedBox(width: 8),
-                        Expanded(
-                          child: Text(
-                            _setPasswordError!,
-                            style: AppTextStyles.bodySm.copyWith(
-                                color: AppColors.danger, fontSize: 11),
-                          ),
-                        ),
-                      ],
-                    ),
-                  ),
-                ],
-
-                const SizedBox(height: 20),
-
-                PrimaryButton(
-                  text: 'Lưu & Cập Nhật Mật Khẩu',
-                  icon: Icons.check_rounded,
-                  isLoading: _isSubmittingNewPass,
-                  onPressed: _handleSetPassword,
-                ),
-              ],
-            ),
-          ),
-          const SizedBox(height: 24),
-        ],
+      const SizedBox(height: 16),
+      TextField(
+        controller: _tokenController,
+        enabled: !_isCheckingToken && !_isSubmittingNewPass,
+        autocorrect: false,
+        enableSuggestions: false,
+        onChanged: (_) => setState(() => _verifiedLinkInfo = null),
+        decoration: InputDecoration(
+          labelText: 'Liên kết hoặc mã xác nhận',
+          errorText: _tokenError,
+          errorMaxLines: 5,
+        ),
+        onSubmitted: (_) {
+          if (!_isCheckingToken) _validateToken();
+        },
       ),
-    );
-  }
-
-  // ==========================================
-  // VIEW: KHI CẬP NHẬT MẬT KHẨU THÀNH CÔNG
-  // ==========================================
-  Widget _buildSuccessView() {
-    return Center(
-      child: SingleChildScrollView(
-        padding: const EdgeInsets.symmetric(horizontal: 24),
-        child: GlassCard(
-          padding: const EdgeInsets.all(28),
-          borderRadius: 24,
-          border: Border.all(color: AppColors.success.withValues(alpha: 0.4)),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              Container(
-                width: 76,
-                height: 76,
-                decoration: BoxDecoration(
-                  shape: BoxShape.circle,
-                  color: AppColors.success.withValues(alpha: 0.15),
-                  border: Border.all(color: AppColors.success, width: 2),
-                ),
-                child: const Icon(
-                  Icons.check_rounded,
-                  size: 44,
-                  color: AppColors.success,
-                ),
-              ),
-              const SizedBox(height: 20),
-              Text(
-                'Đặt Mật Khẩu Thành Công!',
-                textAlign: TextAlign.center,
-                style: AppTextStyles.headlineMd.copyWith(
-                  color: Colors.white,
-                  fontSize: 20,
-                ),
-              ),
-              const SizedBox(height: 8),
-              Text(
-                'Mật khẩu mới của bạn đã được cập nhật an toàn vào hệ thống máy chủ AIVES. Bây giờ bạn có thể đăng nhập bằng mật khẩu mới này.',
-                textAlign: TextAlign.center,
-                style: AppTextStyles.bodySm.copyWith(
-                  color: AppColors.textSecondary,
-                  height: 1.5,
-                ),
-              ),
-              const SizedBox(height: 24),
-              PrimaryButton(
-                text: widget.isFromProfile ? 'Hoàn tất' : 'Đăng Nhập Ngay',
-                icon: Icons.arrow_forward_rounded,
-                onPressed: () {
-                  Navigator.of(context).pop(true);
-                },
-              ),
-            ],
+      const SizedBox(height: 8),
+      TextButton.icon(
+        onPressed: _isCheckingToken || _isSubmittingNewPass
+            ? null
+            : _pasteFromClipboard,
+        icon: const Icon(Icons.content_paste),
+        label: const Text('Dán từ bộ nhớ tạm'),
+      ),
+      PrimaryButton(
+        text: 'Kiểm tra mã',
+        isOutlined: true,
+        isLoading: _isCheckingToken,
+        onPressed: _isSubmittingNewPass ? null : _validateToken,
+      ),
+      if (_verifiedLinkInfo != null) ...[
+        const SizedBox(height: 16),
+        AppMessage(
+          message: 'Đã xác nhận tài khoản ${_verifiedLinkInfo!.email}',
+        ),
+      ],
+      const SizedBox(height: 24),
+      TextField(
+        controller: _newPasswordController,
+        obscureText: _obscureNewPass,
+        enabled: !_isSubmittingNewPass,
+        autofillHints: const [AutofillHints.newPassword],
+        autocorrect: false,
+        enableSuggestions: false,
+        decoration: InputDecoration(
+          labelText: 'Mật khẩu mới',
+          helperText: 'Tối thiểu 8 ký tự, tối đa 72 byte UTF-8.',
+          helperMaxLines: 3,
+          suffixIcon: IconButton(
+            tooltip: _obscureNewPass ? 'Hiện mật khẩu mới' : 'Ẩn mật khẩu mới',
+            onPressed: () => setState(() => _obscureNewPass = !_obscureNewPass),
+            icon: Icon(
+              _obscureNewPass
+                  ? Icons.visibility_outlined
+                  : Icons.visibility_off_outlined,
+            ),
           ),
         ),
       ),
-    );
-  }
+      const SizedBox(height: 16),
+      TextField(
+        controller: _confirmPasswordController,
+        obscureText: _obscureConfirmPass,
+        enabled: !_isSubmittingNewPass,
+        autofillHints: const [AutofillHints.newPassword],
+        autocorrect: false,
+        enableSuggestions: false,
+        textInputAction: TextInputAction.done,
+        onSubmitted: (_) {
+          if (!_isSubmittingNewPass && _verifiedLinkInfo != null) {
+            _handleSetPassword();
+          }
+        },
+        decoration: InputDecoration(
+          labelText: 'Nhập lại mật khẩu',
+          errorText: _setPasswordError,
+          errorMaxLines: 5,
+          suffixIcon: IconButton(
+            tooltip: _obscureConfirmPass
+                ? 'Hiện mật khẩu xác nhận'
+                : 'Ẩn mật khẩu xác nhận',
+            onPressed: () =>
+                setState(() => _obscureConfirmPass = !_obscureConfirmPass),
+            icon: Icon(
+              _obscureConfirmPass
+                  ? Icons.visibility_outlined
+                  : Icons.visibility_off_outlined,
+            ),
+          ),
+        ),
+      ),
+      const SizedBox(height: 24),
+      PrimaryButton(
+        text: 'Lưu mật khẩu',
+        icon: Icons.lock_outline,
+        isLoading: _isSubmittingNewPass,
+        onPressed: _verifiedLinkInfo != null ? _handleSetPassword : null,
+      ),
+    ],
+  );
 }
