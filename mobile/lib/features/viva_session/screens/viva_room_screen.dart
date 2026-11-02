@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:math' as math;
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../../../core/network/api_client.dart';
@@ -353,7 +354,9 @@ class _VivaRoomScreenState extends State<VivaRoomScreen>
       child: Scaffold(
         backgroundColor: AppColors.surfaceDeep,
         body: SafeArea(
-          child: Column(
+          child: Stack(
+            children: [
+              Column(
             children: [
               if (_startError != null || viva.errorMessage != null)
                 Padding(
@@ -487,16 +490,25 @@ class _VivaRoomScreenState extends State<VivaRoomScreen>
               _buildBottomControlDeck(viva),
             ],
           ),
-        ),
+          if (viva.isFinishing) _buildFinishingOverlay(),
+        ],
       ),
-    );
+    ),
+  ),
+);
   }
 
   /// Thanh Header trên cùng hiển thị chỉ số câu hỏi và đồng hồ đếm lùi thực
   Widget _buildTopTelemetryBar(VivaSessionProvider viva) {
     final isLive = viva.wsStatus == WsConnectionStatus.authenticated;
-    final total = viva.currentQuestion.totalQuestions;
-    final current = viva.currentQuestion.questionNumber.clamp(1, total);
+    final totalMain = viva.questions.where((q) => !q.isAdaptiveFollowUp).length;
+    final total = math.max(
+      viva.currentQuestion.totalQuestions,
+      totalMain > 0 ? totalMain : 1,
+    );
+    final current = total > 0
+        ? viva.currentQuestion.questionNumber.clamp(1, total)
+        : viva.currentQuestion.questionNumber;
     final back = IconButton(
       icon: const Icon(Icons.arrow_back_ios_new_rounded, size: 18),
       onPressed: _confirmExit,
@@ -550,25 +562,52 @@ class _VivaRoomScreenState extends State<VivaRoomScreen>
         );
     final counter = pill('Câu $current/$total');
     final timer = pill(
-      viva.formattedTimer,
-      icon: Icons.timer_outlined,
-      color: AppColors.warning,
+      viva.isFinishing ? 'Đã nộp' : viva.formattedTimer,
+      icon: viva.isFinishing
+          ? Icons.check_circle_outline_rounded
+          : Icons.timer_outlined,
+      color: viva.isFinishing ? AppColors.success : AppColors.warning,
     );
     final finish = TextButton(
       style: TextButton.styleFrom(
-        backgroundColor: AppColors.danger.withValues(alpha: 0.18),
+        backgroundColor: viva.isFinishing
+            ? AppColors.surfaceCardHigh
+            : AppColors.danger.withValues(alpha: 0.18),
       ),
-      onPressed: _startError == null && viva.canFinish
+      onPressed: _startError == null && viva.canFinish && !viva.isFinishing
           ? () => _confirmFinishExam(viva)
           : null,
-      child: const Text(
-        'Nộp bài',
-        style: TextStyle(
-          color: AppColors.danger,
-          fontSize: 11.5,
-          fontWeight: FontWeight.bold,
-        ),
-      ),
+      child: viva.isFinishing
+          ? Row(
+              mainAxisSize: MainAxisSize.min,
+              children: const [
+                SizedBox(
+                  width: 12,
+                  height: 12,
+                  child: CircularProgressIndicator(
+                    strokeWidth: 2,
+                    color: AppColors.textMuted,
+                  ),
+                ),
+                SizedBox(width: 5),
+                Text(
+                  'Đang nộp...',
+                  style: TextStyle(
+                    color: AppColors.textMuted,
+                    fontSize: 11.5,
+                    fontWeight: FontWeight.bold,
+                  ),
+                ),
+              ],
+            )
+          : const Text(
+              'Nộp bài',
+              style: TextStyle(
+                color: AppColors.danger,
+                fontSize: 11.5,
+                fontWeight: FontWeight.bold,
+              ),
+            ),
     );
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
@@ -1138,20 +1177,76 @@ class _VivaRoomScreenState extends State<VivaRoomScreen>
               IconButton(
                 padding: EdgeInsets.zero,
                 constraints: const BoxConstraints(minWidth: 44, minHeight: 44),
-                icon: const Icon(
-                  Icons.send_rounded,
-                  size: 26,
-                  color: AppColors.primaryLight,
-                ),
+                icon: viva.isSubmitting
+                    ? const SizedBox(
+                        width: 22,
+                        height: 22,
+                        child: CircularProgressIndicator(
+                          strokeWidth: 2,
+                          color: AppColors.primaryLight,
+                        ),
+                      )
+                    : const Icon(
+                        Icons.send_rounded,
+                        size: 26,
+                        color: AppColors.primaryLight,
+                      ),
                 onPressed: viva.canSubmit ? _submitCurrentAnswer : null,
               ),
               Text(
-                'Nộp câu',
+                viva.isSubmitting ? 'Đang nộp...' : 'Nộp câu',
                 style: AppTextStyles.bodySm.copyWith(fontSize: 11),
               ),
             ],
           ),
         ],
+      ),
+    );
+  }
+
+  Widget _buildFinishingOverlay() {
+    return Container(
+      color: Colors.black.withValues(alpha: 0.8),
+      alignment: Alignment.center,
+      padding: const EdgeInsets.symmetric(horizontal: 24),
+      child: GlassCard(
+        padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 32),
+        borderRadius: 24,
+        backgroundColor: AppColors.surfaceCard.withValues(alpha: 0.95),
+        border: Border.all(color: AppColors.primaryLight.withValues(alpha: 0.3)),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            const SizedBox(
+              width: 52,
+              height: 52,
+              child: CircularProgressIndicator(
+                strokeWidth: 3.5,
+                color: AppColors.primaryLight,
+              ),
+            ),
+            const SizedBox(height: 22),
+            const Text(
+              'Đang nộp bài thi...',
+              textAlign: TextAlign.center,
+              style: TextStyle(
+                color: Colors.white,
+                fontSize: 18,
+                fontWeight: FontWeight.bold,
+              ),
+            ),
+            const SizedBox(height: 10),
+            Text(
+              'Hội đồng Giám khảo AI đang đối chiếu Rubric và chấm điểm chi tiết. Vui lòng đợi trong giây lát, không thoát ứng dụng.',
+              textAlign: TextAlign.center,
+              style: AppTextStyles.bodySm.copyWith(
+                color: AppColors.textSecondary,
+                fontSize: 13,
+                height: 1.45,
+              ),
+            ),
+          ],
+        ),
       ),
     );
   }

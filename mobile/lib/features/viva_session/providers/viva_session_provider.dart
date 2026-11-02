@@ -104,6 +104,8 @@ class VivaSessionProvider extends ChangeNotifier {
       !_answerSubmitted &&
       _planId != null;
   bool get isFinishing => _finishing;
+  bool get isSubmitting => _submitting;
+  bool get isAnswerSubmitted => _answerSubmitted;
 
   void prepareRoom() {
     _sessionState = VivaSessionState.processing;
@@ -125,6 +127,9 @@ class VivaSessionProvider extends ChangeNotifier {
   }
 
   String get formattedTimer {
+    if (_finishing || _sessionState == VivaSessionState.completed) {
+      return '00:00';
+    }
     final m = (_remainingSeconds ~/ 60).toString().padLeft(2, '0');
     final s = (_remainingSeconds % 60).toString().padLeft(2, '0');
     return '$m:$s';
@@ -379,6 +384,9 @@ class VivaSessionProvider extends ChangeNotifier {
     final generation = _generation;
     _errorMessage = null;
     _finishTimer?.cancel();
+    _countdownTimer?.cancel();
+    _countdownTimer = null;
+    _remainingSeconds = 0;
     await _recorderService.stopRecording();
     await _playerService.stop();
     if (_disposed || generation != _generation) return;
@@ -471,13 +479,25 @@ class VivaSessionProvider extends ChangeNotifier {
         _currentTurnId++;
         final kind = msg['kind']?.toString() ?? msg['type']?.toString();
         final content = msg['content']?.toString() ?? '';
-        final number = msg['number'] is int ? msg['number'] as int : 1;
-        final total = msg['total'] ?? _questions.length;
+        final parsedNumber = (msg['number'] is num
+                ? (msg['number'] as num).toInt()
+                : int.tryParse(msg['number']?.toString() ?? '')) ??
+            (msg['question_order'] is num
+                ? (msg['question_order'] as num).toInt()
+                : int.tryParse(msg['question_order']?.toString() ?? '')) ??
+            (_currentQuestionIndex + 1);
+        final parsedTotal = (msg['total'] is num
+                ? (msg['total'] as num).toInt()
+                : int.tryParse(msg['total']?.toString() ?? '')) ??
+            (msg['max'] is num
+                ? (msg['max'] as num).toInt()
+                : int.tryParse(msg['max']?.toString() ?? '')) ??
+            _questions.length;
         final isFollowup = kind == 'followup';
 
         _planId =
             msg['plan_id']?.toString() ??
-            '${msg['question_id'] ?? number}:${msg['followup_index'] ?? 0}';
+            '${msg['question_id'] ?? parsedNumber}:${msg['followup_index'] ?? 0}';
         _submitting = false;
         _submitTimer?.cancel();
         _answerSubmitted = msg['answer_submitted'] == true;
@@ -492,17 +512,43 @@ class VivaSessionProvider extends ChangeNotifier {
             (_deadline!.difference(DateTime.now()).inMilliseconds / 1000)
                 .ceil()
                 .clamp(0, 86400);
-        final mainIndex = _questions.indexWhere(
-          (q) => !q.isAdaptiveFollowUp && q.questionNumber == number,
-        );
-        if (mainIndex < 0) return;
+
+        final qId = msg['question_id']?.toString();
+        int mainIndex = -1;
+        if (qId != null && qId.isNotEmpty) {
+          mainIndex = _questions.indexWhere(
+            (q) => !q.isAdaptiveFollowUp && (q.id == qId || q.parentQuestionId == qId),
+          );
+        }
+        if (mainIndex < 0) {
+          mainIndex = _questions.indexWhere(
+            (q) => !q.isAdaptiveFollowUp && q.questionNumber == parsedNumber,
+          );
+        }
+        if (mainIndex < 0 && parsedNumber >= 1 && parsedNumber <= _questions.length) {
+          mainIndex = parsedNumber - 1;
+        }
+
+        if (mainIndex < 0) {
+          final newQ = VivaQuestionModel(
+            id: qId ?? 'q-$parsedNumber',
+            questionNumber: parsedNumber,
+            totalQuestions: parsedTotal > 0 ? parsedTotal : 1,
+            bloomLevel: msg['bloom_level']?.toString() ?? 'Vận dụng',
+            content: content.isNotEmpty ? content : 'Câu hỏi số $parsedNumber',
+            isAdaptiveFollowUp: false,
+          );
+          _questions.add(newQ);
+          mainIndex = _questions.length - 1;
+        }
+
         final main = _questions[mainIndex];
         if (isFollowup) {
           // AI sinh câu hỏi đào sâu qua RAG
           final followupQ = VivaQuestionModel(
             id: _planId!,
-            questionNumber: number,
-            totalQuestions: total is int ? total : _questions.length,
+            questionNumber: parsedNumber,
+            totalQuestions: parsedTotal > 0 ? parsedTotal : _questions.length,
             bloomLevel: 'Phân tích & Đào sâu (Socratic RAG)',
             content: content.isNotEmpty
                 ? content
@@ -523,8 +569,15 @@ class VivaSessionProvider extends ChangeNotifier {
           _questions[mainIndex] = main.copyWith(
             content: content.isNotEmpty ? content : main.content,
             isAdaptiveFollowUp: false,
-            totalQuestions: total is int ? total : main.totalQuestions,
+            totalQuestions: parsedTotal > 0 ? parsedTotal : main.totalQuestions,
+            questionNumber: parsedNumber,
           );
+        }
+
+        if (parsedTotal > 0) {
+          for (int i = 0; i < _questions.length; i++) {
+            _questions[i] = _questions[i].copyWith(totalQuestions: parsedTotal);
+          }
         }
 
         _sessionState = _answerSubmitted
@@ -536,9 +589,21 @@ class VivaSessionProvider extends ChangeNotifier {
         }
         notifyListeners();
       }
-      // 3. Sự kiện Transcript: Phụ đề thời gian thực (Giám khảo AI hoặc Thí sinh)
+      // 3. Sự kiện Finishing từ server
+      else if (type == 'finishing') {
+        _finishing = true;
+        _finishTimer?.cancel();
+        _countdownTimer?.cancel();
+        _countdownTimer = null;
+        _remainingSeconds = 0;
+        _recorderService.stopRecording();
+        _playerService.stop();
+        _sessionState = VivaSessionState.processing;
+        notifyListeners();
+      }
+      // 4. Sự kiện Transcript: Phụ đề thời gian thực (Giám khảo AI hoặc Thí sinh)
       else if (type == 'answer_submitted') {
-        if (msg['plan_id'] == _planId) {
+        if (msg['plan_id'] == null || msg['plan_id'] == _planId) {
           _submitting = false;
           _answerSubmitted = true;
           _recorderService.stopRecording();

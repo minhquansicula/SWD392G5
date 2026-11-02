@@ -34,7 +34,11 @@ class VivaQuestionModel {
     final qData = json['question'] is Map
         ? json['question'] as Map<String, dynamic>
         : json;
-    final order = json['orderIndex'] ?? json['questionOrder'] ?? 1;
+    final rawOrder = json['orderIndex'] ?? json['questionOrder'] ?? 1;
+    final order = (rawOrder is num
+            ? rawOrder.toInt()
+            : int.tryParse(rawOrder.toString())) ??
+        1;
     final bloom =
         qData['bloomTaxonomy'] ??
         qData['bloomLevel'] ??
@@ -49,7 +53,7 @@ class VivaQuestionModel {
 
     return VivaQuestionModel(
       id: json['questionId']?.toString() ?? json['id']?.toString() ?? '',
-      questionNumber: order is int ? order : 1,
+      questionNumber: order,
       totalQuestions: total > 0 ? total : 1,
       bloomLevel: bloom.toString(),
       content: contentText.toString(),
