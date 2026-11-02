@@ -74,3 +74,18 @@ The full test output is in `mobile/mobile-ui-final-tests.log`.
 - The repository's existing ignore rules keep mobile tests and build artifacts
   local. The new behavior/layout tests follow that existing policy; source files,
   bundled fonts/licenses and this report are available for a later commit.
+
+## Integration with dev — 2026-11-03
+
+Before publishing, fetched dev commit `55cad91` and integrated its scheduled exam
+countdown, automatic finish at exam expiry, conversation auto-scroll and app
+lifecycle/exit safeguards into the new room UI. Both question and exam timers
+remain visible. Reconnection preserves the exam deadline, and both countdowns
+are stopped only after the finish command is sent or acknowledged by the server.
+Timer cleanup also runs on provider disposal.
+
+Auto-scroll pauses during finish processing and brings errors/recovery controls
+into view. Reduced motion uses immediate scroll positioning. Added two local
+regression cases for an unsent finish preserving the exam clock and scheduled
+expiry sending exactly one finish command. The complete merged suite passes
+347 tests; the final log is `mobile/mobile-dev-merge-final.log`.
