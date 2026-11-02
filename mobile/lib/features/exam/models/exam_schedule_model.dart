@@ -7,6 +7,8 @@ class ExamScheduleModel {
   final String examTitle;
   final DateTime scheduledAt;
   final DateTime? scheduledEndAt;
+  final DateTime? actualStartTime;
+  final DateTime? actualEndTime;
   final bool scorePublished;
   final String room;
   final String timeRemainingText;
@@ -25,6 +27,8 @@ class ExamScheduleModel {
     required this.examTitle,
     required this.scheduledAt,
     this.scheduledEndAt,
+    this.actualStartTime,
+    this.actualEndTime,
     this.scorePublished = false,
     required this.room,
     required this.timeRemainingText,
@@ -75,6 +79,12 @@ class ExamScheduleModel {
       scheduledEndAt: DateTime.tryParse(
         json['scheduledEndTime']?.toString() ?? '',
       )?.toLocal(),
+      actualStartTime: DateTime.tryParse(
+        json['actualStartTime']?.toString() ?? '',
+      )?.toLocal(),
+      actualEndTime: DateTime.tryParse(
+        json['actualEndTime']?.toString() ?? '',
+      )?.toLocal(),
       scorePublished: json['scorePublished'] == true,
       room: json['room']?.toString() ?? 'Phòng ảo AI-01',
       timeRemainingText:
@@ -96,6 +106,8 @@ class ExamScheduleModel {
     String? examTitle,
     DateTime? scheduledAt,
     DateTime? scheduledEndAt,
+    DateTime? actualStartTime,
+    DateTime? actualEndTime,
     bool? scorePublished,
     String? room,
     String? timeRemainingText,
@@ -114,6 +126,8 @@ class ExamScheduleModel {
       examTitle: examTitle ?? this.examTitle,
       scheduledAt: scheduledAt ?? this.scheduledAt,
       scheduledEndAt: scheduledEndAt ?? this.scheduledEndAt,
+      actualStartTime: actualStartTime ?? this.actualStartTime,
+      actualEndTime: actualEndTime ?? this.actualEndTime,
       scorePublished: scorePublished ?? this.scorePublished,
       room: room ?? this.room,
       timeRemainingText: timeRemainingText ?? this.timeRemainingText,

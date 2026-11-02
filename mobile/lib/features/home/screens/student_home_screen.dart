@@ -692,10 +692,14 @@ class _StudentHomeScreenState extends State<StudentHomeScreen> {
                   width: 44,
                   height: 44,
                   decoration: BoxDecoration(
-                    color: AppColors.success.withValues(alpha: 0.15),
+                    color: (latestCompleted.finalScore != null ? AppColors.success : AppColors.primaryLight).withValues(alpha: 0.15),
                     shape: BoxShape.circle,
                   ),
-                  child: const Icon(Icons.psychology_rounded, color: AppColors.success, size: 24),
+                  child: Icon(
+                    Icons.psychology_rounded,
+                    color: latestCompleted.finalScore != null ? AppColors.success : AppColors.primaryLight,
+                    size: 24,
+                  ),
                 ),
                 const SizedBox(width: 12),
                 Expanded(
@@ -723,7 +727,9 @@ class _StudentHomeScreenState extends State<StudentHomeScreen> {
                         borderRadius: BorderRadius.circular(10),
                       ),
                       child: Text(
-                        latestCompleted.finalScore != null ? '${latestCompleted.finalScore!.toStringAsFixed(1)} / 10' : 'Chờ duyệt',
+                        latestCompleted.finalScore != null
+                            ? '${latestCompleted.finalScore!.toStringAsFixed(1)} / 10'
+                            : 'Chờ công bố',
                         style: AppTextStyles.labelBold.copyWith(
                           color: latestCompleted.finalScore != null ? AppColors.success : AppColors.warning,
                           fontSize: 13,
@@ -732,8 +738,11 @@ class _StudentHomeScreenState extends State<StudentHomeScreen> {
                     ),
                     const SizedBox(height: 4),
                     Text(
-                      latestCompleted.finalScore != null ? 'Đã có điểm' : 'Đang xử lý',
-                      style: AppTextStyles.bodySm.copyWith(fontSize: 11, color: AppColors.textDisabled),
+                      latestCompleted.finalScore != null ? 'Đã có điểm' : 'Vừa hoàn tất thi',
+                      style: AppTextStyles.bodySm.copyWith(
+                        fontSize: 11,
+                        color: latestCompleted.finalScore != null ? AppColors.textDisabled : AppColors.warning,
+                      ),
                     ),
                   ],
                 ),

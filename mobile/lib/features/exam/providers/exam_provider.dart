@@ -45,7 +45,13 @@ class ExamProvider extends ChangeNotifier {
   ExamScheduleModel? get upcomingHeroExam => activeHeroExam;
 
   List<ExamScheduleModel> get completedExams {
-    return _exams.where((e) => e.status == ExamStatus.completed).toList();
+    final list = _exams.where((e) => e.status == ExamStatus.completed).toList();
+    list.sort((a, b) {
+      final timeA = a.actualEndTime ?? a.actualStartTime ?? a.scheduledEndAt ?? a.scheduledAt;
+      final timeB = b.actualEndTime ?? b.actualStartTime ?? b.scheduledEndAt ?? b.scheduledAt;
+      return timeB.compareTo(timeA);
+    });
+    return list;
   }
 
   void selectExam(ExamScheduleModel exam) {
