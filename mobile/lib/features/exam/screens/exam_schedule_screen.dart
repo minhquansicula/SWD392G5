@@ -166,17 +166,17 @@ class _ExamScheduleScreenState extends State<ExamScheduleScreen> {
   }
 
   Widget _buildExamCard(ExamScheduleModel exam) {
+    final isCompleted = exam.status == ExamStatus.completed;
     final isInProgress = exam.status == ExamStatus.inProgress;
     final isUpcoming = exam.status == ExamStatus.upcoming;
-    final isGraded = exam.status == ExamStatus.completed && exam.finalScore != null;
-    final isPendingReview = exam.status == ExamStatus.completed && exam.finalScore == null;
+    final isGraded = isCompleted && exam.finalScore != null;
     final dateStr = DateFormat('dd/MM/yyyy • HH:mm').format(exam.scheduledAt);
 
     return GlassCard(
       margin: const EdgeInsets.only(bottom: 14),
       padding: const EdgeInsets.all(16),
       onTap: () {
-        if (isGraded || isPendingReview) {
+        if (isCompleted) {
           Navigator.of(context).push(
             MaterialPageRoute(
               builder: (_) => ExamResultReportScreen(exam: exam),

@@ -9,7 +9,6 @@ from sqlalchemy import select, text
 from app.errors import AppError
 from app.models import (
     AssignedQuestion,
-    Course,
     Exam,
     ExamSchedule,
     LecturerCriterionGrade,

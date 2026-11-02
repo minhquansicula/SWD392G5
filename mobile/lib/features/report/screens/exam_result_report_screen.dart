@@ -7,6 +7,7 @@ import '../../../core/widgets/glass_card.dart';
 import '../../../core/widgets/primary_button.dart';
 import '../../../core/widgets/status_badge.dart';
 import '../../exam/models/exam_schedule_model.dart';
+import '../../exam/providers/exam_provider.dart';
 import '../models/viva_report_model.dart';
 import '../providers/report_provider.dart';
 import '../../home/screens/main_navigation_screen.dart';
@@ -117,51 +118,57 @@ class _ExamResultReportScreenState extends State<ExamResultReportScreen> {
       );
     }
 
-    return Scaffold(
-      backgroundColor: AppColors.background,
-      appBar: AppBar(
-        title: Text(
-          isPendingOrNoScore ? 'Trạng Thái Điểm Số' : 'Báo Cáo Đánh Giá Viva',
-          style: AppTextStyles.headlineMd,
-        ),
-        leading: IconButton(
-          icon: const Icon(Icons.arrow_back_ios_new_rounded, size: 18),
-          onPressed: () {
-            if (Navigator.of(context).canPop()) {
-              Navigator.of(context).pop();
-            } else {
-              Navigator.of(context).pushAndRemoveUntil(
-                MaterialPageRoute(
-                  builder: (_) => const MainNavigationScreen(initialIndex: 1),
-                ),
-                (route) => false,
-              );
-            }
-          },
-        ),
-        actions: [
-          if (widget.exam != null)
-            IconButton(
-              tooltip: 'Tải lại kết quả',
-              icon: const Icon(Icons.refresh),
-              onPressed: provider.isLoading
-                  ? null
-                  : () => provider.fetchReportForExam(widget.exam!.id),
-            ),
-        ],
-      ),
-      body: Column(
-        children: [
-          if (provider.errorMessage != null)
-            Padding(
-              padding: const EdgeInsets.all(12),
-              child: Semantics(
-                liveRegion: true,
-                child: Text(provider.errorMessage!),
+    final exams = context.read<ExamProvider?>();
+    return PopScope(
+      onPopInvokedWithResult: (didPop, result) {
+        if (didPop) exams?.refreshExams();
+      },
+      child: Scaffold(
+        backgroundColor: AppColors.background,
+        appBar: AppBar(
+          title: Text(
+            isPendingOrNoScore ? 'Trạng Thái Điểm Số' : 'Báo Cáo Đánh Giá Viva',
+            style: AppTextStyles.headlineMd,
+          ),
+          leading: IconButton(
+            icon: const Icon(Icons.arrow_back_ios_new_rounded, size: 18),
+            onPressed: () {
+              if (Navigator.of(context).canPop()) {
+                Navigator.of(context).pop();
+              } else {
+                Navigator.of(context).pushAndRemoveUntil(
+                  MaterialPageRoute(
+                    builder: (_) => const MainNavigationScreen(initialIndex: 1),
+                  ),
+                  (route) => false,
+                );
+              }
+            },
+          ),
+          actions: [
+            if (widget.exam != null)
+              IconButton(
+                tooltip: 'Tải lại kết quả',
+                icon: const Icon(Icons.refresh),
+                onPressed: provider.isLoading
+                    ? null
+                    : () => provider.fetchReportForExam(widget.exam!.id),
               ),
-            ),
-          Expanded(child: bodyContent),
-        ],
+          ],
+        ),
+        body: Column(
+          children: [
+            if (provider.errorMessage != null)
+              Padding(
+                padding: const EdgeInsets.all(12),
+                child: Semantics(
+                  liveRegion: true,
+                  child: Text(provider.errorMessage!),
+                ),
+              ),
+            Expanded(child: bodyContent),
+          ],
+        ),
       ),
     );
   }

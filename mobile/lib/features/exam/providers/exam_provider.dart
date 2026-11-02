@@ -102,11 +102,11 @@ class ExamProvider extends ChangeNotifier {
   }
 
   /// Báo cho Spring Boot biết sinh viên bắt đầu thi: POST /api/student/schedules/{id}/start
-  Future<bool> startExamOnBackend(String scheduleId) async {
+  Future<bool> startExamOnBackend(String scheduleId, {ApiClient? apiClient}) async {
     final version = _requestVersion;
     try {
       if (scheduleId.trim().isEmpty) return false;
-      final res = await _api.post(
+      final res = await (apiClient ?? _api).post(
         '${ApiEndpoints.studentScheduleStart}/$scheduleId/start',
         body: {},
       );

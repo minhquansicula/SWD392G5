@@ -18,17 +18,20 @@ class VivaSessionProvider extends ChangeNotifier {
     AudioPlayerService? player,
     VivaWebSocketService? socket,
     ApiClient? apiClient,
+    ApiClient? aiClient,
     Duration finishTimeout = const Duration(seconds: 45),
   }) : _recorderService = recorder ?? AudioRecorderService(),
        _playerService = player ?? AudioPlayerService(),
        _wsService = socket ?? VivaWebSocketService(),
        _api = apiClient ?? ApiClient.instance,
+       _aiApi = aiClient ?? apiClient ?? ApiClient.instance,
        _finishTimeout = finishTimeout;
   final Duration _finishTimeout;
   final AudioRecorderService _recorderService;
   final AudioPlayerService _playerService;
   final VivaWebSocketService _wsService;
   final ApiClient _api;
+  final ApiClient _aiApi;
   bool _disposed = false;
   bool _starting = false;
   bool _active = false;
@@ -42,6 +45,7 @@ class VivaSessionProvider extends ChangeNotifier {
   String? _token;
   String? _customWsUrl;
   int _generation = 0;
+  int _currentTurnId = 0;
   Timer? _finishTimer;
   Timer? _submitTimer;
   String? _errorMessage;
@@ -214,7 +218,10 @@ class VivaSessionProvider extends ChangeNotifier {
         throw StateError('Không thể xác thực kết nối phòng thi.');
       }
       _audioChunkSub = _recorderService.audioChunkStream.listen((chunk) {
-        if (_active && _sessionState == VivaSessionState.listening && !_finishing && !_answerSubmitted) {
+        if (_active &&
+            _sessionState == VivaSessionState.listening &&
+            !_finishing &&
+            !_answerSubmitted) {
           _wsService.sendBinaryPcmChunk(chunk);
         }
       });
@@ -247,6 +254,7 @@ class VivaSessionProvider extends ChangeNotifier {
 
   Future<void> stopSession() async {
     _generation++;
+    _currentTurnId++;
     _active = false;
     _starting = false;
     _countdownTimer?.cancel();
@@ -267,14 +275,16 @@ class VivaSessionProvider extends ChangeNotifier {
 
   void _startAutoListening() async {
     final generation = _generation;
+    final turnId = ++_currentTurnId;
     // Chờ 800ms để các chunk âm thanh cuối cùng phát trọn vẹn ra loa ngoài
     // và tiếng vang phòng tiêu tán hoàn toàn trước khi bật mic
-    await Future.delayed(const Duration(milliseconds: 800));
+    await _playerService.waitUntilPlaybackFinished(extraBufferMs: 600);
     if (!_disposed &&
         _active &&
         !_finishing &&
         !_answerSubmitted &&
         generation == _generation &&
+        turnId == _currentTurnId &&
         _sessionState == VivaSessionState.aiSpeaking) {
       try {
         await _recorderService.startRecording();
@@ -296,6 +306,7 @@ class VivaSessionProvider extends ChangeNotifier {
       return;
     }
     try {
+      _currentTurnId++;
       if (_recorderService.isRecording) {
         await _recorderService.stopRecording();
         _sessionState = VivaSessionState.processing;
@@ -324,6 +335,7 @@ class VivaSessionProvider extends ChangeNotifier {
   /// Nộp câu trả lời cho câu hỏi hiện tại
   Future<void> submitAnswer() async {
     if (!canSubmit) return;
+    _currentTurnId++;
     _submitting = true;
     final generation = _generation;
     await _recorderService.stopRecording();
@@ -355,9 +367,15 @@ class VivaSessionProvider extends ChangeNotifier {
   }
 
   /// Kết thúc toàn bộ ca thi và kích hoạt AI chấm điểm Rubric
-  Future<void> finishExamSession() async {
+  Future<void> finishExamSession({bool isTimeout = false, String? examScheduleId}) async {
     if (!_active || _finishing || _disposed) return;
+    if (examScheduleId != null && examScheduleId != _scheduleId) {
+      _errorMessage = 'Mã ca thi không khớp phiên hiện tại.';
+      notifyListeners();
+      return;
+    }
     _finishing = true;
+    _currentTurnId++;
     final generation = _generation;
     _errorMessage = null;
     _finishTimer?.cancel();
@@ -391,7 +409,8 @@ class VivaSessionProvider extends ChangeNotifier {
   Future<void> recoverSession() async {
     if (_disposed || _starting || _scheduleId == null) return;
     final generation = _generation;
-    final result = await _api.get(
+    _aiApi.setAuthToken(_api.authToken ?? _token);
+    final result = await _aiApi.get(
       '/api/v1/sessions/$_scheduleId',
       baseUrl: ApiEndpoints.aiServiceBaseUrl,
     );
@@ -408,7 +427,7 @@ class VivaSessionProvider extends ChangeNotifier {
       return;
     }
     if (_finishing) {
-      final finished = await _api.post(
+      final finished = await _aiApi.post(
         '/api/v1/sessions/$_scheduleId/finish',
         baseUrl: ApiEndpoints.aiServiceBaseUrl,
       );
@@ -449,6 +468,7 @@ class VivaSessionProvider extends ChangeNotifier {
       }
       // 2. Sự kiện Plan: Cập nhật câu hỏi chính hoặc câu hỏi đào sâu (RAG)
       else if (type == 'plan') {
+        _currentTurnId++;
         final kind = msg['kind']?.toString() ?? msg['type']?.toString();
         final content = msg['content']?.toString() ?? '';
         final number = msg['number'] is int ? msg['number'] as int : 1;
@@ -608,6 +628,7 @@ class VivaSessionProvider extends ChangeNotifier {
       }
       // 6. Sự kiện Clear Audio: Thí sinh ngắt lời AI (Barge-in)
       else if (type == 'clear_audio') {
+        _currentTurnId++;
         debugPrint('[VivaSessionProvider] User interrupted AI voice playback.');
         _playerService.clearAudioBuffer();
         notifyListeners();

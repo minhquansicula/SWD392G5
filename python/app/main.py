@@ -12,10 +12,18 @@ if sys.platform == "win32":
     except Exception:
         pass
 from contextlib import asynccontextmanager, suppress
-from pathlib import Path
 from uuid import UUID
 
-from fastapi import Depends, FastAPI, File, Request, Response, UploadFile, WebSocket, WebSocketDisconnect
+from fastapi import (
+    Depends,
+    FastAPI,
+    File,
+    Request,
+    Response,
+    UploadFile,
+    WebSocket,
+    WebSocketDisconnect,
+)
 from fastapi.encoders import jsonable_encoder
 from fastapi.exceptions import RequestValidationError
 from fastapi.middleware.cors import CORSMiddleware
@@ -33,11 +41,10 @@ from app.errors import AppError
 from app.gemini import GeminiGateway
 from app.interview import InterviewService, encode
 from app.live_interview import VoiceRoom
-from app.models import AiDocument, AiDocumentChunk, Course, ExamSchedule, Rubric
+from app.models import AiDocument, AiDocumentChunk, Course, Rubric
 from app.prompts import QUESTION_GENERATOR_SYSTEM, RUBRIC_SYSTEM
 from app.retrieval import RetrievalService
-from app.schemas import GenerateQuestionsRequest, GeneratedQuestionsResponse, RubricData
-
+from app.schemas import GeneratedQuestionsResponse, GenerateQuestionsRequest, RubricData
 
 logger = logging.getLogger("viva-ai")
 

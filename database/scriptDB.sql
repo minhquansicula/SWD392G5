@@ -1,4 +1,10 @@
-CREATE SCHEMA "public";
+DROP SCHEMA public CASCADE;
+
+CREATE SCHEMA public;
+
+CREATE EXTENSION IF NOT EXISTS vector;
+CREATE EXTENSION IF NOT EXISTS pgcrypto;
+
 CREATE TABLE "ai_document_chunks" (
 	"id" uuid PRIMARY KEY,
 	"document_id" uuid NOT NULL,
@@ -8,6 +14,7 @@ CREATE TABLE "ai_document_chunks" (
 	"text" text NOT NULL,
 	"embedding" vector(768) NOT NULL
 );
+
 CREATE TABLE "ai_documents" (
 	"id" uuid PRIMARY KEY,
 	"course_id" uuid NOT NULL,
@@ -18,11 +25,13 @@ CREATE TABLE "ai_documents" (
 	"created_at" timestamp with time zone NOT NULL,
 	CONSTRAINT "ai_documents_course_id_sha256_embedding_model_key" UNIQUE("course_id","sha256","embedding_model")
 );
+
 CREATE TABLE "ai_voice_sessions" (
 	"schedule_id" uuid PRIMARY KEY,
 	"live_model" varchar(120) NOT NULL,
 	"state" jsonb NOT NULL
 );
+
 CREATE TABLE "assigned_questions" (
 	"id" uuid PRIMARY KEY DEFAULT gen_random_uuid(),
 	"exam_schedule_id" uuid NOT NULL,
@@ -34,6 +43,7 @@ CREATE TABLE "assigned_questions" (
 	CONSTRAINT "uq_assigned_question_order" UNIQUE("exam_schedule_id","question_order"),
 	CONSTRAINT "assigned_questions_question_order_check" CHECK ((question_order > 0))
 );
+
 CREATE TABLE "course_lecturers" (
 	"course_id" uuid,
 	"lecturer_id" uuid,
@@ -41,11 +51,13 @@ CREATE TABLE "course_lecturers" (
 	"assigned_by" uuid,
 	CONSTRAINT "course_lecturers_pkey" PRIMARY KEY("course_id","lecturer_id")
 );
+
 CREATE TABLE "courses" (
 	"id" uuid PRIMARY KEY DEFAULT gen_random_uuid(),
 	"course_code" varchar(50) NOT NULL CONSTRAINT "courses_course_code_key" UNIQUE,
 	"course_name" varchar(255) NOT NULL
 );
+
 CREATE TABLE "exam_schedules" (
 	"id" uuid PRIMARY KEY DEFAULT gen_random_uuid(),
 	"exam_id" uuid,
@@ -54,15 +66,20 @@ CREATE TABLE "exam_schedules" (
 	"scheduled_end_time" timestamp with time zone,
 	"status" varchar(50) DEFAULT 'PENDING',
 	"final_score" numeric(5, 2),
+	"lecturer_total_score" numeric(5, 2),
+	"lecturer_total_pending" boolean DEFAULT false NOT NULL,
 	"is_connected" boolean DEFAULT false,
 	"full_recording_url" varchar(500),
 	"graded_by" uuid,
 	"actual_start_time" timestamp with time zone,
 	"actual_end_time" timestamp with time zone,
+	"ai_report" jsonb,
 	CONSTRAINT "uq_exam_schedule_student" UNIQUE("exam_id","student_id"),
 	CONSTRAINT "chk_exam_schedule_final_score" CHECK (((final_score IS NULL) OR ((final_score >= (0)::numeric) AND (final_score <= (10)::numeric)))),
+	CONSTRAINT "chk_exam_schedule_lecturer_total_score" CHECK (((lecturer_total_score IS NULL) OR ((lecturer_total_score >= (0)::numeric) AND (lecturer_total_score <= (10)::numeric)))),
 	CONSTRAINT "exam_schedules_status_check" CHECK (((status)::text = ANY ((ARRAY['PENDING'::character varying, 'IN_PROGRESS'::character varying, 'COMPLETED'::character varying])::text[])))
 );
+
 CREATE TABLE "exams" (
 	"id" uuid PRIMARY KEY DEFAULT gen_random_uuid(),
 	"course_id" uuid,
@@ -76,6 +93,7 @@ CREATE TABLE "exams" (
 	"main_answer_time_limit_seconds" integer DEFAULT 120,
 	"followup_answer_time_limit_seconds" integer DEFAULT 60
 );
+
 CREATE TABLE "flyway_schema_history" (
 	"installed_rank" integer,
 	"version" varchar(50),
@@ -89,6 +107,7 @@ CREATE TABLE "flyway_schema_history" (
 	"success" boolean NOT NULL,
 	CONSTRAINT "flyway_schema_history_pk" PRIMARY KEY("installed_rank")
 );
+
 CREATE TABLE "question_results" (
 	"id" uuid PRIMARY KEY DEFAULT gen_random_uuid(),
 	"exam_schedule_id" uuid,
@@ -98,8 +117,10 @@ CREATE TABLE "question_results" (
 	"max_score" numeric(5, 2) DEFAULT '10.0',
 	"lecturer_score" numeric(5, 2),
 	"lecturer_feedback" text,
-	"graded_at" timestamp with time zone DEFAULT CURRENT_TIMESTAMP
+	"graded_at" timestamp with time zone DEFAULT CURRENT_TIMESTAMP,
+	CONSTRAINT "uq_question_result_schedule_question" UNIQUE("exam_schedule_id", "question_id")
 );
+
 CREATE TABLE "questions" (
 	"id" uuid PRIMARY KEY DEFAULT gen_random_uuid(),
 	"course_id" uuid,
@@ -108,6 +129,7 @@ CREATE TABLE "questions" (
 	"topic" varchar(255),
 	"expected_answer" text
 );
+
 CREATE TABLE "rubrics" (
 	"id" uuid PRIMARY KEY,
 	"course_id" uuid NOT NULL,
@@ -115,6 +137,7 @@ CREATE TABLE "rubrics" (
 	"data" jsonb NOT NULL,
 	"created_at" timestamp with time zone NOT NULL
 );
+
 CREATE TABLE "transcripts" (
 	"id" uuid PRIMARY KEY DEFAULT gen_random_uuid(),
 	"exam_schedule_id" uuid,
@@ -130,6 +153,7 @@ CREATE TABLE "transcripts" (
 	"latency_ms" integer,
 	CONSTRAINT "transcripts_role_check" CHECK (((role)::text = ANY ((ARRAY['AI'::character varying, 'STUDENT'::character varying])::text[])))
 );
+
 CREATE TABLE "users" (
 	"id" uuid PRIMARY KEY DEFAULT gen_random_uuid(),
 	"password_hash" varchar(255) NOT NULL,
@@ -150,37 +174,45 @@ CREATE TABLE "users" (
 	CONSTRAINT "users_role_check" CHECK (((role)::text = ANY ((ARRAY['ADMIN'::character varying, 'LECTURER'::character varying, 'STUDENT'::character varying])::text[]))),
 	CONSTRAINT "users_student_code_role_check" CHECK (((((role)::text = 'STUDENT'::text) AND (student_code IS NOT NULL) AND (btrim((student_code)::text) <> ''::text)) OR (((role)::text <> 'STUDENT'::text) AND (student_code IS NULL))))
 );
-CREATE UNIQUE INDEX "ai_document_chunks_pkey" ON "ai_document_chunks" ("id");
-CREATE INDEX "ix_ai_document_chunks_course_id" ON "ai_document_chunks" ("course_id");
-CREATE INDEX "ix_ai_document_chunks_document_id" ON "ai_document_chunks" ("document_id");
-CREATE UNIQUE INDEX "ai_documents_course_id_sha256_embedding_model_key" ON "ai_documents" ("course_id","sha256","embedding_model");
-CREATE UNIQUE INDEX "ai_documents_pkey" ON "ai_documents" ("id");
-CREATE INDEX "ix_ai_documents_course_id" ON "ai_documents" ("course_id");
-CREATE UNIQUE INDEX "ai_voice_sessions_pkey" ON "ai_voice_sessions" ("schedule_id");
-CREATE UNIQUE INDEX "assigned_questions_pkey" ON "assigned_questions" ("id");
-CREATE INDEX "ix_assigned_questions_question_id" ON "assigned_questions" ("question_id");
-CREATE UNIQUE INDEX "uq_assigned_question" ON "assigned_questions" ("exam_schedule_id","question_id");
-CREATE UNIQUE INDEX "uq_assigned_question_order" ON "assigned_questions" ("exam_schedule_id","question_order");
-CREATE UNIQUE INDEX "course_lecturers_pkey" ON "course_lecturers" ("course_id","lecturer_id");
-CREATE INDEX "idx_course_lecturers_course" ON "course_lecturers" ("course_id");
-CREATE INDEX "idx_course_lecturers_lecturer" ON "course_lecturers" ("lecturer_id");
-CREATE UNIQUE INDEX "courses_course_code_key" ON "courses" ("course_code");
-CREATE UNIQUE INDEX "courses_pkey" ON "courses" ("id");
-CREATE UNIQUE INDEX "exam_schedules_pkey" ON "exam_schedules" ("id");
-CREATE UNIQUE INDEX "uq_exam_schedule_student" ON "exam_schedules" ("exam_id","student_id");
-CREATE UNIQUE INDEX "exams_pkey" ON "exams" ("id");
-CREATE UNIQUE INDEX "flyway_schema_history_pk" ON "flyway_schema_history" ("installed_rank");
-CREATE INDEX "flyway_schema_history_s_idx" ON "flyway_schema_history" ("success");
-CREATE UNIQUE INDEX "question_results_pkey" ON "question_results" ("id");
-CREATE UNIQUE INDEX "questions_pkey" ON "questions" ("id");
-CREATE INDEX "ix_rubrics_course_id" ON "rubrics" ("course_id");
-CREATE UNIQUE INDEX "rubrics_pkey" ON "rubrics" ("id");
-CREATE UNIQUE INDEX "transcripts_pkey" ON "transcripts" ("id");
-CREATE UNIQUE INDEX "users_email_key" ON "users" ("email");
-CREATE UNIQUE INDEX "users_email_normalized_key" ON "users" ("email_normalized");
-CREATE UNIQUE INDEX "users_password_token_hash_key" ON "users" ("password_token_hash");
-CREATE UNIQUE INDEX "users_pkey" ON "users" ("id");
-CREATE UNIQUE INDEX "users_student_code_key" ON "users" ("student_code");
+
+-- 3. Bảng mới lecturer_grading_history (Lưu lịch sử thay đổi điểm và nhận xét của giảng viên)
+CREATE TABLE "lecturer_grading_history" (
+	"id" uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+	"exam_schedule_id" uuid NOT NULL,
+	"question_id" uuid,
+	"criterion_id" varchar(100),
+	"lecturer_id" uuid,
+	"lecturer_name" text NOT NULL,
+	"old_score" numeric(5, 2),
+	"new_score" numeric(5, 2),
+	"old_feedback" text,
+	"new_feedback" text,
+	"changed_at" timestamp with time zone DEFAULT clock_timestamp() NOT NULL
+);
+
+-- 4. Bảng mới lecturer_criterion_grades (Lưu điểm giảng viên chấm theo từng tiêu chí của lịch thi)
+CREATE TABLE "lecturer_criterion_grades" (
+	"exam_schedule_id" uuid NOT NULL,
+	"criterion_id" varchar(100) NOT NULL,
+	"score" numeric(5, 2) NOT NULL,
+	"graded_by" uuid,
+	"graded_at" timestamp with time zone DEFAULT clock_timestamp() NOT NULL,
+	CONSTRAINT "lecturer_criterion_grades_pkey" PRIMARY KEY ("exam_schedule_id", "criterion_id"),
+	CONSTRAINT "chk_lecturer_criterion_grades_score" CHECK (((score >= (0)::numeric) AND (score <= (10)::numeric)))
+);
+
+-- Indexes tối ưu truy vấn
+CREATE INDEX IF NOT EXISTS "ix_ai_document_chunks_course_id" ON "ai_document_chunks" ("course_id");
+CREATE INDEX IF NOT EXISTS "ix_ai_document_chunks_document_id" ON "ai_document_chunks" ("document_id");
+CREATE INDEX IF NOT EXISTS "ix_ai_documents_course_id" ON "ai_documents" ("course_id");
+CREATE INDEX IF NOT EXISTS "ix_assigned_questions_question_id" ON "assigned_questions" ("question_id");
+CREATE INDEX IF NOT EXISTS "idx_course_lecturers_course" ON "course_lecturers" ("course_id");
+CREATE INDEX IF NOT EXISTS "idx_course_lecturers_lecturer" ON "course_lecturers" ("lecturer_id");
+CREATE INDEX IF NOT EXISTS "flyway_schema_history_s_idx" ON "flyway_schema_history" ("success");
+CREATE INDEX IF NOT EXISTS "ix_rubrics_course_id" ON "rubrics" ("course_id");
+CREATE INDEX IF NOT EXISTS "idx_lecturer_grading_history_schedule" ON "lecturer_grading_history" ("exam_schedule_id", "changed_at" DESC, "id" DESC);
+
+-- Foreign Key Constraints
 ALTER TABLE "ai_document_chunks" ADD CONSTRAINT "ai_document_chunks_course_id_fkey" FOREIGN KEY ("course_id") REFERENCES "courses"("id");
 ALTER TABLE "ai_document_chunks" ADD CONSTRAINT "ai_document_chunks_document_id_fkey" FOREIGN KEY ("document_id") REFERENCES "ai_documents"("id");
 ALTER TABLE "ai_documents" ADD CONSTRAINT "ai_documents_course_id_fkey" FOREIGN KEY ("course_id") REFERENCES "courses"("id");
@@ -202,3 +234,15 @@ ALTER TABLE "rubrics" ADD CONSTRAINT "rubrics_course_id_fkey" FOREIGN KEY ("cour
 ALTER TABLE "transcripts" ADD CONSTRAINT "transcripts_exam_schedule_id_fkey" FOREIGN KEY ("exam_schedule_id") REFERENCES "exam_schedules"("id") ON DELETE CASCADE;
 ALTER TABLE "transcripts" ADD CONSTRAINT "transcripts_parent_transcript_id_fkey" FOREIGN KEY ("parent_transcript_id") REFERENCES "transcripts"("id") ON DELETE CASCADE;
 ALTER TABLE "transcripts" ADD CONSTRAINT "transcripts_question_id_fkey" FOREIGN KEY ("question_id") REFERENCES "questions"("id") ON DELETE SET NULL;
+
+-- Foreign Keys cho lecturer_grading_history
+ALTER TABLE "lecturer_grading_history" ADD CONSTRAINT "fk_lecturer_grading_history_schedule" FOREIGN KEY ("exam_schedule_id") REFERENCES "exam_schedules"("id") ON DELETE CASCADE;
+ALTER TABLE "lecturer_grading_history" ADD CONSTRAINT "fk_lecturer_grading_history_lecturer" FOREIGN KEY ("lecturer_id") REFERENCES "users"("id") ON DELETE SET NULL;
+ALTER TABLE "lecturer_grading_history" ADD CONSTRAINT "fk_lecturer_grading_history_question" FOREIGN KEY ("question_id") REFERENCES "questions"("id") ON DELETE SET NULL;
+
+-- Foreign Keys cho lecturer_criterion_grades
+ALTER TABLE "lecturer_criterion_grades" ADD CONSTRAINT "fk_lecturer_criterion_grades_schedule" FOREIGN KEY ("exam_schedule_id") REFERENCES "exam_schedules"("id") ON DELETE CASCADE;
+ALTER TABLE "lecturer_criterion_grades" ADD CONSTRAINT "fk_lecturer_criterion_grades_graded_by" FOREIGN KEY ("graded_by") REFERENCES "users"("id") ON DELETE SET NULL;
+
+-- Đặt lecturer_total_pending = true cho các dòng đã có lecturer_total_score
+UPDATE "exam_schedules" SET "lecturer_total_pending" = true WHERE "lecturer_total_score" IS NOT NULL;

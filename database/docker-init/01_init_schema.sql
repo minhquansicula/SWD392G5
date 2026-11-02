@@ -80,6 +80,8 @@ CREATE TABLE "exam_schedules" (
     "scheduled_end_time" timestamp with time zone NOT NULL,
     "status" varchar(50) DEFAULT 'PENDING',
     "final_score" numeric(5, 2),
+    "lecturer_total_score" numeric(5, 2) CHECK (lecturer_total_score BETWEEN 0 AND 10),
+    "lecturer_total_pending" boolean NOT NULL DEFAULT false,
     "ai_report" jsonb,
     "is_connected" boolean DEFAULT false,
     "full_recording_url" varchar(500),
@@ -181,6 +183,31 @@ CREATE TABLE "ai_voice_sessions" (
     "state" jsonb NOT NULL
 );
 
+-- Bảng Lịch sử giảng viên chấm điểm (Lecturer Grading History)
+CREATE TABLE "lecturer_grading_history" (
+    "id" uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+    "exam_schedule_id" uuid NOT NULL REFERENCES "exam_schedules"("id") ON DELETE CASCADE,
+    "question_id" uuid,
+    "criterion_id" varchar(100),
+    "lecturer_id" uuid REFERENCES "users"("id") ON DELETE SET NULL,
+    "lecturer_name" text NOT NULL,
+    "old_score" numeric(5, 2),
+    "new_score" numeric(5, 2),
+    "old_feedback" text,
+    "new_feedback" text,
+    "changed_at" timestamp with time zone NOT NULL DEFAULT clock_timestamp()
+);
+
+-- Bảng Điểm tiêu chí chấm của giảng viên (Lecturer Criterion Grades)
+CREATE TABLE "lecturer_criterion_grades" (
+    "exam_schedule_id" uuid NOT NULL REFERENCES "exam_schedules"("id") ON DELETE CASCADE,
+    "criterion_id" varchar(100) NOT NULL,
+    "score" numeric(5, 2) NOT NULL CHECK (score BETWEEN 0 AND 10),
+    "graded_by" uuid REFERENCES "users"("id") ON DELETE SET NULL,
+    "graded_at" timestamp with time zone NOT NULL DEFAULT clock_timestamp(),
+    PRIMARY KEY ("exam_schedule_id", "criterion_id")
+);
+
 -- Bảng Lịch sử Flyway Schema Migration (Đồng bộ với Spring Boot Flyway)
 CREATE TABLE "flyway_schema_history" (
     "installed_rank" integer PRIMARY KEY,
@@ -199,6 +226,8 @@ CREATE TABLE "flyway_schema_history" (
 CREATE INDEX "idx_course_lecturers_course" ON "course_lecturers" ("course_id");
 CREATE INDEX "idx_course_lecturers_lecturer" ON "course_lecturers" ("lecturer_id");
 CREATE INDEX "ix_assigned_questions_question_id" ON "assigned_questions" ("question_id");
+CREATE UNIQUE INDEX "uq_question_result_schedule_question" ON "question_results" ("exam_schedule_id", "question_id");
+CREATE INDEX "idx_lecturer_grading_history_schedule" ON "lecturer_grading_history" ("exam_schedule_id", "changed_at" DESC, "id" DESC);
 CREATE INDEX "ix_rubrics_course_id" ON "rubrics" ("course_id");
 CREATE INDEX "ix_ai_documents_course_id" ON "ai_documents" ("course_id");
 CREATE INDEX "ix_ai_document_chunks_course_id" ON "ai_document_chunks" ("course_id");
@@ -213,5 +242,11 @@ VALUES
     (3, '3', 'align interview question references', 'SQL', 'V3__align_interview_question_references.sql', NULL, 'postgres', now(), 1, true),
     (4, '5', 'add normalized user email', 'SQL', 'V5__add_normalized_user_email.sql', NULL, 'postgres', now(), 1, true),
     (5, '6', 'add password setup link', 'SQL', 'V6__add_password_setup_link.sql', NULL, 'postgres', now(), 1, true),
-    (6, '7', 'use email and student code', 'SQL', 'V7__use_email_and_student_code.sql', NULL, 'postgres', now(), 1, true);
+    (6, '7', 'use email and student code', 'SQL', 'V7__use_email_and_student_code.sql', NULL, 'postgres', now(), 1, true),
+    (7, '8', 'add exam schedule ai report', 'SQL', 'V8__add_exam_schedule_ai_report.sql', NULL, 'postgres', now(), 1, true),
+    (8, '9', 'add lecturer total score', 'SQL', 'V9__add_lecturer_total_score.sql', NULL, 'postgres', now(), 1, true),
+    (9, '10', 'add lecturer grading history', 'SQL', 'V10__add_lecturer_grading_history.sql', NULL, 'postgres', now(), 1, true),
+    (10, '11', 'add pending lecturer total', 'SQL', 'V11__add_pending_lecturer_total.sql', NULL, 'postgres', now(), 1, true),
+    (11, '12', 'add lecturer criterion grades', 'SQL', 'V12__add_lecturer_criterion_grades.sql', NULL, 'postgres', now(), 1, true),
+    (12, '13', 'mark legacy lecturer totals pending', 'SQL', 'V13__mark_legacy_lecturer_totals_pending.sql', NULL, 'postgres', now(), 1, true);
 

@@ -3,6 +3,7 @@
 import asyncio
 import json
 import logging
+import re
 import time
 from datetime import UTC, datetime, timedelta
 from uuid import UUID, uuid4
@@ -18,7 +19,6 @@ from app.models import (
     AssignedQuestion,
     Exam,
     ExamSchedule,
-    Rubric,
     Transcript,
     VoiceSessionState,
 )
@@ -236,7 +236,11 @@ class VoiceRoom:
         if t_obj is None:
             return
 
-        t_obj.text_content += text or ""
+        clean_text = text or ""
+        if raw_role != "user":
+            clean_text = re.sub(r"<ctrl\d+>", "", clean_text)
+            clean_text = re.sub(r"</?ctrl[^>]*>", "", clean_text)
+        t_obj.text_content += clean_text
         if raw_role == "assistant" and self.plan and self.plan.get("type") == "followup":
             self.plan["content"] = t_obj.text_content
 
@@ -372,7 +376,7 @@ class VoiceRoom:
                         )
                 elif frame.get("text"):
                     body = json.loads(frame["text"])
-                    if body.get("type") == "finish":
+                    if body.get("type") in {"finish", "finish_exam", "force_finish"}:
                         self.accept_audio = False
                         await self.events.put(("finish", None))
                     elif body.get("type") == "ping":

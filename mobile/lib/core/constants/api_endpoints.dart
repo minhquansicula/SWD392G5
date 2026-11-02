@@ -5,11 +5,12 @@ class ApiEndpoints {
   // CẤU HÌNH KẾT NỐI SERVER (Chỉnh sửa trực tiếp tại đây)
   // ===========================================================================
   //
-  // Lựa chọn 1: Điện thoại thật kết nối Wi-Fi cùng mạng với PC
-  static const String _host = '192.168.2.13';
+  // Lựa chọn 1: Dùng Localhost qua ADB (KHUYÊN DÙNG khi cắm cáp hoặc ADB Wireless)
+  // Đã bật: adb reverse tcp:8080 tcp:8080 và adb reverse tcp:8000 tcp:8000
+  static const String _host = 'localhost';
   //
-  // Lựa chọn 2: Localhost (Web / PC, hoặc Điện thoại cắm cáp đã chạy: adb reverse tcp:8080 tcp:8080)
-  // static const String _host = 'localhost';
+  // Lựa chọn 2: Điện thoại thật kết nối Wi-Fi cùng mạng với PC (IP máy tính hiện tại: 192.168.2.8)
+  // static const String _host = '192.168.2.8';
   //
   // Lựa chọn 3: Máy ảo Android Emulator (Android Studio)
   // static const String _host = '10.0.2.2';

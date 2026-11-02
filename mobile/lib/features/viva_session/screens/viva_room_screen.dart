@@ -1,6 +1,7 @@
 import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
+import '../../../core/network/api_client.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_text_styles.dart';
 import '../../../core/widgets/audio_pulse_orb.dart';
@@ -24,8 +25,9 @@ enum VivaVoiceState {
 
 class VivaRoomScreen extends StatefulWidget {
   final ExamScheduleModel exam;
+  final ApiClient? apiClient;
 
-  const VivaRoomScreen({super.key, required this.exam});
+  const VivaRoomScreen({super.key, required this.exam, this.apiClient});
 
   @override
   State<VivaRoomScreen> createState() => _VivaRoomScreenState();
@@ -77,7 +79,7 @@ class _VivaRoomScreenState extends State<VivaRoomScreen>
   Future<bool> _initExamSessionOnBackend() async {
     try {
       final exams = context.read<ExamProvider>();
-      if (!await exams.startExamOnBackend(widget.exam.id)) {
+      if (!await exams.startExamOnBackend(widget.exam.id, apiClient: widget.apiClient)) {
         if (mounted) {
           setState(
             () =>
@@ -131,6 +133,65 @@ class _VivaRoomScreenState extends State<VivaRoomScreen>
     final viva = context.read<VivaSessionProvider>();
     viva.submitAnswer();
     _scrollToBottom();
+  }
+
+  void _confirmFinishExam(VivaSessionProvider viva) {
+    showDialog(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        backgroundColor: AppColors.surfaceCard,
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+        title: Row(
+          children: const [
+            Icon(
+              Icons.assignment_turned_in_rounded,
+              color: AppColors.primaryLight,
+              size: 26,
+            ),
+            SizedBox(width: 8),
+            Text(
+              'Nộp bài thi vấn đáp?',
+              style: TextStyle(
+                color: Colors.white,
+                fontSize: 17,
+                fontWeight: FontWeight.bold,
+              ),
+            ),
+          ],
+        ),
+        content: const Text(
+          'Bạn có chắc chắn muốn kết thúc buổi thi và nộp toàn bộ câu trả lời để Giám khảo AI chấm điểm không?',
+          style: TextStyle(
+            color: AppColors.textSecondary,
+            fontSize: 13.5,
+            height: 1.45,
+          ),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(ctx).pop(),
+            child: const Text(
+              'Tiếp tục thi',
+              style: TextStyle(color: Colors.white70),
+            ),
+          ),
+          ElevatedButton(
+            style: ElevatedButton.styleFrom(backgroundColor: AppColors.primary),
+            onPressed: () {
+              Navigator.of(ctx).pop();
+              viva.finishExamSession();
+            },
+            child: const Text(
+              'Nộp bài ngay',
+              style: TextStyle(
+                color: Colors.white,
+                fontWeight: FontWeight.bold,
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
   }
 
   void _showExamFinishedDialog() {
@@ -433,120 +494,121 @@ class _VivaRoomScreenState extends State<VivaRoomScreen>
 
   /// Thanh Header trên cùng hiển thị chỉ số câu hỏi và đồng hồ đếm lùi thực
   Widget _buildTopTelemetryBar(VivaSessionProvider viva) {
-    final isLiveWs = viva.wsStatus == WsConnectionStatus.authenticated;
-    final totalQ = viva.currentQuestion.totalQuestions;
-    final currentNum = viva.currentQuestion.questionNumber.clamp(1, totalQ);
-
+    final isLive = viva.wsStatus == WsConnectionStatus.authenticated;
+    final total = viva.currentQuestion.totalQuestions;
+    final current = viva.currentQuestion.questionNumber.clamp(1, total);
+    final back = IconButton(
+      icon: const Icon(Icons.arrow_back_ios_new_rounded, size: 18),
+      onPressed: _confirmExit,
+    );
+    final title = Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(
+          'Phòng Thi Voice AIVES',
+          maxLines: 1,
+          overflow: TextOverflow.ellipsis,
+          style: AppTextStyles.labelBold.copyWith(fontSize: 13.5),
+        ),
+        Text(
+          isLive
+              ? '${widget.exam.courseCode} • Gemini Live & RAG'
+              : widget.exam.courseCode,
+          maxLines: 1,
+          overflow: TextOverflow.ellipsis,
+          style: AppTextStyles.bodySm.copyWith(
+            color: AppColors.textMuted,
+            fontSize: 11,
+          ),
+        ),
+      ],
+    );
+    Widget pill(String label, {IconData? icon, Color color = Colors.white}) =>
+        Container(
+          padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 4),
+          decoration: BoxDecoration(
+            color: AppColors.surfaceCardHigh,
+            borderRadius: BorderRadius.circular(10),
+            border: Border.all(color: AppColors.borderGlass),
+          ),
+          child: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              if (icon != null) ...[
+                Icon(icon, size: 13, color: color),
+                const SizedBox(width: 4),
+              ],
+              Text(
+                label,
+                style: AppTextStyles.labelSm.copyWith(
+                  color: color,
+                  fontSize: 11,
+                ),
+              ),
+            ],
+          ),
+        );
+    final counter = pill('Câu $current/$total');
+    final timer = pill(
+      viva.formattedTimer,
+      icon: Icons.timer_outlined,
+      color: AppColors.warning,
+    );
+    final finish = TextButton(
+      style: TextButton.styleFrom(
+        backgroundColor: AppColors.danger.withValues(alpha: 0.18),
+      ),
+      onPressed: _startError == null && viva.canFinish
+          ? () => _confirmFinishExam(viva)
+          : null,
+      child: const Text(
+        'Nộp bài',
+        style: TextStyle(
+          color: AppColors.danger,
+          fontSize: 11.5,
+          fontWeight: FontWeight.bold,
+        ),
+      ),
+    );
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
       decoration: const BoxDecoration(
         color: AppColors.surfaceDeep,
         border: Border(bottom: BorderSide(color: AppColors.borderGlass)),
       ),
-      child: Row(
-        children: [
-          IconButton(
-            padding: EdgeInsets.zero,
-            constraints: const BoxConstraints(minWidth: 32, minHeight: 32),
-            icon: const Icon(
-              Icons.arrow_back_ios_new_rounded,
-              size: 18,
-              color: Colors.white,
-            ),
-            onPressed: _confirmExit,
-          ),
-          const SizedBox(width: 6),
-
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
+      child: LayoutBuilder(
+        builder: (context, constraints) {
+          if (constraints.maxWidth < 480) {
+            return Column(
               mainAxisSize: MainAxisSize.min,
               children: [
                 Row(
-                  mainAxisSize: MainAxisSize.min,
                   children: [
-                    Flexible(
-                      child: Text(
-                        'Phòng Thi Voice AIVES',
-                        style: AppTextStyles.labelBold.copyWith(fontSize: 13.5),
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                      ),
-                    ),
-                    const SizedBox(width: 5),
-                    Container(
-                      width: 6,
-                      height: 6,
-                      decoration: BoxDecoration(
-                        color: isLiveWs
-                            ? AppColors.success
-                            : AppColors.secondary,
-                        shape: BoxShape.circle,
-                      ),
-                    ),
+                    back,
+                    Expanded(child: title),
+                    finish,
                   ],
                 ),
-                Text(
-                  isLiveWs
-                      ? '${widget.exam.courseCode} • Gemini Live & RAG'
-                      : widget.exam.courseCode,
-                  style: AppTextStyles.bodySm.copyWith(
-                    color: AppColors.textMuted,
-                    fontSize: 11,
-                  ),
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
+                const SizedBox(height: 4),
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.end,
+                  children: [counter, const SizedBox(width: 6), timer],
                 ),
               ],
-            ),
-          ),
-          const SizedBox(width: 6),
-
-          // Pill chỉ số câu hỏi
-          Container(
-            padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 4),
-            decoration: BoxDecoration(
-              color: AppColors.surfaceCardHigh,
-              borderRadius: BorderRadius.circular(10),
-              border: Border.all(color: AppColors.borderGlass),
-            ),
-            child: Text(
-              'Câu $currentNum/$totalQ',
-              style: AppTextStyles.labelSm.copyWith(
-                color: Colors.white,
-                fontSize: 11,
-              ),
-            ),
-          ),
-          const SizedBox(width: 6),
-
-          // Pill đồng hồ đếm lùi
-          Container(
-            padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 4),
-            decoration: BoxDecoration(
-              color: AppColors.warning.withValues(alpha: 0.15),
-              borderRadius: BorderRadius.circular(10),
-              border: Border.all(
-                color: AppColors.warning.withValues(alpha: 0.4),
-              ),
-            ),
-            child: Row(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                const Icon(
-                  Icons.timer_outlined,
-                  size: 13,
-                  color: AppColors.warning,
-                ),
-                const SizedBox(width: 4),
-                Text(
-                  viva.formattedTimer,
-                  style: AppTextStyles.codeOrTimer.copyWith(fontSize: 11.5),
-                ),
-              ],
-            ),
-          ),
-        ],
+            );
+          }
+          return Row(
+            children: [
+              back,
+              Expanded(child: title),
+              counter,
+              const SizedBox(width: 6),
+              timer,
+              const SizedBox(width: 6),
+              finish,
+            ],
+          );
+        },
       ),
     );
   }
@@ -1088,35 +1150,6 @@ class _VivaRoomScreenState extends State<VivaRoomScreen>
                 style: AppTextStyles.bodySm.copyWith(fontSize: 11),
               ),
             ],
-          ),
-          TextButton(
-            onPressed: viva.canFinish
-                ? () async {
-                    final confirmed = await showDialog<bool>(
-                      context: context,
-                      builder: (ctx) => AlertDialog(
-                        title: const Text('Kết thúc và nộp bài?'),
-                        content: const Text(
-                          'Các câu chưa trả lời sẽ được ghi nhận theo dữ liệu hiện có.',
-                        ),
-                        actions: [
-                          TextButton(
-                            onPressed: () => Navigator.pop(ctx, false),
-                            child: const Text('Tiếp tục thi'),
-                          ),
-                          TextButton(
-                            onPressed: () => Navigator.pop(ctx, true),
-                            child: const Text('Nộp bài'),
-                          ),
-                        ],
-                      ),
-                    );
-                    if (confirmed == true && mounted) {
-                      await viva.finishExamSession();
-                    }
-                  }
-                : null,
-            child: const Text('Nộp bài'),
           ),
         ],
       ),
