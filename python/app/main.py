@@ -116,12 +116,12 @@ def create_app(settings=None, gateway=None, auth_transport=None) -> FastAPI:
     # ==========================================================================
     @app.get("/health")
     async def health():
-        connected = app.state.db_ready
-        if connected:
-            try:
-                await database.ping()
-            except Exception:
-                connected = False
+        try:
+            await database.ping()
+            connected = True
+            app.state.db_ready = True
+        except Exception:
+            connected = False
         return {
             "status": "UP" if connected else "DEGRADED",
             "database_connected": connected,
