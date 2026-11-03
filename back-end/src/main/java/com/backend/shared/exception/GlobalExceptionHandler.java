@@ -2,6 +2,7 @@ package com.backend.shared.exception;
 
 import com.backend.shared.response.ErrorResponse;
 import jakarta.servlet.http.HttpServletRequest;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
@@ -18,6 +19,7 @@ import java.time.LocalDateTime;
 import java.util.HashMap;
 import java.util.Map;
 
+@Slf4j
 @RestControllerAdvice
 public class GlobalExceptionHandler {
 
@@ -93,11 +95,24 @@ public class GlobalExceptionHandler {
 
     @ExceptionHandler(Exception.class)
     public ResponseEntity<ErrorResponse> handleGeneralException(Exception ex, HttpServletRequest request) {
+        // MVC exceptions carry their own HTTP status and headers (e.g. Allow for 405).
+        if (ex instanceof org.springframework.web.ErrorResponse httpError) {
+            int status = httpError.getStatusCode().value();
+            HttpStatus knownStatus = HttpStatus.resolve(status);
+            String message = knownStatus != null ? knownStatus.getReasonPhrase() : "Request could not be processed";
+            if (status >= 500) log.error("Request failed: {} {}", request.getMethod(), request.getRequestURI(), ex);
+            return ResponseEntity.status(httpError.getStatusCode()).headers(httpError.getHeaders())
+                    .body(ErrorResponse.builder()
+                            .timestamp(LocalDateTime.now()).status(status)
+                            .error(knownStatus != null ? knownStatus.name() : "REQUEST_FAILED")
+                            .message(message).path(request.getRequestURI()).build());
+        }
+        log.error("Unexpected request failure: {} {}", request.getMethod(), request.getRequestURI(), ex);
         ErrorResponse errorResponse = ErrorResponse.builder()
                 .timestamp(LocalDateTime.now())
                 .status(HttpStatus.INTERNAL_SERVER_ERROR.value())
                 .error("INTERNAL_SERVER_ERROR")
-                .message(ex.getMessage())
+                .message("An unexpected error occurred. Please try again later.")
                 .path(request.getRequestURI())
                 .build();
         return new ResponseEntity<>(errorResponse, HttpStatus.INTERNAL_SERVER_ERROR);

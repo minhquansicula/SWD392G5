@@ -12,6 +12,7 @@ import type { SessionDetail } from '../../services/aiService';
 import { reportService } from '../../services/reportService';
 import type { ExamReportDto } from '../../services/reportService';
 import { formatExamTime } from '../../utils/lecturerExam';
+import { validateSessionRubric } from '../../utils/sessionResult';
 import { downloadGradebook, semesterOf } from '../../utils/gradeSheet';
 import { Button, EmptyState, LoadingState, PageHeader } from '../ui';
 import { GradeSheetTable } from './GradeSheetTable';
@@ -76,6 +77,7 @@ export function ResultAnalyticsView({ language = 'vi', currentUser, initialExamI
       if (sequence !== saveSequence.current || selectedScheduleRef.current !== scheduleId) return;
       const updatedSchedule = updatedSchedules.find(item => item.id === scheduleId);
       if (!updatedSchedule || updatedDetail.schedule_id !== scheduleId) throw new Error('Dữ liệu ca thi không khớp.');
+      validateSessionRubric(updatedDetail);
       setDetail(updatedDetail);
       setSchedules(previous => previous.map(item => item.id === scheduleId ? updatedSchedule : item));
       setHistoryRevision(value => value + 1);
@@ -124,7 +126,7 @@ export function ResultAnalyticsView({ language = 'vi', currentUser, initialExamI
     setDetail(null); setDetailError('');
     if (!selected?.id || selected.status !== 'COMPLETED') { setLoadingDetail(false); return; }
     setLoadingDetail(true);
-    getSessionDetail(selected.id).then(data => { if (!active) return; if (data?.schedule_id !== selected.id) throw new Error(t('Dữ liệu kết quả không khớp ca thi đã chọn.', 'The result does not match the selected schedule.')); setDetail(data); }).catch(err => { if (active) setDetailError(err instanceof Error ? err.message : t('Chưa tải được chi tiết từ dịch vụ AI.', 'Unable to load AI session details.')); }).finally(() => { if (active) setLoadingDetail(false); });
+    getSessionDetail(selected.id).then(data => { if (!active) return; if (data?.schedule_id !== selected.id) throw new Error(t('Dữ liệu kết quả không khớp ca thi đã chọn.', 'The result does not match the selected schedule.')); validateSessionRubric(data); setDetail(data); }).catch(err => { if (active) setDetailError(err instanceof Error ? err.message : t('Chưa tải được chi tiết từ dịch vụ AI.', 'Unable to load AI session details.')); }).finally(() => { if (active) setLoadingDetail(false); });
     return () => { active = false; };
   }, [selected?.id, selected?.status, reload, t]);
   const [examReport, setExamReport] = useState<ExamReportDto | null>(null);

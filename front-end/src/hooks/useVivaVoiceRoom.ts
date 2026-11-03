@@ -91,7 +91,7 @@ export function useVivaVoiceRoom({ scheduleId, onFinish, onError }: UseVivaVoice
     const totalIsValid = report?.total_score === null
       ? Array.isArray(report.criteria) && report.grading_failed !== true
       : typeof report?.total_score === 'number' && Number.isFinite(report.total_score) && report.total_score >= 0 && report.total_score <= scale;
-    if (!report || !totalIsValid || typeof scale !== 'number' || !Number.isFinite(scale) || scale <= 0) {
+    if (!report || report.grading_failed === true || !totalIsValid || typeof scale !== 'number' || !Number.isFinite(scale) || scale <= 0) {
       fail('Dữ liệu kết quả từ máy chủ không hợp lệ. Vui lòng kiểm tra lại lịch thi hoặc liên hệ giảng viên.'); return;
     }
     clearApiCache();
@@ -157,25 +157,29 @@ export function useVivaVoiceRoom({ scheduleId, onFinish, onError }: UseVivaVoice
         let event: any;
         try { event = JSON.parse(data); } catch { return; }
         if (!event || typeof event !== 'object') return;
-        if (event.type === 'ready' && statusRef.current !== 'EVALUATING') {
-          if (connectionTimer.current) clearTimeout(connectionTimer.current); connectionTimer.current = null;
-          setMetadata({ examTitle: typeof event.exam_title === 'string' ? event.exam_title : '', totalQuestions: integer(event.total_questions, 0), maxMainQuestions: integer(event.max_main_questions, integer(event.total_questions, 0)), maxFollowupQuestions: integer(event.max_followup_questions, 0), maxFollowupsPerMain: integer(event.max_followups_per_main, 2), mainAnswerTimeLimitSeconds: integer(event.main_answer_time_limit_seconds, 120, 1), followupAnswerTimeLimitSeconds: integer(event.followup_answer_time_limit_seconds, 60, 1) });
-          transition('CONNECTED');
-        } else if (event.type === 'plan' && statusRef.current !== 'EVALUATING') {
-          const type = event.kind === 'followup' ? 'followup' : 'main';
-          const limit = integer(event.time_limit_seconds, type === 'followup' ? 60 : 120, 1);
-          questionDeadline.current = Date.now() + limit * 1000;
-          setCurrentPlan({ type, number: integer(event.number, 1, 1), total: event.total, content: typeof event.content === 'string' ? event.content : undefined, followup_index: event.followup_index, max_followups_per_main: event.max_followups_per_main, total_followups_used: event.total_followups_used, max_total_followups: event.max_total_followups, time_limit_seconds: limit, sources: Array.isArray(event.sources) ? event.sources : undefined });
-        } else if (event.type === 'transcript' && typeof event.id === 'string' && typeof event.text === 'string') {
-          const item: VivaTranscriptItem = { id: event.id, role: event.role === 'user' ? 'user' : 'assistant', text: event.text, final: !!event.final, question_id: event.question_id };
-          setTranscripts(previous => { const index = previous.findIndex(entry => entry.id === item.id); return index < 0 ? [...previous, item] : previous.map((entry, i) => i === index ? item : entry); });
-        } else if (event.type === 'clear_audio') player.clear();
-        else if (event.type === 'reconnecting' && statusRef.current !== 'EVALUATING') {
-          transition('RECONNECTING'); player.clear();
-          if (connectionTimer.current) clearTimeout(connectionTimer.current);
-          connectionTimer.current = setTimeout(() => { if (active()) fail('Không thể kết nối lại phòng thi. Vui lòng kiểm tra trạng thái ca thi.'); }, CONNECTION_TIMEOUT);
-        } else if (event.type === 'report') complete(event.data || event.report);
-        else if (event.type === 'error') fail(typeof event.message === 'string' ? event.message : 'Có sự cố trong phiên vấn đáp.');
+        try {
+          if (event.type === 'ready' && statusRef.current !== 'EVALUATING') {
+            if (connectionTimer.current) clearTimeout(connectionTimer.current); connectionTimer.current = null;
+            setMetadata({ examTitle: typeof event.exam_title === 'string' ? event.exam_title : '', totalQuestions: integer(event.total_questions, 0), maxMainQuestions: integer(event.max_main_questions, integer(event.total_questions, 0)), maxFollowupQuestions: integer(event.max_followup_questions, 0), maxFollowupsPerMain: integer(event.max_followups_per_main, 2), mainAnswerTimeLimitSeconds: integer(event.main_answer_time_limit_seconds, 120, 1), followupAnswerTimeLimitSeconds: integer(event.followup_answer_time_limit_seconds, 60, 1) });
+            transition('CONNECTED');
+          } else if (event.type === 'plan' && statusRef.current !== 'EVALUATING') {
+            const type = event.kind === 'followup' ? 'followup' : 'main';
+            const limit = integer(event.time_limit_seconds, type === 'followup' ? 60 : 120, 1);
+            questionDeadline.current = Date.now() + limit * 1000;
+            setCurrentPlan({ type, number: integer(event.number, 1, 1), total: event.total, content: typeof event.content === 'string' ? event.content : undefined, followup_index: event.followup_index, max_followups_per_main: event.max_followups_per_main, total_followups_used: event.total_followups_used, max_total_followups: event.max_total_followups, time_limit_seconds: limit, sources: Array.isArray(event.sources) ? event.sources : undefined });
+          } else if (event.type === 'transcript' && typeof event.id === 'string' && typeof event.text === 'string') {
+            const item: VivaTranscriptItem = { id: event.id, role: event.role === 'user' ? 'user' : 'assistant', text: event.text, final: !!event.final, question_id: event.question_id };
+            setTranscripts(previous => { const index = previous.findIndex(entry => entry.id === item.id); return index < 0 ? [...previous, item] : previous.map((entry, i) => i === index ? item : entry); });
+          } else if (event.type === 'clear_audio') player.clear();
+          else if (event.type === 'reconnecting' && statusRef.current !== 'EVALUATING') {
+            transition('RECONNECTING'); player.clear();
+            if (connectionTimer.current) clearTimeout(connectionTimer.current);
+            connectionTimer.current = setTimeout(() => { if (active()) fail('Không thể kết nối lại phòng thi. Vui lòng kiểm tra trạng thái ca thi.'); }, CONNECTION_TIMEOUT);
+          } else if (event.type === 'report') complete(event.data || event.report);
+          else if (event.type === 'error') fail(typeof event.message === 'string' ? event.message : 'Có sự cố trong phiên vấn đáp.');
+        } catch {
+          fail('Không thể xử lý dữ liệu hoặc âm thanh phòng thi. Vui lòng kiểm tra trạng thái ca thi trước khi kết nối lại.');
+        }
       };
       socket.onclose = event => {
         if (!active()) return;
@@ -192,7 +196,8 @@ export function useVivaVoiceRoom({ scheduleId, onFinish, onError }: UseVivaVoice
     if (!mounted.current || finishing.current || !['CONNECTED', 'DISCONNECTED'].includes(statusRef.current)) return;
     finishing.current = true; setErrorMsg(null); transition('EVALUATING');
     streamRef.current?.getAudioTracks().forEach(track => { track.enabled = false; });
-    playerRef.current?.clear();
+    try { playerRef.current?.clear(); }
+    catch { fail('Không thể dừng âm thanh. Hãy kiểm tra trạng thái ca thi trước khi kết thúc lại.'); return; }
     const attempt = generation.current;
     const active = () => mounted.current && attempt === generation.current && statusRef.current === 'EVALUATING';
     gradingTimer.current = setTimeout(() => { if (active()) fail('Hết thời gian chờ kết quả. Yêu cầu có thể đã được xử lý; hãy kiểm tra lịch thi trước khi gửi lại.'); }, GRADING_TIMEOUT);

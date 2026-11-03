@@ -3,11 +3,18 @@ import { reportService, type GradingHistoryEntry } from '../../services/reportSe
 import type { SessionAssignedQuestion } from '../../services/aiService';
 
 export function GradingHistory({ scheduleId, questions }: { scheduleId: string; questions: SessionAssignedQuestion[] }) {
+  // A different schedule must never inherit another student's history or errors.
+  return <ScheduleGradingHistory key={scheduleId} scheduleId={scheduleId} questions={questions} />;
+}
+
+function ScheduleGradingHistory({ scheduleId, questions }: { scheduleId: string; questions: SessionAssignedQuestion[] }) {
   const [items, setItems] = useState<GradingHistoryEntry[] | null>(null);
   const [error, setError] = useState('');
   useEffect(() => {
     const controller = new AbortController();
-    reportService.gradingHistory(scheduleId, controller.signal).then(setItems).catch(() => {
+    reportService.gradingHistory(scheduleId, controller.signal).then(items => {
+      if (!controller.signal.aborted) setItems(items);
+    }).catch(() => {
       if (!controller.signal.aborted) setError('Không tải được lịch sử chấm điểm.');
     });
     return () => controller.abort();

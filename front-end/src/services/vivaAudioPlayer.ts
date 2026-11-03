@@ -42,7 +42,7 @@ export class PCMPlayer {
     this.onState(true);
 
     node.onended = () => {
-      node.disconnect();
+      try { node.disconnect(); } catch { /* Device may already be detached. */ }
       this.nodes.delete(node);
       if (this.nodes.size === 0) {
         this.onState(false);
@@ -61,7 +61,7 @@ export class PCMPlayer {
       } catch {
         // ignore already stopped
       }
-      node.disconnect();
+      try { node.disconnect(); } catch { /* Device may already be detached. */ }
     }
     this.nodes.clear();
     this.nextTime = 0;
