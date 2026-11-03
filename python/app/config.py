@@ -1,6 +1,7 @@
+import json
 from functools import lru_cache
 
-from pydantic import Field, SecretStr
+from pydantic import Field, SecretStr, field_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 EMBEDDING_DIMENSIONS = 768
@@ -17,12 +18,40 @@ class Settings(BaseSettings):
     gemini_embedding_model: str = "gemini-embedding-001"
     database_url: str = "postgresql+psycopg://postgres:postgres@127.0.0.1:5432/aives_db"
     backend_api_url: str = "http://localhost:8080/api"
-    cors_origins: list[str] = ["http://localhost:5173", "http://127.0.0.1:5173"]
+    cors_origins: str | list[str] = ["http://localhost:5173", "http://127.0.0.1:5173"]
     model_timeout_seconds: int = Field(default=120, ge=10, le=600)
     retrieval_top_k: int = Field(default=5, ge=1, le=10)
     max_upload_bytes: int = 10 * 1024 * 1024
     max_document_chars: int = 200_000
     max_rubric_chars: int = 25_000
+
+    @field_validator("database_url")
+    @classmethod
+    def normalize_database_url(cls, v: str) -> str:
+        if isinstance(v, str):
+            v = v.strip()
+            if v.startswith("postgres://"):
+                return v.replace("postgres://", "postgresql+psycopg://", 1)
+            if v.startswith("postgresql://") and not v.startswith("postgresql+"):
+                return v.replace("postgresql://", "postgresql+psycopg://", 1)
+        return v
+
+    @field_validator("cors_origins")
+    @classmethod
+    def parse_cors_origins(cls, v) -> list[str]:
+        if isinstance(v, str):
+            v = v.strip()
+            if v.startswith("[") and v.endswith("]"):
+                try:
+                    parsed = json.loads(v)
+                    if isinstance(parsed, list):
+                        return [str(x).strip() for x in parsed if str(x).strip()]
+                except Exception:
+                    pass
+            return [x.strip() for x in v.split(",") if x.strip()]
+        if isinstance(v, list):
+            return [str(x).strip() for x in v if str(x).strip()]
+        return ["*"]
 
 
 @lru_cache
