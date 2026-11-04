@@ -79,6 +79,8 @@ class VivaSessionProvider extends ChangeNotifier {
   StreamSubscription? _wsStatusSub;
 
   Map<String, dynamic>? _finalEvaluationReport;
+  bool _isFirstPlanReceived = false;
+  bool _allQuestionsCompleted = false;
 
   // Getters
   List<VivaQuestionModel> get questions => _questions;
@@ -103,6 +105,13 @@ class VivaSessionProvider extends ChangeNotifier {
   bool get isRecording => _recorderService.isRecording;
   WsConnectionStatus get wsStatus => _wsService.currentStatus;
   Map<String, dynamic>? get finalEvaluationReport => _finalEvaluationReport;
+  bool get isFirstPlanReceived => _isFirstPlanReceived;
+  bool get allQuestionsCompleted => _allQuestionsCompleted;
+  bool get isSessionReady =>
+      _active &&
+      _isFirstPlanReceived &&
+      _questions.isNotEmpty &&
+      _wsService.currentStatus == WsConnectionStatus.authenticated;
   bool get canFinish => _active && !_finishing && !_disposed;
   bool get canSubmit =>
       _active &&
@@ -118,6 +127,8 @@ class VivaSessionProvider extends ChangeNotifier {
     _sessionState = VivaSessionState.processing;
     _errorMessage = null;
     _finalEvaluationReport = null;
+    _isFirstPlanReceived = false;
+    _allQuestionsCompleted = false;
   }
 
   OrbState get orbState {
@@ -186,6 +197,8 @@ class VivaSessionProvider extends ChangeNotifier {
     _finishing = false;
     _submitting = false;
     _answerSubmitted = false;
+    _isFirstPlanReceived = false;
+    _allQuestionsCompleted = false;
     _planId = null;
     _deadline = null;
     _currentQuestionIndex = 0;
@@ -315,6 +328,8 @@ class VivaSessionProvider extends ChangeNotifier {
     _currentTurnId++;
     _active = false;
     _starting = false;
+    _isFirstPlanReceived = false;
+    _allQuestionsCompleted = false;
     _countdownTimer?.cancel();
     _examCountdownTimer?.cancel();
     _finishTimer?.cancel();
@@ -546,6 +561,7 @@ class VivaSessionProvider extends ChangeNotifier {
       }
       // 2. Sự kiện Plan: Cập nhật câu hỏi chính hoặc câu hỏi đào sâu (RAG)
       else if (type == 'plan') {
+        _isFirstPlanReceived = true;
         _currentTurnId++;
         final kind = msg['kind']?.toString() ?? msg['type']?.toString();
         final content = msg['content']?.toString() ?? '';
@@ -804,9 +820,17 @@ class VivaSessionProvider extends ChangeNotifier {
       // 8. Hết danh sách câu hỏi
       else if (type == 'questions_complete') {
         debugPrint(
-          '[VivaSessionProvider] All questions answered. Ready to finish.',
+          '[VivaSessionProvider] All questions answered. Ready for student to submit & finish.',
         );
-        finishExamSession();
+        _allQuestionsCompleted = true;
+        _isFirstPlanReceived = true;
+        _recorderService.stopRecording();
+        _playerService.stop();
+        _countdownTimer?.cancel();
+        _countdownTimer = null;
+        _remainingSeconds = 0;
+        _sessionState = VivaSessionState.processing;
+        notifyListeners();
       } else if (type == 'error') {
         if (msg['code'] == 'finish_failed') _finishing = false;
         _submitting = false;
