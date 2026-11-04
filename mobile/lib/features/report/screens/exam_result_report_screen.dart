@@ -263,39 +263,216 @@ class _ExamResultReportScreenState extends State<ExamResultReportScreen> {
         ),
       ),
     const SizedBox(height: 24),
-    Text('Câu hỏi và câu trả lời', style: AppTextStyles.headlineMd),
+    Text('Chi tiết từng câu hỏi & đánh giá', style: AppTextStyles.headlineMd),
     const SizedBox(height: 12),
     if (report.questionReports.isEmpty)
       const AppMessage(message: 'Chưa tải được bản ghi câu hỏi và câu trả lời.')
     else
       ...report.questionReports.map(
         (question) => GlassCard(
-          margin: const EdgeInsets.only(bottom: 12),
+          margin: const EdgeInsets.only(bottom: 14),
           padding: EdgeInsets.zero,
-          child: ExpansionTile(
-            title: Text(
-              'Câu ${question.questionNumber}${question.isFollowUp ? " · Bổ sung" : ""}',
-              style: AppTextStyles.labelBold,
+          child: Theme(
+            data: Theme.of(context).copyWith(dividerColor: Colors.transparent),
+            child: ExpansionTile(
+              initiallyExpanded: true,
+              tilePadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+              title: Row(
+                children: [
+                  Flexible(
+                    child: StatusBadge(
+                      label: 'Câu ${question.questionNumber}${question.isFollowUp ? " • Bổ sung" : ""}',
+                      type: BadgeType.info,
+                    ),
+                  ),
+                  const Spacer(),
+                  if (question.lecturerScore != null)
+                    StatusBadge(
+                      label: 'GV: ${question.lecturerScore!.toStringAsFixed(1)} / ${question.maxScore.toStringAsFixed(0)}',
+                      type: BadgeType.success,
+                    )
+                  else if (question.score != null)
+                    StatusBadge(
+                      label: 'AI: ${question.score!.toStringAsFixed(1)} / ${question.maxScore.toStringAsFixed(0)}',
+                      type: BadgeType.warning,
+                    ),
+                ],
+              ),
+              subtitle: Padding(
+                padding: const EdgeInsets.only(top: 8),
+                child: Text(
+                  question.fullQuestion,
+                  style: AppTextStyles.labelBold.copyWith(fontSize: 14),
+                  maxLines: 2,
+                  overflow: TextOverflow.ellipsis,
+                ),
+              ),
+              childrenPadding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
+              children: [
+                const Divider(color: AppColors.borderGlass),
+                const SizedBox(height: 8),
+
+                // 1. Toàn bộ câu hỏi
+                Align(
+                  alignment: Alignment.centerLeft,
+                  child: Text(
+                    'Nội dung câu hỏi:',
+                    style: AppTextStyles.labelSm.copyWith(color: AppColors.textSecondary),
+                  ),
+                ),
+                const SizedBox(height: 4),
+                Align(
+                  alignment: Alignment.centerLeft,
+                  child: Text(
+                    question.fullQuestion,
+                    style: AppTextStyles.bodyMd.copyWith(color: Colors.white, height: 1.45),
+                  ),
+                ),
+                const SizedBox(height: 14),
+
+                // 2. Câu trả lời của thí sinh
+                Align(
+                  alignment: Alignment.centerLeft,
+                  child: Text(
+                    'Câu trả lời của bạn:',
+                    style: AppTextStyles.labelSm.copyWith(color: AppColors.primaryLight),
+                  ),
+                ),
+                const SizedBox(height: 6),
+                Container(
+                  width: double.infinity,
+                  padding: const EdgeInsets.all(12),
+                  decoration: BoxDecoration(
+                    color: AppColors.surfaceCardHigh,
+                    borderRadius: BorderRadius.circular(10),
+                    border: Border.all(color: AppColors.borderGlass),
+                  ),
+                  child: Text(
+                    question.studentAnswer.isEmpty
+                        ? 'Chưa có câu trả lời được ghi nhận.'
+                        : question.studentAnswer,
+                    style: AppTextStyles.bodyMd.copyWith(height: 1.45),
+                  ),
+                ),
+                const SizedBox(height: 14),
+
+                // 3. Nhận xét của Giảng viên (Đánh giá chính thức)
+                Container(
+                  width: double.infinity,
+                  padding: const EdgeInsets.all(12),
+                  decoration: BoxDecoration(
+                    color: question.lecturerScore != null
+                        ? AppColors.success.withValues(alpha: 0.08)
+                        : AppColors.surfaceCard,
+                    borderRadius: BorderRadius.circular(10),
+                    border: Border.all(
+                      color: question.lecturerScore != null
+                          ? AppColors.success.withValues(alpha: 0.3)
+                          : AppColors.borderGlass,
+                    ),
+                  ),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Row(
+                        children: [
+                          Icon(
+                            Icons.school_outlined,
+                            size: 18,
+                            color: question.lecturerScore != null
+                                ? AppColors.success
+                                : AppColors.textSecondary,
+                          ),
+                          const SizedBox(width: 8),
+                          Expanded(
+                            child: Text(
+                              'Đánh giá của Giảng viên',
+                              style: AppTextStyles.labelBold.copyWith(
+                                color: question.lecturerScore != null
+                                    ? AppColors.success
+                                    : AppColors.textSecondary,
+                              ),
+                            ),
+                          ),
+                          const SizedBox(width: 8),
+                          Text(
+                            question.lecturerScore != null
+                                ? 'Điểm: ${question.lecturerScore!.toStringAsFixed(1)} / ${question.maxScore.toStringAsFixed(0)}'
+                                : 'Chưa chấm điểm',
+                            style: AppTextStyles.labelBold.copyWith(
+                              color: question.lecturerScore != null
+                                  ? AppColors.success
+                                  : AppColors.textSecondary,
+                              fontSize: 13,
+                            ),
+                          ),
+                        ],
+                      ),
+                      const SizedBox(height: 6),
+                      Text(
+                        (question.lecturerFeedback != null && question.lecturerFeedback!.trim().isNotEmpty)
+                            ? question.lecturerFeedback!
+                            : 'Giảng viên chưa để lại nhận xét riêng cho câu này.',
+                        style: AppTextStyles.bodySm.copyWith(
+                          color: (question.lecturerFeedback != null && question.lecturerFeedback!.trim().isNotEmpty)
+                              ? Colors.white
+                              : AppColors.textSecondary,
+                          height: 1.4,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+
+                // 4. Nhận xét & điểm tham khảo từ AI
+                if (question.score != null || (question.aiFeedback != null && question.aiFeedback!.isNotEmpty)) ...[
+                  const SizedBox(height: 10),
+                  Container(
+                    width: double.infinity,
+                    padding: const EdgeInsets.all(12),
+                    decoration: BoxDecoration(
+                      color: AppColors.primarySoft,
+                      borderRadius: BorderRadius.circular(10),
+                      border: Border.all(color: AppColors.borderGlass),
+                    ),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Row(
+                          children: [
+                            const Icon(Icons.smart_toy_outlined, size: 16, color: AppColors.primaryLight),
+                            const SizedBox(width: 6),
+                            Expanded(
+                              child: Text(
+                                'Gợi ý tham khảo từ Giám khảo AI',
+                                style: AppTextStyles.labelSm.copyWith(color: AppColors.primaryLight),
+                              ),
+                            ),
+                            if (question.score != null) ...[
+                              const SizedBox(width: 8),
+                              Text(
+                                '${question.score!.toStringAsFixed(1)} / ${question.maxScore.toStringAsFixed(0)}',
+                                style: AppTextStyles.labelSm.copyWith(
+                                  color: AppColors.primaryLight,
+                                  fontWeight: FontWeight.w600,
+                                ),
+                              ),
+                            ],
+                          ],
+                        ),
+                        if (question.aiFeedback != null && question.aiFeedback!.trim().isNotEmpty) ...[
+                          const SizedBox(height: 6),
+                          Text(
+                            question.aiFeedback!,
+                            style: AppTextStyles.bodySm.copyWith(color: AppColors.textSecondary, height: 1.4),
+                          ),
+                        ],
+                      ],
+                    ),
+                  ),
+                ],
+              ],
             ),
-            subtitle: Text(question.title, style: AppTextStyles.bodyMd),
-            childrenPadding: const EdgeInsets.all(16),
-            children: [
-              Text(question.fullQuestion, style: AppTextStyles.bodyMd),
-              const SizedBox(height: 16),
-              Text(
-                question.studentAnswer.isEmpty
-                    ? 'Chưa có câu trả lời được ghi nhận.'
-                    : question.studentAnswer,
-                style: AppTextStyles.bodyMd,
-              ),
-              const SizedBox(height: 16),
-              Text(
-                question.score == null
-                    ? 'Chưa đánh giá'
-                    : 'AI tham khảo: ${question.score!.toStringAsFixed(1)} / ${question.maxScore}',
-                style: AppTextStyles.bodyMd,
-              ),
-            ],
           ),
         ),
       ),
