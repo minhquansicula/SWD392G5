@@ -267,6 +267,19 @@ class VoiceRoom:
             if raw_role == "user" and t_obj.text_content.strip():
                 self.waiting_for_answer = False
                 await self.checkpoint()
+            elif raw_role == "assistant":
+                lower = t_obj.text_content.lower()
+                if (
+                    "hoàn thành toàn bộ" in lower
+                    or "kết thúc bài thi" in lower
+                    or "bấm nút \"nộp bài\"" in lower
+                    or "bấm nút nộp bài" in lower
+                    or "mời thí sinh bấm nút" in lower
+                    or "mời bạn bấm nút" in lower
+                ):
+                    self.finished = True
+                    await self.checkpoint()
+                    await self.send({"type": "questions_complete"})
 
     async def close_buffers(self, interrupted: bool = False):
         if not self.buffers:

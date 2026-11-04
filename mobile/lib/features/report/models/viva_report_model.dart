@@ -24,7 +24,10 @@ class QuestionReportItem {
   final String title;
   final String fullQuestion;
   final String studentAnswer;
-  final double? score;
+  final double? score; // ai_score
+  final String? aiFeedback;
+  final double? lecturerScore;
+  final String? lecturerFeedback;
   final double maxScore;
   final String audioDuration;
   final String bloomLevel;
@@ -36,7 +39,10 @@ class QuestionReportItem {
     required this.fullQuestion,
     required this.studentAnswer,
     required this.score,
-    this.maxScore = 2.5,
+    this.aiFeedback,
+    this.lecturerScore,
+    this.lecturerFeedback,
+    this.maxScore = 10.0,
     required this.audioDuration,
     required this.bloomLevel,
     this.isFollowUp = false,
@@ -167,7 +173,10 @@ class VivaReportModel {
                   fullQuestion: q['fullQuestion'] ?? '',
                   studentAnswer: q['studentAnswer'] ?? '',
                   score: (q['score'] as num?)?.toDouble(),
-                  maxScore: (q['maxScore'] as num?)?.toDouble() ?? 2.5,
+                  aiFeedback: q['aiFeedback']?.toString(),
+                  lecturerScore: (q['lecturerScore'] as num?)?.toDouble(),
+                  lecturerFeedback: q['lecturerFeedback']?.toString(),
+                  maxScore: (q['maxScore'] as num?)?.toDouble() ?? 10.0,
                   audioDuration: q['audioDuration'] ?? '00:00',
                   bloomLevel: q['bloomLevel'] ?? '',
                   isFollowUp: q['isFollowUp'] == true,
@@ -225,25 +234,31 @@ class VivaReportModel {
       ],
       'questionReports': [
         for (final q in questions)
-          {
-            'questionNumber': q['order'],
-            'title': 'Câu ${q['order']}',
-            'fullQuestion': q['content'],
-            'studentAnswer': transcripts
-                .where(
-                  (t) =>
-                      t['question_id'] == q['question_id'] &&
-                      t['role'] == 'STUDENT',
-                )
-                .map((t) => t['text']?.toString() ?? '')
-                .join('\n'),
-            'score': results
+          () {
+            final res = results
                 .where((r) => r['question_id'] == q['question_id'])
-                .firstOrNull?['ai_score'],
-            'maxScore': 10.0,
-            'audioDuration': '',
-            'bloomLevel': '',
-          },
+                .firstOrNull;
+            return {
+              'questionNumber': q['order'],
+              'title': 'Câu ${q['order']}',
+              'fullQuestion': q['content'],
+              'studentAnswer': transcripts
+                  .where(
+                    (t) =>
+                        t['question_id'] == q['question_id'] &&
+                        t['role'] == 'STUDENT',
+                  )
+                  .map((t) => t['text']?.toString() ?? '')
+                  .join('\n'),
+              'score': res?['ai_score'],
+              'aiFeedback': res?['ai_feedback'],
+              'lecturerScore': res?['lecturer_score'],
+              'lecturerFeedback': res?['lecturer_feedback'],
+              'maxScore': res?['max_score'] ?? 10.0,
+              'audioDuration': '',
+              'bloomLevel': '',
+            };
+          }(),
       ],
     });
   }

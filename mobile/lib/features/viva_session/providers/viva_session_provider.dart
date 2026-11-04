@@ -277,8 +277,11 @@ class VivaSessionProvider extends ChangeNotifier {
       });
       _amplitudeSub = _recorderService.amplitudeStream.listen((level) {
         if (!_disposed && _sessionState == VivaSessionState.listening) {
-          _currentAudioLevel = level;
-          notifyListeners();
+          if ((level - _currentAudioLevel).abs() > 0.08 ||
+              (level == 0.0 && _currentAudioLevel != 0.0)) {
+            _currentAudioLevel = level;
+            notifyListeners();
+          }
         }
       });
       _active = true;
@@ -739,6 +742,43 @@ class VivaSessionProvider extends ChangeNotifier {
               ),
             );
           }
+
+          // Nhận diện Giám khảo AI phát biểu câu kết thúc ca thi để tự động nộp bài
+          final lower = text.toLowerCase();
+          final isConclusion = lower.contains('hoàn thành toàn bộ') ||
+              lower.contains('kết thúc bài thi') ||
+              lower.contains('kết thúc phần thi') ||
+              lower.contains('hoàn thành tất cả các câu hỏi') ||
+              lower.contains('bấm nút "nộp bài"') ||
+              lower.contains('bấm nút nộp bài') ||
+              lower.contains('mời thí sinh bấm nút') ||
+              lower.contains('mời bạn bấm nút');
+
+          if (isConclusion && !_allQuestionsCompleted) {
+            debugPrint(
+              '[VivaSessionProvider] AI conclusion phrase detected in transcript: "$text". Auto-submitting in 3.5s...',
+            );
+            _allQuestionsCompleted = true;
+            _countdownTimer?.cancel();
+            _countdownTimer = null;
+            _remainingSeconds = 0;
+            _sessionState = VivaSessionState.processing;
+            _recorderService.stopRecording();
+            notifyListeners();
+
+            // Tự động kích hoạt nộp bài sau 3.5 giây để AI đọc xong câu chào kết thúc
+            Future.delayed(const Duration(milliseconds: 3500), () {
+              if (!_disposed &&
+                  _active &&
+                  !_finishing &&
+                  _sessionState != VivaSessionState.completed) {
+                debugPrint(
+                  '[VivaSessionProvider] Auto-submitting exam session from AI conclusion...',
+                );
+                finishExamSession();
+              }
+            });
+          }
         } else {
           if (_transcripts.isNotEmpty &&
               _transcripts.last.speaker == VivaRole.student &&
@@ -775,14 +815,30 @@ class VivaSessionProvider extends ChangeNotifier {
           _playerService.feedPcmChunk(chunk);
           // Tính biên độ âm thanh cho quả cầu 3D Orb khi AI nói
           if (chunk.isNotEmpty) {
-            _currentAudioLevel = 0.4 + ((chunk[0].abs() % 50) / 100.0);
+            final newLevel = 0.4 + ((chunk[0].abs() % 50) / 100.0);
+            if ((newLevel - _currentAudioLevel).abs() > 0.12) {
+              _currentAudioLevel = newLevel;
+              notifyListeners();
+            }
           }
-          notifyListeners();
         }
       }
-      // 5. Sự kiện Turn Complete: Giám khảo AI đọc xong câu hỏi -> Mở mic cho thí sinh
+      // 5. Sự kiện Turn Complete: Giám khảo AI đọc xong câu hỏi -> Mở mic cho thí sinh (hoặc tự động nộp bài nếu đã hết câu hỏi)
       else if (type == 'turn_complete') {
-        if (_sessionState == VivaSessionState.aiSpeaking) {
+        if (_allQuestionsCompleted) {
+          // AI đã hoàn tất phát biểu kết luận của toàn bộ bài thi -> tự động nộp bài ngay
+          Future.delayed(const Duration(milliseconds: 1000), () {
+            if (!_disposed &&
+                _active &&
+                !_finishing &&
+                _sessionState != VivaSessionState.completed) {
+              debugPrint(
+                '[VivaSessionProvider] Turn complete after all questions: Auto-submitting exam...',
+              );
+              finishExamSession();
+            }
+          });
+        } else if (_sessionState == VivaSessionState.aiSpeaking) {
           _startAutoListening();
         }
       }
@@ -817,20 +873,33 @@ class VivaSessionProvider extends ChangeNotifier {
         _sessionState = VivaSessionState.completed;
         notifyListeners();
       }
-      // 8. Hết danh sách câu hỏi
+      // 8. Hết danh sách câu hỏi -> AI phát biểu câu chào kết luận và tự động nộp bài
       else if (type == 'questions_complete') {
         debugPrint(
-          '[VivaSessionProvider] All questions answered. Ready for student to submit & finish.',
+          '[VivaSessionProvider] All questions answered. Waiting for AI conclusion to auto-submit...',
         );
         _allQuestionsCompleted = true;
         _isFirstPlanReceived = true;
         _recorderService.stopRecording();
-        _playerService.stop();
+        // Không gọi _playerService.stop() để âm thanh kết thúc của AI phát trọn vẹn
         _countdownTimer?.cancel();
         _countdownTimer = null;
         _remainingSeconds = 0;
         _sessionState = VivaSessionState.processing;
         notifyListeners();
+
+        // Tự động kích hoạt nộp bài sau 4.5 giây phòng trường hợp không nhận được turn_complete
+        Future.delayed(const Duration(milliseconds: 4500), () {
+          if (!_disposed &&
+              _active &&
+              !_finishing &&
+              _sessionState != VivaSessionState.completed) {
+            debugPrint(
+              '[VivaSessionProvider] Auto-submitting exam session after conclusion delay...',
+            );
+            finishExamSession();
+          }
+        });
       } else if (type == 'error') {
         if (msg['code'] == 'finish_failed') _finishing = false;
         _submitting = false;
